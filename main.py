@@ -93,6 +93,9 @@ def generate_menu(session_id):
 # ---------------------------
 # Flujo principal /next-step
 # ---------------------------
+# ---------------------------
+# Endpoint principal: siguiente paso
+# ---------------------------
 @app.post("/next-step")
 def next_step(input: UserInput):
     session_id = input.session_id
@@ -105,17 +108,41 @@ def next_step(input: UserInput):
     if answer:
         sessions[session_id][step] = answer
 
+    # Definimos pasos y campos con opciones
     steps_mapping = {
-        "pick_plan": {"question": "Select your plan", "fields": ["Plan"]},
-        "duration": {"question": "Select duration (days)", "fields": ["Duration"]},
-        "personal_data": {"question": "Enter your personal data", "fields": ["Age", "Weight", "Sex"]},
-        "preferences": {"question": "Select your dietary preferences", "fields": ["Dietary Preferences", "Dislikes"]},
-        "allergies": {"question": "Indicate your allergies", "fields": ["Allergies"]}
+        "pick_plan": {
+            "question": "Selecciona tu plan",
+            "fields": [{"name": "Plan", "type": "select", "options": ["Plan 1","Plan 2","Plan 3","Plan 4"]}]
+        },
+        "duration": {
+            "question": "Selecciona duración (días)",
+            "fields": [{"name": "Duración", "type": "select", "options": ["1","2","3","4","5","6","7"]}]
+        },
+        "personal_data": {
+            "question": "Ingresa tus datos personales",
+            "fields": [
+                {"name": "Edad", "type": "input"},
+                {"name": "Peso", "type": "input"},
+                {"name": "Sexo", "type": "select", "options": ["M","F"]}
+            ]
+        },
+        "preferences": {
+            "question": "Indica tus preferencias alimenticias",
+            "fields": [
+                {"name": "Preferencias alimenticias", "type": "select", "options": ["Vegano","Vegetariano","Pescatariano","Omnívoro"]},
+                {"name": "Ingredientes que no te gustan", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts"]}
+            ]
+        },
+        "allergies": {
+            "question": "Indica tus alergias",
+            "fields": [
+                {"name": "Alergias", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts"]}
+            ]
+        }
     }
 
+    # Determinar siguiente paso
     steps_order = ["pick_plan", "duration", "personal_data", "preferences", "allergies", "generate_menu"]
-
-    # Calcular siguiente paso
     try:
         next_index = steps_order.index(step) + 1
         next_step_name = steps_order[next_index]
@@ -125,8 +152,7 @@ def next_step(input: UserInput):
     if next_step_name == "generate_menu":
         return generate_menu(session_id)
 
-    step_info = steps_mapping.get(next_step_name, {"question": f"Next step: {next_step_name}", "fields": []})
-    return {"question": step_info["question"], "fields": step_info["fields"]}
+    return {"question": steps_mapping[next_step_name]["question"], "fields": steps_mapping[next_step_name]["fields"]}
 
 # ---------------------------
 # Swap meal
