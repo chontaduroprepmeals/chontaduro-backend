@@ -18,18 +18,14 @@ app.add_middleware(
 # --- Modelos ---
 class UserInput(BaseModel):
     session_id: str
-    step: str
+    step: str = "start"
     answer: dict = {}
-
-class SwapMealInput(BaseModel):
-    session_id: str
-    meal_name: str
 
 class AddProteinInput(BaseModel):
     session_id: str
     extra_protein_g: int
     distribute_all: bool = True
-    meal_name: str = None  # si quiere ponerlo solo en una comida
+    meal_name: str = None
 
 # --- Sesiones ---
 sessions = {}
@@ -49,9 +45,8 @@ def filter_meals(meal_type=None, dislikes=None, allergies=None):
         meals = [m for m in meals if not any(a.lower() in [i.lower() for i in m.get("ingredients", [])] for a in allergies)]
     return meals
 
-# --- Cálculo genérico de calorías según sexo y objetivo ---
+# --- Calorías ---
 def calculate_calories(weight_lbs, height_in, age, sex, goal):
-    # Conversión a kg y cm
     weight = weight_lbs * 0.453592
     height = height_in * 2.54
     if sex.lower() == "m":
@@ -63,7 +58,7 @@ def calculate_calories(weight_lbs, height_in, age, sex, goal):
     elif goal == "gain muscle":
         return int(bmr * 1.5)
     else:
-        return int(bmr * 1.35)  # maintain
+        return int(bmr * 1.35)
 
 # --- Generar menú ---
 def generate_menu(session_id):
@@ -73,7 +68,6 @@ def generate_menu(session_id):
     preferences = session.get("preferences", {}).get("Dietary Preferences", [])
     dislikes = session.get("preferences", {}).get("Dislikes", [])
     allergies = session.get("allergies", {}).get("Allergies", [])
-    # Datos personales
     personal = session.get("personal_data", {})
     calories_needed = calculate_calories(
         weight_lbs=float(personal.get("Weight", 0)),
@@ -90,6 +84,7 @@ def generate_menu(session_id):
         "Plan 3": {"Main Meal": 1, "Breakfast": 1},
         "Plan 4": {"Main Meal": 2, "Breakfast": 1}
     }
+
     for day in range(days):
         for t, count in type_map.get(plan, {}).items():
             available = filter_meals(t, dislikes, allergies)
@@ -98,62 +93,77 @@ def generate_menu(session_id):
             for _ in range(count):
                 menu.append(random.choice(available))
 
-    # Precio
     total_price = sum([m["price"] for m in menu])
     sessions[session_id]['menu'] = menu
     sessions[session_id]['price'] = total_price
     return {"menu": menu, "price": total_price}
 
+# --- Steps mapping ---
+steps_mapping = {
+    "pick_plan": {"question": "Pick your plan", "fields":[{"name":"Plan","type":"select","options":["Plan 1","Plan 2","Plan 3","Plan 4"]}]},
+    "duration": {"question":"How many days?","fields":[{"name":"Days","type":"select","options":["1","2","3","4","5","6","7"]}]},
+    "personal_data":{"question":"Enter your personal data","fields":[
+        {"name":"Age","type":"number"},
+        {"name":"Weight","type":"number"},
+        {"name":"Height","type":"number"},
+        {"name":"Gender","type":"select","options":["M","F"]},
+        {"name":"Goal","type":"select","options":["lose fat","maintain","gain muscle"]}
+    ]},
+    "preferences":{"question":"Dietary Preferences","fields":[
+        {"name":"Dietary Preferences","type":"select","options":["Vegetarian","Vegan","Pescatarian","Omnivore"]},
+        {"name":"Dislikes","type":"multiselect","options":["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}
+    ]},
+    "allergies":{"question":"Allergies","fields":[
+        {"name":"Allergies","type":"multiselect","options":["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}
+    ]}
+}
+
+steps_order = ["pick_plan","duration","personal_data","preferences","allergies","generate_menu"]
+
+# --- Field -> Step mapping ---
+field_to_step = {
+    "Plan": "pick_plan",
+    "Days": "duration",
+    "Age": "personal_data",
+    "Weight": "personal_data",
+    "Height": "personal_data",
+    "Gender": "personal_data",
+    "Goal": "personal_data",
+    "Dietary Preferences": "preferences",
+    "Dislikes": "preferences",
+    "Allergies": "allergies"
+}
+
 # --- Endpoints ---
 @app.post("/next-step")
 def next_step(input: UserInput):
     session_id = input.session_id
-    step = input.step
-    answer = input.answer
+    answer = input.answer or {}
 
     if session_id not in sessions:
         sessions[session_id] = {}
 
-    # Guardar respuesta si existe (mismo comportamiento que antes)
+    # Guardar respuesta
     if answer:
+        step = field_to_step.get(list(answer.keys())[0], "start")
         sessions[session_id][step] = answer
+    else:
+        step = "start"
 
-    # --- NUEVO: si es la llamada inicial, devolver el primer paso sin cambiar nada más ---
-    if step in [None, "", "start"]:
-        return {
-            "question": "Pick your plan",
-            "fields": [
-                {"name": "Plan", "type": "select", "options": ["Plan 1", "Plan 2", "Plan 3", "Plan 4"]}
-            ]
-        }
-
-    steps_mapping = {
-        "pick_plan": {"question": "Pick your plan", "fields":[{"name":"Plan","type":"select","options":["Plan 1","Plan 2","Plan 3","Plan 4"]}]},
-        "duration": {"question":"How many days?","fields":[{"name":"Days","type":"select","options":["1","2","3","4","5","6","7"]}]},
-        "personal_data":{"question":"Enter your personal data","fields":[
-            {"name":"Age","type":"number"},
-            {"name":"Weight","type":"number"},
-            {"name":"Height","type":"number"},
-            {"name":"Gender","type":"select","options":["M","F"]},
-            {"name":"Goal","type":"select","options":["lose fat","maintain","gain muscle"]}
-        ]},
-        "preferences":{"question":"Dietary Preferences","fields":[{"name":"Dietary Preferences","type":"select","options":["Vegetarian","Vegan","Pescatarian","Omnivore"]},
-        {"name":"Dislikes","type":"multiselect","options":["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}]},
-        "allergies":{"question":"Allergies","fields":[{"name":"Allergies","type":"multiselect","options":["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}]}
-    }
-    steps_order = ["pick_plan","duration","personal_data","preferences","allergies","generate_menu"]
-
+    # Determinar siguiente paso
     try:
         next_index = steps_order.index(step) + 1
         next_step_name = steps_order[next_index]
     except (ValueError, IndexError):
-        # Si el step no está en la lista o ya es el último, vamos a generar el menú
         next_step_name = "generate_menu"
 
     if next_step_name == "generate_menu":
         return generate_menu(session_id)
 
-    return {"question": steps_mapping[next_step_name]["question"], "fields": steps_mapping[next_step_name]["fields"]}
+    return {
+        "question": steps_mapping[next_step_name]["question"],
+        "fields": steps_mapping[next_step_name]["fields"]
+    }
 
 # --- Add protein ---
 @app.post("/add-protein")
@@ -162,12 +172,11 @@ def add_protein(input: AddProteinInput):
     menu = sessions[session_id].get('menu', [])
     if not menu:
         raise HTTPException(status_code=400, detail="No menu generated")
-    # Distribuir proteína
     if input.distribute_all:
         per_meal = input.extra_protein_g / len(menu)
         for m in menu:
             m['calories'] += per_meal*4
-            m['price'] += per_meal*1  # $1 por gramo
+            m['price'] += per_meal*1
     else:
         for m in menu:
             if m['name']==input.meal_name:
@@ -178,44 +187,7 @@ def add_protein(input: AddProteinInput):
     sessions[session_id]['price'] = total_price
     return {"menu":menu,"price":total_price,"message":"Protein added"}
 
-# --- Endpoint inicial para el formulario ---
+# --- Endpoint para obtener la estructura inicial ---
 @app.get("/form")
 def get_form():
-    """Devuelve la estructura inicial del formulario"""
-    return [
-        {
-            "title": "Pick your plan",
-            "fields": [
-                {"name": "Plan", "type": "select", "options": ["Plan 1", "Plan 2", "Plan 3", "Plan 4"]}
-            ]
-        },
-        {
-            "title": "How many days?",
-            "fields": [
-                {"name": "Days", "type": "select", "options": ["1", "2", "3", "4", "5", "6", "7"]}
-            ]
-        },
-        {
-            "title": "Enter your personal data",
-            "fields": [
-                {"name": "Age", "type": "number"},
-                {"name": "Weight", "type": "number"},
-                {"name": "Height", "type": "number"},
-                {"name": "Gender", "type": "select", "options": ["M", "F"]},
-                {"name": "Goal", "type": "select", "options": ["lose fat", "maintain", "gain muscle"]}
-            ]
-        },
-        {
-            "title": "Dietary Preferences",
-            "fields": [
-                {"name": "Dietary Preferences", "type": "select", "options": ["Vegetarian", "Vegan", "Pescatarian", "Omnivore"]},
-                {"name": "Dislikes", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}
-            ]
-        },
-        {
-            "title": "Allergies",
-            "fields": [
-                {"name": "Allergies", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}
-            ]
-        }
-    ]
+    return [steps_mapping[s] for s in steps_order if s != "generate_menu"]
