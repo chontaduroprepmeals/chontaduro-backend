@@ -2,220 +2,207 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>🍽️ Chontaduro Menu Generator</title>
+<title>Chontaduro Menu Generator</title>
 <style>
-  body { font-family: Arial, sans-serif; padding: 20px; background: #fdf6e3; color: #333; }
-  #menu { margin-top: 20px; }
-  .meal { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; border-radius: 6px; background: #fff; }
-  button { margin-top: 10px; padding: 8px 12px; border-radius: 4px; border: none; background: #0077cc; color: white; cursor: pointer; }
-  button:hover { background: #005fa3; }
-  select[multiple] { height: auto; }
+  body { font-family: Arial, sans-serif; max-width: 700px; margin: auto; padding: 20px; }
+  .hidden { display: none; }
+  .step { margin-bottom: 20px; }
+  button { margin-top: 10px; }
 </style>
 </head>
 <body>
 
 <h1>🍽️ Chontaduro Menu Generator</h1>
-<div id="question">Loading...</div>
-<div id="app"></div>
-<div id="menu"></div>
+
+<div id="question"></div>
+<div id="fields"></div>
+
+<button id="backBtn" class="hidden">Back</button>
+<button id="nextBtn">Next</button>
+
+<div id="menuDisplay" class="hidden">
+  <h2>Your Menu</h2>
+  <ul id="menuList"></ul>
+  <p>Total price: $<span id="totalPrice"></span></p>
+
+  <h3>Add Extra Protein</h3>
+  <input type="number" id="proteinAmount" placeholder="grams" min="1">
+  <label><input type="checkbox" id="distributeAll" checked> Distribute in all meals</label>
+  <select id="selectMeal" class="hidden"></select>
+  <button id="addProteinBtn">Add Protein</button>
+</div>
 
 <script>
-const BASE_URL = "https://chontaduro-backend.onrender.com"; 
-let session_id = "test123"; 
-let currentMenu = [];
+let sessionId = Date.now().toString();
 let stepHistory = [];
+let currentStep = "pick_plan";
 
-// -------------------
-// Mostrar formulario
-// -------------------
-function showForm(question, fields, nextStepName) {
-  const container = document.getElementById("app");
-  container.innerHTML = "";
-
-  const q = document.createElement("h2");
-  q.innerText = question;
-  container.appendChild(q);
-
-  const form = document.createElement("form");
-
-  fields.forEach(f => {
-    const label = document.createElement("label");
-    label.innerText = f.label || f.name;
-    label.style.display = "block";
-    label.style.marginTop = "10px";
-    form.appendChild(label);
-
-    let input;
-
-    if(f.type === "select") {
-      input = document.createElement("select");
-      input.name = f.name;
-      if(f.multiple) {
-        input.multiple = true;
-        input.size = Math.min(f.options.length, 6);
-      }
-      f.options.forEach(opt => {
-        const option = document.createElement("option");
-        option.value = opt;
-        option.innerText = opt;
-        input.appendChild(option);
-      });
-    } else if(f.type === "multiselect") {
-      input = document.createElement("select");
-      input.name = f.name;
-      input.multiple = true;
-      input.size = Math.min(f.options.length, 6);
-      f.options.forEach(opt => {
-        const option = document.createElement("option");
-        option.value = opt;
-        option.innerText = opt;
-        input.appendChild(option);
-      });
-    } else {
-      input = document.createElement("input");
-      input.type = f.type || "text";
-      input.name = f.name;
-      input.placeholder = f.placeholder || "";
-    }
-
-    input.style.display = "block";
-    input.style.marginBottom = "8px";
-    input.style.padding = "6px";
-    input.style.width = "100%";
-    input.style.maxWidth = "400px";
-    input.style.borderRadius = "8px";
-    input.style.border = "1px solid #ccc";
-    form.appendChild(input);
-  });
-
-  const btnNext = document.createElement("button");
-  btnNext.type = "submit";
-  btnNext.innerText = "Next";
-  btnNext.style.background = "#ff7e33";
-  form.appendChild(btnNext);
-
-  const btnBack = document.createElement("button");
-  btnBack.type = "button";
-  btnBack.innerText = "Back";
-  btnBack.style.marginLeft = "10px";
-  btnBack.onclick = () => {
-    const lastStep = stepHistory.pop();
-    if(lastStep) nextStep(lastStep.step, lastStep.answer, true);
-  };
-  form.appendChild(btnBack);
-
-  form.onsubmit = async (e) => {
-    e.preventDefault();
-    const answer = {};
-    fields.forEach(f => {
-      const el = form.querySelector(`[name='${f.name}']`);
-      if(f.multiple || f.type === "multiselect") {
-        answer[f.name] = Array.from(el.selectedOptions).map(o => o.value);
-      } else {
-        answer[f.name] = el.value;
-      }
+async function renderStep(step) {
+    let res = await fetch("/next-step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, step: step, answer: {} })
     });
-    stepHistory.push({step: nextStepName, answer});
-    await nextStep(nextStepName, answer);
-  };
+    let data = await res.json();
+    if(data.menu) {
+        displayMenu(data);
+        return;
+    }
+    const qDiv = document.getElementById("question");
+    const fDiv = document.getElementById("fields");
+    qDiv.innerHTML = `<h3>${data.question}</h3>`;
+    fDiv.innerHTML = "";
+    data.fields.forEach(field => {
+        if(field.type === "select") {
+            let select = document.createElement("select");
+            select.id = field.name;
+            field.options.forEach(opt => select.options.add(new Option(opt,opt)));
+            fDiv.appendChild(select);
+        } else if(field.type === "multiselect") {
+            let container = document.createElement("div");
+            field.options.forEach(opt => {
+                let label = document.createElement("label");
+                let checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.value = opt;
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(opt));
+                container.appendChild(label);
+                container.appendChild(document.createElement("br"));
+            });
+            fDiv.appendChild(container);
+        } else {
+            let input = document.createElement("input");
+            input.type = "number";
+            input.id = field.name;
+            fDiv.appendChild(input);
+        }
+    });
 
-  container.appendChild(form);
+    document.getElementById("backBtn").classList.toggle("hidden", stepHistory.length === 0);
+    currentStep = step;
 }
 
-// -------------------
-// Función nextStep
-// -------------------
-async function nextStep(step, answer={}, back=false) {
-  const res = await fetch(BASE_URL + "/next-step", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({session_id, step, answer})
-  });
-  const data = await res.json();
+async function submitStep() {
+    const fDiv = document.getElementById("fields");
+    let answer = {};
+    Array.from(fDiv.querySelectorAll("select,input")).forEach(el => {
+        if(el.type==="checkbox") return;
+        answer[el.id] = el.value;
+    });
+    // Multiselect
+    fDiv.querySelectorAll("div").forEach(div=>{
+        let selected = [];
+        div.querySelectorAll("input[type=checkbox]").forEach(cb=>{
+            if(cb.checked) selected.push(cb.value);
+        });
+        if(selected.length>0) answer[div.querySelector("input[type=checkbox]").parentNode.textContent.trim()] = selected;
+    });
 
-  if(data.fields) {
-    showForm(data.question, data.fields, step);
-  } else if(data.menu) {
-    currentMenu = data.menu;
-    showMenu(data.menu, data.price);
-  } else {
-    document.getElementById("question").innerText = data.question || "";
-  }
+    stepHistory.push(currentStep);
+
+    let res = await fetch("/next-step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, step: currentStep, answer: answer })
+    });
+    let data = await res.json();
+    if(data.menu) {
+        displayMenu(data);
+    } else {
+        renderStep(data.fields ? currentStep : currentStep);
+        renderStep(stepHistory[stepHistory.length-1]);
+        renderStep(data.question ? currentStep : currentStep);
+        renderStep(stepHistory[stepHistory.length-1]);
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+        renderStep(stepHistory.pop());
+    }
 }
 
-// -------------------
-// Mostrar menú
-// -------------------
-function showMenu(menu, price) {
-  const container = document.getElementById("menu");
-  container.innerHTML = `<h2>Your Menu</h2>`;
-  menu.forEach(m => {
-    container.innerHTML += `<div class="meal"><strong>${m.name}</strong> (${m.type})<br>
-      ${m.calories} cal | $${m.price}<br>
-    </div>`;
-  });
-  container.innerHTML += `<p><strong>Total: $${price}</strong></p>`;
-  container.innerHTML += `<button onclick="redoMenu()">Redo Menu</button> `;
-  container.innerHTML += `<button onclick="swapMealPrompt()">Swap Meal</button> `;
-  container.innerHTML += `<button onclick="addProteinPrompt()">Add Protein</button> `;
+document.getElementById("nextBtn").addEventListener("click", async ()=>{
+    const fDiv = document.getElementById("fields");
+    let answer = {};
+    fDiv.querySelectorAll("input, select").forEach(el=>{
+        if(el.type==="checkbox") return;
+        answer[el.id] = el.value || (el.checked ? el.value : "");
+    });
+    fDiv.querySelectorAll("div").forEach(div=>{
+        let selected = [];
+        div.querySelectorAll("input[type=checkbox]").forEach(cb=>{
+            if(cb.checked) selected.push(cb.value);
+        });
+        if(selected.length>0) answer[div.querySelector("input[type=checkbox]").parentNode.textContent.trim()] = selected;
+    });
+
+    let res = await fetch("/next-step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, step: currentStep, answer: answer })
+    });
+    let data = await res.json();
+    if(data.menu) displayMenu(data);
+    else renderStep(data.fields ? currentStep : currentStep);
+    stepHistory.push(currentStep);
+});
+
+document.getElementById("backBtn").addEventListener("click", ()=>{
+    if(stepHistory.length>0){
+        let prev = stepHistory.pop();
+        renderStep(prev);
+    }
+});
+
+function displayMenu(data){
+    document.getElementById("menuDisplay").classList.remove("hidden");
+    let ul = document.getElementById("menuList");
+    ul.innerHTML="";
+    data.menu.forEach(m=>{
+        let li = document.createElement("li");
+        li.textContent = `${m.name} - ${m.type} - ${m.calories} cal - $${m.price}`;
+        ul.appendChild(li);
+    });
+    document.getElementById("totalPrice").textContent = data.price;
+
+    // Mostrar opción de seleccionar solo una comida si plan >1
+    if(data.menu.length>1){
+        const selectMeal = document.getElementById("selectMeal");
+        selectMeal.innerHTML="";
+        data.menu.forEach(m=>{
+            let opt = document.createElement("option");
+            opt.value = m.name;
+            opt.textContent = m.name;
+            selectMeal.appendChild(opt);
+        });
+        selectMeal.classList.remove("hidden");
+    }
 }
 
-// -------------------
-// Redo, Swap, Add Protein
-// -------------------
-async function redoMenu() {
-  const res = await fetch(BASE_URL + "/redo-menu", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({session_id, step: ""})
-  });
-  const data = await res.json();
-  currentMenu = data.menu;
-  showMenu(data.menu, data.price);
-}
+document.getElementById("addProteinBtn").addEventListener("click", async ()=>{
+    const grams = parseFloat(document.getElementById("proteinAmount").value);
+    const distribute = document.getElementById("distributeAll").checked;
+    const mealName = document.getElementById("selectMeal").value;
 
-function swapMealPrompt() {
-  const mealName = prompt("Enter meal name to swap:");
-  if(!mealName) return;
-  swapMeal(mealName);
-}
+    const res = await fetch("/add-protein", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({session_id:sessionId, extra_protein_g:grams, distribute_all:distribute, meal_name:mealName})
+    });
+    const data = await res.json();
+    displayMenu(data);
+});
 
-async function swapMeal(mealName) {
-  const res = await fetch(BASE_URL + "/swap-meal", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({session_id, meal_name: mealName})
-  });
-  const data = await res.json();
-  currentMenu = data.menu;
-  showMenu(data.menu, data.price);
-}
-
-function addProteinPrompt() {
-  const g = parseInt(prompt("How many grams of extra protein?"));
-  if(isNaN(g)) return;
-  const target = prompt("Add to 'all' meals or specify a meal name?");
-  if(!target) return;
-  addProtein(g, target);
-}
-
-async function addProtein(g, target) {
-  const res = await fetch(BASE_URL + "/add-protein", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({session_id, extra_protein_g: g, target})
-  });
-  const data = await res.json();
-  currentMenu = data.menu;
-  showMenu(data.menu, data.price);
-  alert(`Protein added! New price: $${data.price}`);
-}
-
-// -------------------
-// Inicial
-// -------------------
-nextStep("pick_plan");
-
+renderStep(currentStep);
 </script>
 </body>
 </html>

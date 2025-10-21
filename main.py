@@ -6,9 +6,7 @@ import json
 
 app = FastAPI()
 
-# ---------------------------
-# CORS
-# ---------------------------
+# --- CORS ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,9 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------
-# Modelos
-# ---------------------------
+# --- Modelos ---
 class UserInput(BaseModel):
     session_id: str
     step: str
@@ -32,195 +28,140 @@ class SwapMealInput(BaseModel):
 class AddProteinInput(BaseModel):
     session_id: str
     extra_protein_g: int
-    target: str  # "all" o nombre de la comida
+    distribute_all: bool = True
+    meal_name: str = None  # si quiere ponerlo solo en una comida
 
-# ---------------------------
-# Sesiones
-# ---------------------------
+# --- Sesiones ---
 sessions = {}
 
-# ---------------------------
-# Cargar comidas
-# ---------------------------
+# --- Cargar comidas ---
 with open("meals.json", "r") as f:
     all_meals = json.load(f)
 
-# ---------------------------
-# Función para filtrar comidas según categoría, dislikes y alergias
-# ---------------------------
-def filter_meals(category=None, dislikes=None, allergies=None, type_filter=None):
+# --- Filtrar comidas ---
+def filter_meals(meal_type=None, dislikes=None, allergies=None):
     meals = all_meals.copy()
-    if category:
-        meals = [m for m in meals if m["category"] == category]
-    if type_filter:
-        meals = [m for m in meals if m["type"] == type_filter]
+    if meal_type:
+        meals = [m for m in meals if m["type"] == meal_type]
     if dislikes:
-        meals = [m for m in meals if not any(d.lower() in [i.lower() for i in m["ingredients"]] for d in dislikes)]
+        meals = [m for m in meals if not any(d.lower() in [i.lower() for i in m.get("ingredients", [])] for d in dislikes)]
     if allergies:
-        meals = [m for m in meals if not any(a.lower() in [i.lower() for i in m["ingredients"]] for a in allergies)]
+        meals = [m for m in meals if not any(a.lower() in [i.lower() for i in m.get("ingredients", [])] for a in allergies)]
     return meals
 
-# ---------------------------
-# Generar menú
-# ---------------------------
+# --- Cálculo genérico de calorías según sexo y objetivo ---
+def calculate_calories(weight_lbs, height_in, age, sex, goal):
+    # Conversión a kg y cm
+    weight = weight_lbs * 0.453592
+    height = height_in * 2.54
+    if sex.lower() == "m":
+        bmr = 10*weight + 6.25*height - 5*age + 5
+    else:
+        bmr = 10*weight + 6.25*height - 5*age - 161
+    if goal == "lose fat":
+        return int(bmr * 1.2)
+    elif goal == "gain muscle":
+        return int(bmr * 1.5)
+    else:
+        return int(bmr * 1.35)  # maintain
+
+# --- Generar menú ---
 def generate_menu(session_id):
     session = sessions[session_id]
     plan = session.get("pick_plan", {}).get("Plan")
-    days = int(session.get("duration", {}).get("Duration", 1))
+    days = int(session.get("duration", {}).get("Days", 1))
     preferences = session.get("preferences", {}).get("Dietary Preferences", [])
     dislikes = session.get("preferences", {}).get("Dislikes", [])
     allergies = session.get("allergies", {}).get("Allergies", [])
-    
-    # Determinar tipos de comidas por plan
-    plan_types = {
-        "Plan 1": ["main"],
-        "Plan 2": ["main", "dinner"],
-        "Plan 3": ["breakfast", "main"],
-        "Plan 4": ["breakfast", "main", "dinner"]
-    }
-    types = plan_types.get(plan, ["main"])
-    
-    menu = []
-    for t in types:
-        available = filter_meals(plan, dislikes, allergies, t)
-        if not available:
-            raise HTTPException(status_code=400, detail=f"No meals available for {t}")
-        for _ in range(days):
-            menu.append(random.choice(available))
-    
-    # Precio total
-    price = sum(m["price"] for m in menu)
-    
-    sessions[session_id]['menu'] = menu
-    sessions[session_id]['price'] = price
-    return {"menu": menu, "price": price}
+    # Datos personales
+    personal = session.get("personal_data", {})
+    calories_needed = calculate_calories(
+        weight_lbs=float(personal.get("Weight", 0)),
+        height_in=float(personal.get("Height", 0)),
+        age=int(personal.get("Age", 0)),
+        sex=personal.get("Gender", "F"),
+        goal=personal.get("Goal", "maintain")
+    )
 
-# ---------------------------
-# Flujo de pasos
-# ---------------------------
+    menu = []
+    type_map = {
+        "Plan 1": {"Main Meal": 1, "Breakfast": 0},
+        "Plan 2": {"Main Meal": 2, "Breakfast": 0},
+        "Plan 3": {"Main Meal": 1, "Breakfast": 1},
+        "Plan 4": {"Main Meal": 2, "Breakfast": 1}
+    }
+    for day in range(days):
+        for t, count in type_map.get(plan, {}).items():
+            available = filter_meals(t, dislikes, allergies)
+            if not available:
+                continue
+            for _ in range(count):
+                menu.append(random.choice(available))
+
+    # Precio
+    total_price = sum([m["price"] for m in menu])
+    sessions[session_id]['menu'] = menu
+    sessions[session_id]['price'] = total_price
+    return {"menu": menu, "price": total_price}
+
+# --- Endpoints ---
 @app.post("/next-step")
 def next_step(input: UserInput):
     session_id = input.session_id
     step = input.step
     answer = input.answer
-
     if session_id not in sessions:
         sessions[session_id] = {}
-
     if answer:
         sessions[session_id][step] = answer
 
     steps_mapping = {
-        "pick_plan": {
-            "question": "Pick your plan",
-            "fields": [{"name": "Plan", "type": "select", "options": ["Plan 1","Plan 2","Plan 3","Plan 4"]}]
-        },
-        "duration": {
-            "question": "How many days?",
-            "fields": [{"name": "Duration", "type": "select", "options": ["1","2","3","4","5","6","7"]}]
-        },
-        "personal_data": {
-            "question": "Enter your personal data",
-            "fields": [
-                {"name": "Age", "type": "number"},
-                {"name": "Weight", "type": "number"},
-                {"name": "Height", "type": "number"},
-                {"name": "Gender", "type": "select", "options": ["M","F"]},
-                {"name": "Goal", "type": "select", "options": ["Lose Fat","Maintain","Gain Muscle"]}
-            ]
-        },
-        "preferences": {
-            "question": "Dietary preferences",
-            "fields": [
-                {"name": "Dietary Preferences", "type": "multiselect", "options": ["Vegan","Vegetarian","Pescatarian","Omnivore","No preference"]},
-                {"name": "Dislikes", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","No dislikes"]}
-            ]
-        },
-        "allergies": {
-            "question": "Allergies",
-            "fields": [
-                {"name": "Allergies", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","No allergies"]}
-            ]
-        }
+        "pick_plan": {"question": "Pick your plan", "fields":[{"name":"Plan","type":"select","options":["Plan 1","Plan 2","Plan 3","Plan 4"]}]},
+        "duration": {"question":"How many days?","fields":[{"name":"Days","type":"select","options":["1","2","3","4","5","6","7"]}]},
+        "personal_data":{"question":"Enter your personal data","fields":[
+            {"name":"Age","type":"number"},
+            {"name":"Weight","type":"number"},
+            {"name":"Height","type":"number"},
+            {"name":"Gender","type":"select","options":["M","F"]},
+            {"name":"Goal","type":"select","options":["lose fat","maintain","gain muscle"]}
+        ]},
+        "preferences":{"question":"Dietary Preferences","fields":[{"name":"Dietary Preferences","type":"select","options":["Vegetarian","Vegan","Pescatarian","Omnivore"]},
+        {"name":"Dislikes","type":"multiselect","options":["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}]},
+        "allergies":{"question":"Allergies","fields":[{"name":"Allergies","type":"multiselect","options":["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}]}
     }
-
     steps_order = ["pick_plan","duration","personal_data","preferences","allergies","generate_menu"]
+
     try:
-        next_index = steps_order.index(step) + 1
+        next_index = steps_order.index(step)+1
         next_step_name = steps_order[next_index]
     except IndexError:
-        next_step_name = "generate_menu"
+        next_step_name="generate_menu"
 
-    if next_step_name == "generate_menu":
+    if next_step_name=="generate_menu":
         return generate_menu(session_id)
 
-    return {"question": steps_mapping[next_step_name]["question"], "fields": steps_mapping[next_step_name]["fields"]}
+    return {"question":steps_mapping[next_step_name]["question"],"fields":steps_mapping[next_step_name]["fields"]}
 
-# ---------------------------
-# Swap meal
-# ---------------------------
-@app.post("/swap-meal")
-def swap_meal(input: SwapMealInput):
-    session_id = input.session_id
-    meal_name = input.meal_name
-    if session_id not in sessions or 'menu' not in sessions[session_id]:
-        raise HTTPException(status_code=400, detail="No menu generated")
-    
-    menu = sessions[session_id]['menu']
-    plan = sessions[session_id].get("pick_plan", {}).get("Plan")
-    dislikes = sessions[session_id].get("preferences", {}).get("Dislikes", [])
-    allergies = sessions[session_id].get("allergies", {}).get("Allergies", [])
-
-    plan_types = {
-        "Plan 1": ["main"],
-        "Plan 2": ["main","dinner"],
-        "Plan 3": ["breakfast","main"],
-        "Plan 4": ["breakfast","main","dinner"]
-    }
-    types = plan_types.get(plan, ["main"])
-    
-    # Filtrar comidas disponibles
-    available = []
-    for t in types:
-        available.extend(filter_meals(plan, dislikes, allergies, t))
-    
-    new_meal = random.choice([m for m in available if m['name'] != meal_name])
-    for i, m in enumerate(menu):
-        if m['name'] == meal_name:
-            menu[i] = new_meal
-            break
-    sessions[session_id]['menu'] = menu
-    price = sessions[session_id]['price']
-    return {"menu": menu, "price": price}
-
-# ---------------------------
-# Redo menu
-# ---------------------------
-@app.post("/redo-menu")
-def redo_menu(input: UserInput):
-    session_id = input.session_id
-    return generate_menu(session_id)
-
-# ---------------------------
-# Add protein
-# ---------------------------
+# --- Add protein ---
 @app.post("/add-protein")
 def add_protein(input: AddProteinInput):
     session_id = input.session_id
-    if session_id not in sessions or 'menu' not in sessions[session_id]:
+    menu = sessions[session_id].get('menu', [])
+    if not menu:
         raise HTTPException(status_code=400, detail="No menu generated")
-    
-    menu = sessions[session_id]['menu']
-    if input.target == "all":
+    # Distribuir proteína
+    if input.distribute_all:
         per_meal = input.extra_protein_g / len(menu)
         for m in menu:
-            m["calories"] += per_meal * 4
+            m['calories'] += per_meal*4
+            m['price'] += per_meal*1  # $1 por gramo
     else:
         for m in menu:
-            if m["name"] == input.target:
-                m["calories"] += input.extra_protein_g * 4
-                break
-
+            if m['name']==input.meal_name:
+                m['calories'] += input.extra_protein_g*4
+                m['price'] += input.extra_protein_g*1
+    total_price = sum([m["price"] for m in menu])
     sessions[session_id]['menu'] = menu
-    sessions[session_id]['price'] += input.extra_protein_g  # 1$ por gramo extra
-    return {"menu": menu, "price": sessions[session_id]['price']}
+    sessions[session_id]['price'] = total_price
+    return {"menu":menu,"price":total_price,"message":"Protein added"}
+

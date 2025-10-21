@@ -1,75 +1,34 @@
-
 [
   {
+    "name": "Oatmeal with Berries",
+    "type": "Breakfast",
+    "ingredients": ["Oats", "Berries", "Milk"],
+    "calories": 250,
+    "price": 5,
+    "image_url": "https://example.com/oatmeal.jpg"
+  },
+  {
     "name": "Chicken Bowl",
-    "category": "Plan 1",
-    "type": "main",
-    "ingredients": ["Chicken", "Rice", "Veggies"],
-    "calories": 500,
-    "price": 12,
-    "image_url": ""
-  },
-  {
-    "name": "Veggie Lunch",
-    "category": "Plan 2",
-    "type": "main",
-    "ingredients": ["Tofu", "Quinoa", "Veggies"],
-    "calories": 550,
-    "price": 13,
-    "image_url": ""
-  },
-  {
-    "name": "Turkey Dinner",
-    "category": "Plan 2",
-    "type": "dinner",
-    "ingredients": ["Turkey", "Potatoes", "Veggies"],
-    "calories": 600,
-    "price": 14,
-    "image_url": ""
-  },
-  {
-    "name": "Vegan Breakfast",
-    "category": "Plan 3",
-    "type": "breakfast",
-    "ingredients": ["Oats", "Banana", "Almond Milk"],
-    "calories": 350,
-    "price": 8,
-    "image_url": ""
-  },
-  {
-    "name": "Salmon Lunch",
-    "category": "Plan 3",
-    "type": "main",
-    "ingredients": ["Salmon", "Rice", "Veggies"],
-    "calories": 500,
-    "price": 12,
-    "image_url": ""
-  },
-  {
-    "name": "Chicken Breakfast",
-    "category": "Plan 4",
-    "type": "breakfast",
-    "ingredients": ["Eggs", "Toast", "Avocado"],
-    "calories": 400,
-    "price": 10,
-    "image_url": ""
-  },
-  {
-    "name": "Chicken Lunch",
-    "category": "Plan 4",
-    "type": "main",
-    "ingredients": ["Chicken", "Rice", "Veggies"],
+    "type": "Main Meal",
+    "ingredients": ["Chicken", "Rice", "Broccoli"],
     "calories": 550,
     "price": 12,
-    "image_url": ""
+    "image_url": "https://example.com/chicken_bowl.jpg"
   },
   {
-    "name": "Chicken Dinner",
-    "category": "Plan 4",
-    "type": "dinner",
-    "ingredients": ["Chicken", "Potatoes", "Veggies"],
-    "calories": 600,
+    "name": "Salmon Salad",
+    "type": "Main Meal",
+    "ingredients": ["Salmon", "Lettuce", "Avocado"],
+    "calories": 500,
     "price": 14,
-    "image_url": ""
+    "image_url": "https://example.com/salmon_salad.jpg"
+  },
+  {
+    "name": "Vegetable Stir Fry",
+    "type": "Main Meal",
+    "ingredients": ["Broccoli", "Carrots", "Tofu"],
+    "calories": 450,
+    "price": 11,
+    "image_url": "https://example.com/veg_stirfry.jpg"
   }
 ]
