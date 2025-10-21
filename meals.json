@@ -1,40 +1,75 @@
+
 [
-  {"name": "Quinoa Bowl", "category": "Vegetariano", "calories": 450, "price": 12, "image_url": "https://via.placeholder.com/300x200?text=Quinoa+Bowl"},
-  {"name": "Veggie Stir Fry", "category": "Vegetariano", "calories": 400, "price": 11, "image_url": "https://via.placeholder.com/300x200?text=Veggie+Stir+Fry"},
-  {"name": "Lentejas con Arroz", "category": "Vegetariano", "calories": 420, "price": 10, "image_url": "https://via.placeholder.com/300x200?text=Lentejas+Arroz"},
-  {"name": "Salmon Salad", "category": "Pescatariano", "calories": 500, "price": 15, "image_url": "https://via.placeholder.com/300x200?text=Salmon+Salad"},
-  {"name": "Tuna Wrap", "category": "Pescatariano", "calories": 480, "price": 14, "image_url": "https://via.placeholder.com/300x200?text=Tuna+Wrap"},
-  {"name": "Chicken Stir Fry", "category": "Omnívoro", "calories": 600, "price": 14, "image_url": "https://via.placeholder.com/300x200?text=Chicken+Stir+Fry"},
-  {"name": "Beef Bowl", "category": "Omnívoro", "calories": 650, "price": 16, "image_url": "https://via.placeholder.com/300x200?text=Beef+Bowl"},
-  {"name": "Turkey Sandwich", "category": "Omnívoro", "calories": 550, "price": 13, "image_url": "https://via.placeholder.com/300x200?text=Turkey+Sandwich"},
-  {"name": "Vegan Buddha Bowl", "category": "Vegano", "calories": 400, "price": 12, "image_url": "https://via.placeholder.com/300x200?text=Vegan+Buddha+Bowl"},
-  {"name": "Tofu Salad", "category": "Vegano", "calories": 380, "price": 11, "image_url": "https://via.placeholder.com/300x200?text=Tofu+Salad"},
-  {"name": "Chickpea Curry", "category": "Vegano", "calories": 420, "price": 12, "image_url": "https://via.placeholder.com/300x200?text=Chickpea+Curry"},
-  {"name": "Shrimp Pasta", "category": "Pescatariano", "calories": 520, "price": 16, "image_url": "https://via.placeholder.com/300x200?text=Shrimp+Pasta"},
-  {"name": "Egg Salad Sandwich", "category": "Omnívoro", "calories": 500, "price": 12, "image_url": "https://via.placeholder.com/300x200?text=Egg+Salad+Sandwich"},
-  {"name": "Vegan Tacos", "category": "Vegano", "calories": 390, "price": 11, "image_url": "https://via.placeholder.com/300x200?text=Vegan+Tacos"},
-  {"name": "Grilled Salmon", "category": "Pescatariano", "calories": 530, "price": 17, "image_url": "https://via.placeholder.com/300x200?text=Grilled+Salmon"},
-  {"name": "Mushroom Risotto", "category": "Vegetariano", "calories": 480, "price": 13, "image_url": "https://via.placeholder.com/300x200?text=Mushroom+Risotto"},
-  {"name": "Paneer Curry", "category": "Vegetariano", "calories": 450, "price": 12, "image_url": "https://via.placeholder.com/300x200?text=Paneer+Curry"},
-  {"name": "Avocado Toast", "category": "Vegano", "calories": 350, "price": 10, "image_url": "https://via.placeholder.com/300x200?text=Avocado+Toast"},
-  {"name": "Vegan Chili", "category": "Vegano", "calories": 400, "price": 12, "image_url": "https://via.placeholder.com/300x200?text=Vegan+Chili"},
-  {"name": "Pasta Primavera", "category": "Vegetariano", "calories": 460, "price": 13, "image_url": "https://via.placeholder.com/300x200?text=Pasta+Primavera"},
-  {"name": "Grilled Tuna", "category": "Pescatariano", "calories": 510, "price": 16, "image_url": "https://via.placeholder.com/300x200?text=Grilled+Tuna"},
-  {"name": "Cod Fillet", "category": "Pescatariano", "calories": 500, "price": 15, "image_url": "https://via.placeholder.com/300x200?text=Cod+Fillet"},
-  {"name": "Salmon Sushi", "category": "Pescatariano", "calories": 450, "price": 17, "image_url": "https://via.placeholder.com/300x200?text=Salmon+Sushi"},
-  {"name": "Beef Tacos", "category": "Omnívoro", "calories": 600, "price": 14, "image_url": "https://via.placeholder.com/300x200?text=Beef+Tacos"},
-  {"name": "Chicken Salad", "category": "Omnívoro", "calories": 550, "price": 13, "image_url": "https://via.placeholder.com/300x200?text=Chicken+Salad"},
-  {"name": "Turkey Wrap", "category": "Omnívoro", "calories": 530, "price": 12, "image_url": "https://via.placeholder.com/300x200?text=Turkey+Wrap"},
-  {"name": "Veggie Burger", "category": "Vegetariano", "calories": 480, "price": 13, "image_url": "https://via.placeholder.com/300x200?text=Veggie+Burger"},
-  {"name": "Vegan Pasta", "category": "Vegano", "calories": 400, "price": 12, "image_url": "https://via.placeholder.com/300x200?text=Vegan+Pasta"},
-  {"name": "Chili Con Veggies", "category": "Vegano", "calories": 410, "price": 12, "image_url": "https://via.placeholder.com/300x200?text=Chili+Con+Veggies"},
-  {"name": "Paneer Wrap", "category": "Vegetariano", "calories": 430, "price": 11, "image_url": "https://via.placeholder.com/300x200?text=Paneer+Wrap"},
-  {"name": "Eggplant Curry", "category": "Vegetariano", "calories": 420, "price": 12, "image_url": "https://via.placeholder.com/300x200?text=Eggplant+Curry"},
-  {"name": "Shrimp Salad", "category": "Pescatariano", "calories": 520, "price": 15, "image_url": "https://via.placeholder.com/300x200?text=Shrimp+Salad"},
-  {"name": "Grilled Cod", "category": "Pescatariano", "calories": 500, "price": 16, "image_url": "https://via.placeholder.com/300x200?text=Grilled+Cod"},
-  {"name": "Chicken Curry", "category": "Omnívoro", "calories": 600, "price": 14, "image_url": "https://via.placeholder.com/300x200?text=Chicken+Curry"},
-  {"name": "Beef Salad", "category": "Omnívoro", "calories": 650, "price": 16, "image_url": "https://via.placeholder.com/300x200?text=Beef+Salad"},
-  {"name": "Turkey Bowl", "category": "Omnívoro", "calories": 550, "price": 13, "image_url": "https://via.placeholder.com/300x200?text=Turkey+Bowl"},
-  {"name": "Vegan Curry", "category": "Vegano", "calories": 400, "price": 12, "image_url": "https://via.placeholder.com/300x200?text=Vegan+Curry"},
-  {"name": "Tofu Stir Fry", "category": "Vegano", "calories": 380, "price": 11, "image_url": "https://via.placeholder.com/300x200?text=Tofu+Stir+_"}
+  {
+    "name": "Chicken Bowl",
+    "category": "Plan 1",
+    "type": "main",
+    "ingredients": ["Chicken", "Rice", "Veggies"],
+    "calories": 500,
+    "price": 12,
+    "image_url": ""
+  },
+  {
+    "name": "Veggie Lunch",
+    "category": "Plan 2",
+    "type": "main",
+    "ingredients": ["Tofu", "Quinoa", "Veggies"],
+    "calories": 550,
+    "price": 13,
+    "image_url": ""
+  },
+  {
+    "name": "Turkey Dinner",
+    "category": "Plan 2",
+    "type": "dinner",
+    "ingredients": ["Turkey", "Potatoes", "Veggies"],
+    "calories": 600,
+    "price": 14,
+    "image_url": ""
+  },
+  {
+    "name": "Vegan Breakfast",
+    "category": "Plan 3",
+    "type": "breakfast",
+    "ingredients": ["Oats", "Banana", "Almond Milk"],
+    "calories": 350,
+    "price": 8,
+    "image_url": ""
+  },
+  {
+    "name": "Salmon Lunch",
+    "category": "Plan 3",
+    "type": "main",
+    "ingredients": ["Salmon", "Rice", "Veggies"],
+    "calories": 500,
+    "price": 12,
+    "image_url": ""
+  },
+  {
+    "name": "Chicken Breakfast",
+    "category": "Plan 4",
+    "type": "breakfast",
+    "ingredients": ["Eggs", "Toast", "Avocado"],
+    "calories": 400,
+    "price": 10,
+    "image_url": ""
+  },
+  {
+    "name": "Chicken Lunch",
+    "category": "Plan 4",
+    "type": "main",
+    "ingredients": ["Chicken", "Rice", "Veggies"],
+    "calories": 550,
+    "price": 12,
+    "image_url": ""
+  },
+  {
+    "name": "Chicken Dinner",
+    "category": "Plan 4",
+    "type": "dinner",
+    "ingredients": ["Chicken", "Potatoes", "Veggies"],
+    "calories": 600,
+    "price": 14,
+    "image_url": ""
+  }
 ]

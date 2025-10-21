@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>🍽️ Chontaduro Menu Generator</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; background: #fdf6e3; color: #333; }
+  #menu { margin-top: 20px; }
+  .meal { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; border-radius: 6px; background: #fff; }
+  button { margin-top: 10px; padding: 8px 12px; border-radius: 4px; border: none; background: #0077cc; color: white; cursor: pointer; }
+  button:hover { background: #005fa3; }
+  select[multiple] { height: auto; }
+</style>
+</head>
+<body>
+
+<h1>🍽️ Chontaduro Menu Generator</h1>
+<div id="question">Loading...</div>
+<div id="app"></div>
+<div id="menu"></div>
+
+<script>
+const BASE_URL = "https://chontaduro-backend.onrender.com"; 
+let session_id = "test123"; 
+let currentMenu = [];
+let stepHistory = [];
+
+// -------------------
+// Mostrar formulario
+// -------------------
+function showForm(question, fields, nextStepName) {
+  const container = document.getElementById("app");
+  container.innerHTML = "";
+
+  const q = document.createElement("h2");
+  q.innerText = question;
+  container.appendChild(q);
+
+  const form = document.createElement("form");
+
+  fields.forEach(f => {
+    const label = document.createElement("label");
+    label.innerText = f.label || f.name;
+    label.style.display = "block";
+    label.style.marginTop = "10px";
+    form.appendChild(label);
+
+    let input;
+
+    if(f.type === "select") {
+      input = document.createElement("select");
+      input.name = f.name;
+      if(f.multiple) {
+        input.multiple = true;
+        input.size = Math.min(f.options.length, 6);
+      }
+      f.options.forEach(opt => {
+        const option = document.createElement("option");
+        option.value = opt;
+        option.innerText = opt;
+        input.appendChild(option);
+      });
+    } else if(f.type === "multiselect") {
+      input = document.createElement("select");
+      input.name = f.name;
+      input.multiple = true;
+      input.size = Math.min(f.options.length, 6);
+      f.options.forEach(opt => {
+        const option = document.createElement("option");
+        option.value = opt;
+        option.innerText = opt;
+        input.appendChild(option);
+      });
+    } else {
+      input = document.createElement("input");
+      input.type = f.type || "text";
+      input.name = f.name;
+      input.placeholder = f.placeholder || "";
+    }
+
+    input.style.display = "block";
+    input.style.marginBottom = "8px";
+    input.style.padding = "6px";
+    input.style.width = "100%";
+    input.style.maxWidth = "400px";
+    input.style.borderRadius = "8px";
+    input.style.border = "1px solid #ccc";
+    form.appendChild(input);
+  });
+
+  const btnNext = document.createElement("button");
+  btnNext.type = "submit";
+  btnNext.innerText = "Next";
+  btnNext.style.background = "#ff7e33";
+  form.appendChild(btnNext);
+
+  const btnBack = document.createElement("button");
+  btnBack.type = "button";
+  btnBack.innerText = "Back";
+  btnBack.style.marginLeft = "10px";
+  btnBack.onclick = () => {
+    const lastStep = stepHistory.pop();
+    if(lastStep) nextStep(lastStep.step, lastStep.answer, true);
+  };
+  form.appendChild(btnBack);
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const answer = {};
+    fields.forEach(f => {
+      const el = form.querySelector(`[name='${f.name}']`);
+      if(f.multiple || f.type === "multiselect") {
+        answer[f.name] = Array.from(el.selectedOptions).map(o => o.value);
+      } else {
+        answer[f.name] = el.value;
+      }
+    });
+    stepHistory.push({step: nextStepName, answer});
+    await nextStep(nextStepName, answer);
+  };
+
+  container.appendChild(form);
+}
+
+// -------------------
+// Función nextStep
+// -------------------
+async function nextStep(step, answer={}, back=false) {
+  const res = await fetch(BASE_URL + "/next-step", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({session_id, step, answer})
+  });
+  const data = await res.json();
+
+  if(data.fields) {
+    showForm(data.question, data.fields, step);
+  } else if(data.menu) {
+    currentMenu = data.menu;
+    showMenu(data.menu, data.price);
+  } else {
+    document.getElementById("question").innerText = data.question || "";
+  }
+}
+
+// -------------------
+// Mostrar menú
+// -------------------
+function showMenu(menu, price) {
+  const container = document.getElementById("menu");
+  container.innerHTML = `<h2>Your Menu</h2>`;
+  menu.forEach(m => {
+    container.innerHTML += `<div class="meal"><strong>${m.name}</strong> (${m.type})<br>
+      ${m.calories} cal | $${m.price}<br>
+    </div>`;
+  });
+  container.innerHTML += `<p><strong>Total: $${price}</strong></p>`;
+  container.innerHTML += `<button onclick="redoMenu()">Redo Menu</button> `;
+  container.innerHTML += `<button onclick="swapMealPrompt()">Swap Meal</button> `;
+  container.innerHTML += `<button onclick="addProteinPrompt()">Add Protein</button> `;
+}
+
+// -------------------
+// Redo, Swap, Add Protein
+// -------------------
+async function redoMenu() {
+  const res = await fetch(BASE_URL + "/redo-menu", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({session_id, step: ""})
+  });
+  const data = await res.json();
+  currentMenu = data.menu;
+  showMenu(data.menu, data.price);
+}
+
+function swapMealPrompt() {
+  const mealName = prompt("Enter meal name to swap:");
+  if(!mealName) return;
+  swapMeal(mealName);
+}
+
+async function swapMeal(mealName) {
+  const res = await fetch(BASE_URL + "/swap-meal", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({session_id, meal_name: mealName})
+  });
+  const data = await res.json();
+  currentMenu = data.menu;
+  showMenu(data.menu, data.price);
+}
+
+function addProteinPrompt() {
+  const g = parseInt(prompt("How many grams of extra protein?"));
+  if(isNaN(g)) return;
+  const target = prompt("Add to 'all' meals or specify a meal name?");
+  if(!target) return;
+  addProtein(g, target);
+}
+
+async function addProtein(g, target) {
+  const res = await fetch(BASE_URL + "/add-protein", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({session_id, extra_protein_g: g, target})
+  });
+  const data = await res.json();
+  currentMenu = data.menu;
+  showMenu(data.menu, data.price);
+  alert(`Protein added! New price: $${data.price}`);
+}
+
+// -------------------
+// Inicial
+// -------------------
+nextStep("pick_plan");
+
+</script>
+</body>
+</html>

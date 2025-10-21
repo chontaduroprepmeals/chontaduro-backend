@@ -7,18 +7,18 @@ import json
 app = FastAPI()
 
 # ---------------------------
-# Configurar CORS
+# CORS
 # ---------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Cambia "*" por tu dominio Carrd o localhost
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # ---------------------------
-# Modelos de entrada
+# Modelos
 # ---------------------------
 class UserInput(BaseModel):
     session_id: str
@@ -32,14 +32,15 @@ class SwapMealInput(BaseModel):
 class AddProteinInput(BaseModel):
     session_id: str
     extra_protein_g: int
+    target: str  # "all" o nombre de la comida
 
 # ---------------------------
-# Sesiones en memoria
+# Sesiones
 # ---------------------------
 sessions = {}
 
 # ---------------------------
-# Cargar comidas desde JSON
+# Cargar comidas
 # ---------------------------
 with open("meals.json", "r") as f:
     all_meals = json.load(f)
@@ -47,54 +48,55 @@ with open("meals.json", "r") as f:
 # ---------------------------
 # Función para filtrar comidas según categoría, dislikes y alergias
 # ---------------------------
-def filter_meals(category=None, dislikes=None, allergies=None):
+def filter_meals(category=None, dislikes=None, allergies=None, type_filter=None):
     meals = all_meals.copy()
     if category:
-        meals = [m for m in meals if m["category"].lower() == category.lower()]
+        meals = [m for m in meals if m["category"] == category]
+    if type_filter:
+        meals = [m for m in meals if m["type"] == type_filter]
     if dislikes:
-        meals = [m for m in meals if not any(d.lower() in [ing.lower() for ing in m.get("ingredients", [])] for d in dislikes)]
+        meals = [m for m in meals if not any(d.lower() in [i.lower() for i in m["ingredients"]] for d in dislikes)]
     if allergies:
-        meals = [m for m in meals if not any(a.lower() in [ing.lower() for ing in m.get("ingredients", [])] for a in allergies)]
+        meals = [m for m in meals if not any(a.lower() in [i.lower() for i in m["ingredients"]] for a in allergies)]
     return meals
 
 # ---------------------------
-# Generar menú personalizado
+# Generar menú
 # ---------------------------
 def generate_menu(session_id):
     session = sessions[session_id]
-
     plan = session.get("pick_plan", {}).get("Plan")
-    duration = int(session.get("duration", {}).get("Duration", 1))
+    days = int(session.get("duration", {}).get("Duration", 1))
     preferences = session.get("preferences", {}).get("Dietary Preferences", [])
     dislikes = session.get("preferences", {}).get("Dislikes", [])
     allergies = session.get("allergies", {}).get("Allergies", [])
-
-    category_map = {
-        "Plan 1": "Vegetarian",
-        "Plan 2": "Vegan",
-        "Plan 3": "Pescatarian",
-        "Plan 4": "Omnivore"
+    
+    # Determinar tipos de comidas por plan
+    plan_types = {
+        "Plan 1": ["main"],
+        "Plan 2": ["main", "dinner"],
+        "Plan 3": ["breakfast", "main"],
+        "Plan 4": ["breakfast", "main", "dinner"]
     }
-    category = category_map.get(plan)
-    available_meals = filter_meals(category, dislikes, allergies)
-
-    if len(available_meals) < 3:
-        raise HTTPException(status_code=400, detail="Not enough meals available for your preferences/allergies.")
-
-    menu = random.sample(available_meals, 3)
-
-    plan_price_map = {"Plan 1": 12, "Plan 2": 12, "Plan 3": 15, "Plan 4": 14}
-    price = sum([plan_price_map.get(plan, 12) for _ in menu]) * duration
-
+    types = plan_types.get(plan, ["main"])
+    
+    menu = []
+    for t in types:
+        available = filter_meals(plan, dislikes, allergies, t)
+        if not available:
+            raise HTTPException(status_code=400, detail=f"No meals available for {t}")
+        for _ in range(days):
+            menu.append(random.choice(available))
+    
+    # Precio total
+    price = sum(m["price"] for m in menu)
+    
     sessions[session_id]['menu'] = menu
     sessions[session_id]['price'] = price
     return {"menu": menu, "price": price}
 
 # ---------------------------
-# Flujo principal /next-step
-# ---------------------------
-# ---------------------------
-# Endpoint principal: siguiente paso
+# Flujo de pasos
 # ---------------------------
 @app.post("/next-step")
 def next_step(input: UserInput):
@@ -108,41 +110,41 @@ def next_step(input: UserInput):
     if answer:
         sessions[session_id][step] = answer
 
-    # Definimos pasos y campos con opciones
     steps_mapping = {
         "pick_plan": {
-            "question": "Selecciona tu plan",
+            "question": "Pick your plan",
             "fields": [{"name": "Plan", "type": "select", "options": ["Plan 1","Plan 2","Plan 3","Plan 4"]}]
         },
         "duration": {
-            "question": "Selecciona duración (días)",
-            "fields": [{"name": "Duración", "type": "select", "options": ["1","2","3","4","5","6","7"]}]
+            "question": "How many days?",
+            "fields": [{"name": "Duration", "type": "select", "options": ["1","2","3","4","5","6","7"]}]
         },
         "personal_data": {
-            "question": "Ingresa tus datos personales",
+            "question": "Enter your personal data",
             "fields": [
-                {"name": "Edad", "type": "input"},
-                {"name": "Peso", "type": "input"},
-                {"name": "Sexo", "type": "select", "options": ["M","F"]}
+                {"name": "Age", "type": "number"},
+                {"name": "Weight", "type": "number"},
+                {"name": "Height", "type": "number"},
+                {"name": "Gender", "type": "select", "options": ["M","F"]},
+                {"name": "Goal", "type": "select", "options": ["Lose Fat","Maintain","Gain Muscle"]}
             ]
         },
         "preferences": {
-            "question": "Indica tus preferencias alimenticias",
+            "question": "Dietary preferences",
             "fields": [
-                {"name": "Preferencias alimenticias", "type": "select", "options": ["Vegano","Vegetariano","Pescatariano","Omnívoro"]},
-                {"name": "Ingredientes que no te gustan", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts"]}
+                {"name": "Dietary Preferences", "type": "multiselect", "options": ["Vegan","Vegetarian","Pescatarian","Omnivore","No preference"]},
+                {"name": "Dislikes", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","No dislikes"]}
             ]
         },
         "allergies": {
-            "question": "Indica tus alergias",
+            "question": "Allergies",
             "fields": [
-                {"name": "Alergias", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts"]}
+                {"name": "Allergies", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","No allergies"]}
             ]
         }
     }
 
-    # Determinar siguiente paso
-    steps_order = ["pick_plan", "duration", "personal_data", "preferences", "allergies", "generate_menu"]
+    steps_order = ["pick_plan","duration","personal_data","preferences","allergies","generate_menu"]
     try:
         next_index = steps_order.index(step) + 1
         next_step_name = steps_order[next_index]
@@ -161,30 +163,32 @@ def next_step(input: UserInput):
 def swap_meal(input: SwapMealInput):
     session_id = input.session_id
     meal_name = input.meal_name
-
     if session_id not in sessions or 'menu' not in sessions[session_id]:
-        raise HTTPException(status_code=400, detail="No menu generated for this session")
-
+        raise HTTPException(status_code=400, detail="No menu generated")
+    
     menu = sessions[session_id]['menu']
     plan = sessions[session_id].get("pick_plan", {}).get("Plan")
     dislikes = sessions[session_id].get("preferences", {}).get("Dislikes", [])
     allergies = sessions[session_id].get("allergies", {}).get("Allergies", [])
 
-    category_map = {
-        "Plan 1": "Vegetarian",
-        "Plan 2": "Vegan",
-        "Plan 3": "Pescatarian",
-        "Plan 4": "Omnivore"
+    plan_types = {
+        "Plan 1": ["main"],
+        "Plan 2": ["main","dinner"],
+        "Plan 3": ["breakfast","main"],
+        "Plan 4": ["breakfast","main","dinner"]
     }
-    category = category_map.get(plan)
-    available_meals = filter_meals(category, dislikes, allergies)
-
-    new_meal = random.choice([m for m in available_meals if m['name'] != meal_name])
+    types = plan_types.get(plan, ["main"])
+    
+    # Filtrar comidas disponibles
+    available = []
+    for t in types:
+        available.extend(filter_meals(plan, dislikes, allergies, t))
+    
+    new_meal = random.choice([m for m in available if m['name'] != meal_name])
     for i, m in enumerate(menu):
         if m['name'] == meal_name:
             menu[i] = new_meal
             break
-
     sessions[session_id]['menu'] = menu
     price = sessions[session_id]['price']
     return {"menu": menu, "price": price}
@@ -203,14 +207,20 @@ def redo_menu(input: UserInput):
 @app.post("/add-protein")
 def add_protein(input: AddProteinInput):
     session_id = input.session_id
-
     if session_id not in sessions or 'menu' not in sessions[session_id]:
-        raise HTTPException(status_code=400, detail="No menu generated for this session")
-
+        raise HTTPException(status_code=400, detail="No menu generated")
+    
     menu = sessions[session_id]['menu']
-    for m in menu:
-        m['calories'] += input.extra_protein_g * 4  # 4 cal per gram protein
+    if input.target == "all":
+        per_meal = input.extra_protein_g / len(menu)
+        for m in menu:
+            m["calories"] += per_meal * 4
+    else:
+        for m in menu:
+            if m["name"] == input.target:
+                m["calories"] += input.extra_protein_g * 4
+                break
 
     sessions[session_id]['menu'] = menu
-    price = sessions[session_id]['price']
-    return {"menu": menu, "price": price, "message": f"{input.extra_protein_g}g extra protein added."}
+    sessions[session_id]['price'] += input.extra_protein_g  # 1$ por gramo extra
+    return {"menu": menu, "price": sessions[session_id]['price']}
