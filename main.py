@@ -165,3 +165,44 @@ def add_protein(input: AddProteinInput):
     sessions[session_id]['price'] = total_price
     return {"menu":menu,"price":total_price,"message":"Protein added"}
 
+# --- Endpoint inicial para el formulario ---
+@app.get("/form")
+def get_form():
+    """Devuelve la estructura inicial del formulario"""
+    return [
+        {
+            "title": "Pick your plan",
+            "fields": [
+                {"name": "Plan", "type": "select", "options": ["Plan 1", "Plan 2", "Plan 3", "Plan 4"]}
+            ]
+        },
+        {
+            "title": "How many days?",
+            "fields": [
+                {"name": "Days", "type": "select", "options": ["1", "2", "3", "4", "5", "6", "7"]}
+            ]
+        },
+        {
+            "title": "Enter your personal data",
+            "fields": [
+                {"name": "Age", "type": "number"},
+                {"name": "Weight", "type": "number"},
+                {"name": "Height", "type": "number"},
+                {"name": "Gender", "type": "select", "options": ["M", "F"]},
+                {"name": "Goal", "type": "select", "options": ["lose fat", "maintain", "gain muscle"]}
+            ]
+        },
+        {
+            "title": "Dietary Preferences",
+            "fields": [
+                {"name": "Dietary Preferences", "type": "select", "options": ["Vegetarian", "Vegan", "Pescatarian", "Omnivore"]},
+                {"name": "Dislikes", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}
+            ]
+        },
+        {
+            "title": "Allergies",
+            "fields": [
+                {"name": "Allergies", "type": "multiselect", "options": ["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}
+            ]
+        }
+    ]
