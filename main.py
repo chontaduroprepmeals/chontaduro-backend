@@ -110,10 +110,22 @@ def next_step(input: UserInput):
     session_id = input.session_id
     step = input.step
     answer = input.answer
+
     if session_id not in sessions:
         sessions[session_id] = {}
+
+    # Guardar respuesta si existe (mismo comportamiento que antes)
     if answer:
         sessions[session_id][step] = answer
+
+    # --- NUEVO: si es la llamada inicial, devolver el primer paso sin cambiar nada más ---
+    if step in [None, "", "start"]:
+        return {
+            "question": "Pick your plan",
+            "fields": [
+                {"name": "Plan", "type": "select", "options": ["Plan 1", "Plan 2", "Plan 3", "Plan 4"]}
+            ]
+        }
 
     steps_mapping = {
         "pick_plan": {"question": "Pick your plan", "fields":[{"name":"Plan","type":"select","options":["Plan 1","Plan 2","Plan 3","Plan 4"]}]},
@@ -132,15 +144,16 @@ def next_step(input: UserInput):
     steps_order = ["pick_plan","duration","personal_data","preferences","allergies","generate_menu"]
 
     try:
-        next_index = steps_order.index(step)+1
+        next_index = steps_order.index(step) + 1
         next_step_name = steps_order[next_index]
-    except IndexError:
-        next_step_name="generate_menu"
+    except (ValueError, IndexError):
+        # Si el step no está en la lista o ya es el último, vamos a generar el menú
+        next_step_name = "generate_menu"
 
-    if next_step_name=="generate_menu":
+    if next_step_name == "generate_menu":
         return generate_menu(session_id)
 
-    return {"question":steps_mapping[next_step_name]["question"],"fields":steps_mapping[next_step_name]["fields"]}
+    return {"question": steps_mapping[next_step_name]["question"], "fields": steps_mapping[next_step_name]["fields"]}
 
 # --- Add protein ---
 @app.post("/add-protein")
