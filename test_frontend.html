@@ -1,208 +1,167 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Chontaduro Menu Generator</title>
-<style>
-  body { font-family: Arial, sans-serif; max-width: 700px; margin: auto; padding: 20px; }
-  .hidden { display: none; }
-  .step { margin-bottom: 20px; }
-  button { margin-top: 10px; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🍽️ Chontaduro Menu Generator</title>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #fff8f3;
+      color: #333;
+      text-align: center;
+      padding: 2rem;
+    }
+    h1 {
+      color: #ff7b00;
+      margin-bottom: 1rem;
+    }
+    form {
+      display: inline-block;
+      background: white;
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+      text-align: left;
+      max-width: 400px;
+      width: 100%;
+    }
+    label {
+      display: block;
+      margin: 10px 0 5px;
+      font-weight: 600;
+    }
+    input, select {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    button {
+      background-color: #ff7b00;
+      color: white;
+      border: none;
+      padding: 0.7rem 1.5rem;
+      border-radius: 0.5rem;
+      font-size: 1rem;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background-color: #e96a00;
+    }
+    #menu {
+      margin-top: 2rem;
+      text-align: left;
+      display: inline-block;
+    }
+    .meal {
+      border-bottom: 1px solid #eee;
+      padding: 10px 0;
+    }
+  </style>
 </head>
 <body>
+  <h1>🍽️ Chontaduro Menu Generator</h1>
 
-<h1>🍽️ Chontaduro Menu Generator</h1>
+  <div id="app">
+    <p>Loading...</p>
+  </div>
 
-<div id="question"></div>
-<div id="fields"></div>
+  <script>
+    const BASE_URL = "https://chontaduro-backend.onrender.com";
+    let sessionId = Math.random().toString(36).substring(2);
+    let step = "pick_plan";
+    let history = [];
 
-<button id="backBtn" class="hidden">Back</button>
-<button id="nextBtn">Next</button>
+    async function fetchStep(answer = {}) {
+      try {
+        const response = await fetch(`${BASE_URL}/next-step`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, step, answer }),
+        });
 
-<div id="menuDisplay" class="hidden">
-  <h2>Your Menu</h2>
-  <ul id="menuList"></ul>
-  <p>Total price: $<span id="totalPrice"></span></p>
+        if (!response.ok) throw new Error("Request failed");
+        const data = await response.json();
 
-  <h3>Add Extra Protein</h3>
-  <input type="number" id="proteinAmount" placeholder="grams" min="1">
-  <label><input type="checkbox" id="distributeAll" checked> Distribute in all meals</label>
-  <select id="selectMeal" class="hidden"></select>
-  <button id="addProteinBtn">Add Protein</button>
-</div>
-
-<script>
-let sessionId = Date.now().toString();
-let stepHistory = [];
-let currentStep = "pick_plan";
-
-async function renderStep(step) {
-    let res = await fetch("/next-step", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, step: step, answer: {} })
-    });
-    let data = await res.json();
-    if(data.menu) {
-        displayMenu(data);
-        return;
-    }
-    const qDiv = document.getElementById("question");
-    const fDiv = document.getElementById("fields");
-    qDiv.innerHTML = `<h3>${data.question}</h3>`;
-    fDiv.innerHTML = "";
-    data.fields.forEach(field => {
-        if(field.type === "select") {
-            let select = document.createElement("select");
-            select.id = field.name;
-            field.options.forEach(opt => select.options.add(new Option(opt,opt)));
-            fDiv.appendChild(select);
-        } else if(field.type === "multiselect") {
-            let container = document.createElement("div");
-            field.options.forEach(opt => {
-                let label = document.createElement("label");
-                let checkbox = document.createElement("input");
-                checkbox.type = "checkbox";
-                checkbox.value = opt;
-                label.appendChild(checkbox);
-                label.appendChild(document.createTextNode(opt));
-                container.appendChild(label);
-                container.appendChild(document.createElement("br"));
-            });
-            fDiv.appendChild(container);
+        if (data.menu) {
+          showMenu(data);
         } else {
-            let input = document.createElement("input");
-            input.type = "number";
-            input.id = field.name;
-            fDiv.appendChild(input);
+          history.push({ step, answer });
+          showForm(data.question, data.fields);
         }
-    });
-
-    document.getElementById("backBtn").classList.toggle("hidden", stepHistory.length === 0);
-    currentStep = step;
-}
-
-async function submitStep() {
-    const fDiv = document.getElementById("fields");
-    let answer = {};
-    Array.from(fDiv.querySelectorAll("select,input")).forEach(el => {
-        if(el.type==="checkbox") return;
-        answer[el.id] = el.value;
-    });
-    // Multiselect
-    fDiv.querySelectorAll("div").forEach(div=>{
-        let selected = [];
-        div.querySelectorAll("input[type=checkbox]").forEach(cb=>{
-            if(cb.checked) selected.push(cb.value);
-        });
-        if(selected.length>0) answer[div.querySelector("input[type=checkbox]").parentNode.textContent.trim()] = selected;
-    });
-
-    stepHistory.push(currentStep);
-
-    let res = await fetch("/next-step", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, step: currentStep, answer: answer })
-    });
-    let data = await res.json();
-    if(data.menu) {
-        displayMenu(data);
-    } else {
-        renderStep(data.fields ? currentStep : currentStep);
-        renderStep(stepHistory[stepHistory.length-1]);
-        renderStep(data.question ? currentStep : currentStep);
-        renderStep(stepHistory[stepHistory.length-1]);
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
-        renderStep(stepHistory.pop());
+      } catch (err) {
+        document.getElementById("app").innerHTML = "<p>Error loading form.</p>";
+      }
     }
-}
 
-document.getElementById("nextBtn").addEventListener("click", async ()=>{
-    const fDiv = document.getElementById("fields");
-    let answer = {};
-    fDiv.querySelectorAll("input, select").forEach(el=>{
-        if(el.type==="checkbox") return;
-        answer[el.id] = el.value || (el.checked ? el.value : "");
-    });
-    fDiv.querySelectorAll("div").forEach(div=>{
-        let selected = [];
-        div.querySelectorAll("input[type=checkbox]").forEach(cb=>{
-            if(cb.checked) selected.push(cb.value);
-        });
-        if(selected.length>0) answer[div.querySelector("input[type=checkbox]").parentNode.textContent.trim()] = selected;
-    });
+    function showForm(question, fields) {
+      let formHtml = `<form id="stepForm"><h2>${question}</h2>`;
+      fields.forEach(f => {
+        formHtml += `<label>${f.name}</label>`;
+        if (f.type === "select") {
+          formHtml += `<select name="${f.name}">
+            ${f.options.map(o => `<option value="${o}">${o}</option>`).join("")}
+          </select>`;
+        } else if (f.type === "multiselect") {
+          formHtml += `<select name="${f.name}" multiple size="5">
+            ${f.options.map(o => `<option value="${o}">${o}</option>`).join("")}
+          </select>`;
+        } else {
+          formHtml += `<input type="${f.type}" name="${f.name}" required />`;
+        }
+      });
+      formHtml += `<button type="submit">Next</button>`;
+      if (history.length > 0) formHtml += `<button type="button" id="backBtn">Back</button>`;
+      formHtml += `</form>`;
+      document.getElementById("app").innerHTML = formHtml;
 
-    let res = await fetch("/next-step", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, step: currentStep, answer: answer })
-    });
-    let data = await res.json();
-    if(data.menu) displayMenu(data);
-    else renderStep(data.fields ? currentStep : currentStep);
-    stepHistory.push(currentStep);
-});
+      document.getElementById("stepForm").onsubmit = e => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const answer = {};
+        for (const [key, value] of formData.entries()) {
+          if (answer[key]) {
+            if (!Array.isArray(answer[key])) answer[key] = [answer[key]];
+            answer[key].push(value);
+          } else {
+            answer[key] = value;
+          }
+        }
+        step = fields[0].name.toLowerCase().includes("plan") ? "pick_plan" :
+               fields[0].name.toLowerCase().includes("day") ? "duration" :
+               step === "pick_plan" ? "duration" : step;
+        fetchStep(answer);
+      };
 
-document.getElementById("backBtn").addEventListener("click", ()=>{
-    if(stepHistory.length>0){
-        let prev = stepHistory.pop();
-        renderStep(prev);
+      const backBtn = document.getElementById("backBtn");
+      if (backBtn) {
+        backBtn.onclick = () => {
+          if (history.length > 0) {
+            const prev = history.pop();
+            step = prev.step;
+            fetchStep(prev.answer);
+          }
+        };
+      }
     }
-});
 
-function displayMenu(data){
-    document.getElementById("menuDisplay").classList.remove("hidden");
-    let ul = document.getElementById("menuList");
-    ul.innerHTML="";
-    data.menu.forEach(m=>{
-        let li = document.createElement("li");
-        li.textContent = `${m.name} - ${m.type} - ${m.calories} cal - $${m.price}`;
-        ul.appendChild(li);
-    });
-    document.getElementById("totalPrice").textContent = data.price;
-
-    // Mostrar opción de seleccionar solo una comida si plan >1
-    if(data.menu.length>1){
-        const selectMeal = document.getElementById("selectMeal");
-        selectMeal.innerHTML="";
-        data.menu.forEach(m=>{
-            let opt = document.createElement("option");
-            opt.value = m.name;
-            opt.textContent = m.name;
-            selectMeal.appendChild(opt);
-        });
-        selectMeal.classList.remove("hidden");
+    function showMenu(data) {
+      let html = `<h2>Your menu is ready!</h2>
+      <div id="menu">`;
+      data.menu.forEach(m => {
+        html += `<div class="meal">
+          <strong>${m.name}</strong> (${m.type})<br>
+          ${m.calories} kcal - $${m.price.toFixed(2)}
+        </div>`;
+      });
+      html += `</div><p><strong>Total Price:</strong> $${data.price.toFixed(2)}</p>`;
+      document.getElementById("app").innerHTML = html;
     }
-}
 
-document.getElementById("addProteinBtn").addEventListener("click", async ()=>{
-    const grams = parseFloat(document.getElementById("proteinAmount").value);
-    const distribute = document.getElementById("distributeAll").checked;
-    const mealName = document.getElementById("selectMeal").value;
-
-    const res = await fetch("/add-protein", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({session_id:sessionId, extra_protein_g:grams, distribute_all:distribute, meal_name:mealName})
-    });
-    const data = await res.json();
-    displayMenu(data);
-});
-
-renderStep(currentStep);
-</script>
+    fetchStep();
+  </script>
 </body>
 </html>
