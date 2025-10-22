@@ -62,22 +62,29 @@
         });
 
         if (!response.ok) {
-          // Si el servidor responde con un error HTTP (ej: 400, 500)
-          const errorData = await response.json();
-          // Muestra el error específico de la API para mejor diagnóstico
-          throw new Error(`HTTP Error ${response.status}: ${errorData.detail || 'Server error'}`);
+          // Intenta obtener el error detallado de FastAPI
+          const errorData = await response.json().catch(() => ({ detail: 'No detailed error message from server.' }));
+          const errorMsg = errorData.detail || 'Server error';
+          // LANZA UN ERROR CON EL CÓDIGO Y MENSAJE REAL
+          throw new Error(`HTTP ${response.status}: ${errorMsg}`);
         }
         return await response.json();
 
       } catch (err) {
-        // Si hay un error de red (Failed to fetch, CORS, DNS)
+        // Muestra el mensaje de error real en la UI
         console.error("API Request Failed:", err);
         document.getElementById("app").innerHTML = `
-          <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4">
-            <strong class="font-bold">❌ Error: Failed to fetch.</strong>
-            <span class="block sm:inline">Verifica tu conexión o los logs de Render para detalles.</span>
+          <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4 text-left">
+            <strong class="font-bold block mb-1">❌ Error de Comunicación</strong>
+            <span class="block text-sm">Causa: ${err.message || 'Fallo de red (DNS o CORS).'}</span>
+            <span class="block text-xs text-red-500 mt-2">
+                Si ves 'HTTP 405', fuerza la limpieza de caché en Render.
+            </span>
+            <button onclick="window.location.reload();" class="mt-3 bg-red-500 hover:bg-red-600 text-white font-medium py-1 px-3 rounded-lg text-xs">
+                Recargar
+            </button>
           </div>`;
-        throw err; // Propaga el error para detener el flujo
+        throw err;
       }
     }
 
@@ -103,9 +110,8 @@
       };
       
       try {
-          // Si no es la primera llamada ni "Back", guardamos el estado en el historial
           if (nextStepAction === 'next' && currentStepName !== 'start') {
-              // El historial se maneja completamente en el backend, solo enviamos la acción.
+              // El historial se maneja completamente en el backend.
           }
           
           const data = await apiRequest("/next-step", payload);
@@ -115,7 +121,7 @@
             showMenu(data);
           } else {
             // Si no hay menú, se muestra el formulario del siguiente paso
-            currentStepName = nextStepAction === 'back' ? data.current_step : data.current_step; 
+            currentStepName = data.current_step; 
             showForm(data.question, data.fields);
           }
       } catch (error) {
@@ -132,10 +138,8 @@
       fields.forEach(f => {
         const values = formData.getAll(f.name);
         if (f.type === 'multiselect') {
-          // Los multiselects se guardan siempre como un array
           answer[f.name] = values; 
         } else {
-          // El resto se guarda como el primer valor
           answer[f.name] = values[0];
         }
       });
@@ -144,7 +148,6 @@
     }
     
     function handleBack() {
-      // El backend maneja la lógica de qué paso mostrar y la restauración de estado
       fetchStep({}, 'back'); 
     }
 
@@ -171,7 +174,6 @@
             ${f.options.map(o => `<option value="${o}">${o}</option>`).join("")}
           </select>`;
         } else {
-          // Incluye min y max para los inputs numéricos (como en duration y extra_protein)
           const minAttr = f.min !== undefined ? `min="${f.min}"` : '';
           const maxAttr = f.max !== undefined ? `max="${f.max}"` : '';
           const placeholderAttr = f.placeholder ? `placeholder="${f.placeholder}"` : '';
@@ -184,14 +186,12 @@
       });
 
       formHtml += `<div class="flex justify-between mt-8">`;
-      // La longitud del historial ahora se determina implícitamente por el backend (si devuelve el botón "Back")
-      // Sin embargo, para la UI, podemos basarnos en si no es el primer paso.
       if (currentStepName !== 'start') {
         formHtml += `<button type="button" id="backBtn" class="bg-gray-400 hover:bg-gray-500 text-white font-medium py-2 px-4 rounded-lg transition duration-150">
           ← Back
         </button>`;
       } else {
-        formHtml += '<div></div>'; // Espaciador para mantener el botón "Next" a la derecha
+        formHtml += '<div></div>';
       }
       formHtml += `<button type="submit" class="font-medium py-2 px-4 rounded-lg transition duration-150" 
         style="background-color: #ff7b00; color: white; hover:bg-orange-600;">
@@ -218,7 +218,6 @@
       `;
       
       data.menu.forEach(m => {
-        // Corregido: Removida la referencia a m.day ya que el backend no la incluye.
         menuHtml += `
           <div class="meal bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200 flex justify-between items-center">
             <div>
@@ -251,7 +250,6 @@
       
       const payload = { 
         session_id: sessionId, 
-        // CORRECCIÓN: Usar meal_to_swap para que coincida con el modelo Pydantic
         meal_to_swap: mealName 
       };
       
@@ -259,7 +257,7 @@
       if (data && data.menu) {
         showMenu(data);
       } else if (data.message) {
-        alert(data.message); // Usamos un alert simple para el mensaje de error o éxito
+        alert(data.message);
       }
     }
 
@@ -274,12 +272,11 @@
       if (data && data.menu) {
         showMenu(data);
       } else if (data.message) {
-        alert(data.message); // Usamos un alert simple para el mensaje de error o éxito
+        alert(data.message);
       }
     }
 
     // Iniciar la aplicación
-    // La primera llamada usa currentStepName = 'start'
     fetchStep({}, 'next'); 
   </script>
 </body>
