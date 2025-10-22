@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🍽️ Chontaduro Menu Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #fef3e6; /* Soft cream/peach background */
+      color: #333;
+    }
+    .app-container {
+      max-width: 90%;
+      margin: 2rem auto;
+      padding: 1rem;
+    }
+    .card {
+      background: white;
+      padding: 2rem;
+      border-radius: 1.5rem;
+      box-shadow: 0 10px 25px rgba(255, 123, 0, 0.1);
+      max-width: 500px;
+      margin: 1rem auto;
+      border: 1px solid #ff7b0033;
+    }
+    .chontaduro-btn {
+      background-color: #ff7b00;
+      color: white;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+    .chontaduro-btn:hover {
+      background-color: #e96a00;
+      transform: translateY(-1px);
+    }
+    .back-btn {
+      background-color: #ccc;
+      color: #333;
+    }
+    .back-btn:hover {
+      background-color: #bbb;
+    }
+    .meal-list {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+    .meal-item {
+      background-color: #fff8f3;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      border-left: 5px solid #ff7b00;
+    }
+    .meal-name {
+      font-weight: 700;
+      color: #333;
+      display: block;
+    }
+    .meal-meta {
+      font-size: 0.9em;
+      color: #666;
+    }
+    /* Responsive adjustment */
+    @media (min-width: 640px) {
+      .app-container {
+        max-width: 800px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container text-center">
+    <h1 class="text-4xl font-extrabold text-[#ff7b00] mb-6">🍽️ Chontaduro Menu Generator</h1>
+    <div id="app-content" class="card">
+      <p class="text-gray-500">Initializing session...</p>
+    </div>
+  </div>
+
+  <script>
+    // Configuración
+    const BASE_URL = "/"; // Usamos la URL base del entorno
+    let sessionId = Math.random().toString(36).substring(2);
+    let currentStep = "start"; // El estado inicial
+    let menuData = null; // Para almacenar el menú final y permitir swap/redo
+    
+    const appContent = document.getElementById("app-content");
+
+    // --- Core Request Function ---
+    async function apiRequest(endpoint, body = {}) {
+      try {
+        appContent.innerHTML = `<div class="p-4 text-center text-[#ff7b00]">Processing...</div>`;
+        
+        const response = await fetch(`${BASE_URL}${endpoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, ...body }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || `HTTP Error: ${response.status}`);
+        }
+        return await response.json();
+      } catch (err) {
+        console.error("API Request Failed:", err);
+        appContent.innerHTML = `<div class="p-4 text-center text-red-500">❌ Error: ${err.message}. Please try again.</div>`;
+        // Volver a mostrar el menú si falló un swap/redo
+        if (menuData) showMenu(menuData); 
+        return null;
+      }
+    }
+
+    // --- Flow Navigation ---
+    async function navigateFlow(step, answer = {}) {
+        const data = await apiRequest("/next-step", { step, answer });
+        
+        if (!data) return; // Error handled by apiRequest
+
+        if (data.menu) {
+            menuData = data;
+            showMenu(data);
+        } else {
+            currentStep = data.step; // Actualiza el estado al paso que el backend pide
+            showForm(data.question, data.fields);
+        }
+    }
+    
+    // --- "Back" Action ---
+    function goBack() {
+        // El backend maneja la lógica de retroceder, nosotros solo le informamos.
+        navigateFlow("back");
+    }
+
+    // --- Form Rendering ---
+    function showForm(question, fields) {
+      let formHtml = `<form id="stepForm" class="space-y-4">
+        <h2 class="text-2xl font-bold text-[#ff7b00] mb-4">${question}</h2>`;
+      
+      fields.forEach(f => {
+        const isMulti = f.type === "multiselect";
+        const inputName = f.name;
+
+        formHtml += `<div><label class="font-semibold text-gray-700 block">${f.name} ${f.unit ? `(${f.unit})` : ''}</label>`;
+        
+        if (f.type === "select" || isMulti) {
+          formHtml += `<select name="${inputName}" ${isMulti ? 'multiple size="5"' : ''} class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff7b00] transition duration-150">
+            ${f.options.map(o => `<option value="${o}">${o}</option>`).join("")}
+          </select>`;
+        } else if (f.type === "number") {
+          formHtml += `<input type="number" name="${inputName}" min="1" step="${f.unit === 'lbs' || f.unit === 'in' ? '0.1' : '1'}" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff7b00] transition duration-150" />`;
+        } else {
+          formHtml += `<input type="${f.type}" name="${inputName}" required class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff7b00] transition duration-150" />`;
+        }
+        formHtml += `</div>`;
+      });
+
+      formHtml += `<div class="flex justify-between mt-6">`;
+      // Mostrar botón Back solo si no es el primer paso
+      if (currentStep !== "pick_plan" && currentStep !== "start") {
+        formHtml += `<button type="button" id="backBtn" class="back-btn rounded-full px-4 py-2 font-semibold">⬅️ Back</button>`;
+      } else {
+        formHtml += `<div></div>`; // Spacer
+      }
+      formHtml += `<button type="submit" class="chontaduro-btn rounded-full px-6 py-2 font-semibold">Next ➡️</button>`;
+      formHtml += `</div></form>`;
+
+      appContent.innerHTML = formHtml;
+
+      // --- Event Listeners ---
+      document.getElementById("stepForm").onsubmit = e => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const answer = {};
+
+        // Recolectar respuestas, manejando multiselect como arrays
+        fields.forEach(f => {
+          const values = formData.getAll(f.name);
+          if (f.type === "multiselect") {
+            answer[f.name] = values;
+          } else {
+            answer[f.name] = values.length > 0 ? values[0] : "";
+          }
+        });
+        
+        navigateFlow(currentStep, answer);
+      };
+
+      const backBtn = document.getElementById("backBtn");
+      if (backBtn) {
+        backBtn.onclick = goBack;
+      }
+    }
+
+    // --- Menu Rendering ---
+    function showMenu(data) {
+      menuData = data; // Guardamos el estado del menú
+      let html = `<h2 class="text-3xl font-bold text-[#ff7b00] mb-4">✅ Your Menu is Ready!</h2>
+      <div id="menu-list" class="meal-list mb-6">`;
+      
+      data.menu.forEach((m, index) => {
+        html += `<div class="meal-item flex justify-between items-center" data-meal-name="${m.name}">
+          <div>
+            <span class="meal-name">${m.name}</span>
+            <span class="meal-meta block text-xs">Day ${m.day} | ${m.type}</span>
+          </div>
+          <div class="text-right">
+            <span class="font-semibold text-sm">${m.calories.toFixed(0)} kcal</span><br>
+            <span class="font-bold text-[#ff7b00]">$${m.price.toFixed(2)}</span>
+            <button onclick="handleSwap('${m.name}')" class="ml-3 chontaduro-btn rounded-full text-xs p-1">Swap</button>
+          </div>
+        </div>`;
+      });
+      
+      html += `</div>
+      <p class="text-xl font-bold mb-4">Total Price: <span class="text-[#ff7b00]">$${data.price.toFixed(2)}</span></p>
+      
+      <div class="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-3">
+        <button onclick="handleRedo()" class="chontaduro-btn rounded-lg px-4 py-2 font-semibold">🔄 Redo Menu</button>
+        <button onclick="showProteinModal()" class="chontaduro-btn rounded-lg px-4 py-2 font-semibold">🧪 Add Protein</button>
+      </div>`;
+      
+      appContent.innerHTML = html;
+    }
+
+    // --- Menu Actions ---
+
+    async function handleSwap(mealName) {
+        const data = await apiRequest("/swap-meal", { meal_name: mealName });
+        if (data) {
+            menuData = data;
+            showMenu(data);
+        }
+    }
+
+    async function handleRedo() {
+        const data = await apiRequest("/redo-menu", {});
+        if (data) {
+            menuData = data;
+            showMenu(data);
+        }
+    }
+
+    function showProteinModal() {
+        const meals = menuData.menu.map(m => `<option value="${m.name}">Day ${m.day}: ${m.name}</option>`).join('');
+
+        const modalHtml = `<div id="proteinModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm">
+                <h3 class="text-xl font-bold text-[#ff7b00] mb-4">Add Extra Protein (grams)</h3>
+                <form id="proteinForm" class="space-y-4">
+                    <div>
+                        <label class="font-semibold block mb-1">Grams of Protein:</label>
+                        <input type="number" id="extraProteinG" name="extra_protein_g" min="1" required class="w-full p-2 border rounded-lg" value="10">
+                    </div>
+                    <div>
+                        <label class="font-semibold block mb-1">Distribution:</label>
+                        <select id="distributionType" name="distribution_type" onchange="toggleMealSelect(this.value)" class="w-full p-2 border rounded-lg">
+                            <option value="all">Distribute to All Meals</option>
+                            <option value="single">Add to Single Meal</option>
+                        </select>
+                    </div>
+                    <div id="mealSelectContainer" style="display:none;">
+                        <label class="font-semibold block mb-1">Select Meal:</label>
+                        <select id="mealNameSelect" name="meal_name" class="w-full p-2 border rounded-lg">
+                            ${meals}
+                        </select>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-5">
+                        <button type="button" onclick="closeProteinModal()" class="back-btn rounded-lg px-4 py-2 font-semibold">Cancel</button>
+                        <button type="submit" class="chontaduro-btn rounded-lg px-4 py-2 font-semibold">Apply Protein</button>
+                    </div>
+                </form>
+            </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        document.getElementById('proteinForm').onsubmit = handleProteinSubmit;
+    }
+    
+    function toggleMealSelect(value) {
+        document.getElementById('mealSelectContainer').style.display = value === 'single' ? 'block' : 'none';
+    }
+
+    function closeProteinModal() {
+        const modal = document.getElementById('proteinModal');
+        if (modal) modal.remove();
+    }
+
+    async function handleProteinSubmit(e) {
+        e.preventDefault();
+        const proteinG = parseInt(document.getElementById('extraProteinG').value);
+        const distributionType = document.getElementById('distributionType').value;
+        
+        let mealName = null;
+        if (distributionType === 'single') {
+            mealName = document.getElementById('mealNameSelect').value;
+        }
+
+        closeProteinModal();
+        
+        const body = {
+            extra_protein_g: proteinG,
+            distribute_all: distributionType === 'all',
+            meal_name: mealName
+        };
+        
+        const data = await apiRequest("/add-protein", body);
+        if (data) {
+            menuData = data;
+            showMenu(data);
+        }
+    }
+
+    // --- Initialization ---
+    // Inicia el flujo pidiendo el primer paso ('start')
+    navigateFlow("start");
+
+  </script>
+</body>
+</html>
