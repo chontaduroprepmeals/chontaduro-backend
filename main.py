@@ -1,20 +1,13 @@
 # Importaciones necesarias
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, FileResponse # Se añade FileResponse
 from pydantic import BaseModel, Field
 import random
 import json
 from typing import List, Dict, Any, Optional
 
-app = FastAPI() # Versión FINAL de despliegue - Acepta POST
-
-# --- SERVICIO DE ARCHIVOS ESTÁTICOS Y ROOT ---
-# Monta el directorio actual para servir index.html.
-# Esto hace que FastAPI busque 'index.html' en la carpeta raíz para la ruta '/'
-app.mount("/", StaticFiles(directory=".", html=True), name="static")
-
+app = FastAPI() 
 
 # --- CORS (Permite la comunicación entre frontend y backend) ---
 app.add_middleware(
@@ -24,6 +17,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- ENDPOINT RAIZ (SOLUCIÓN AL ERROR 405) ---
+@app.get("/", response_class=HTMLResponse)
+async def serve_frontend():
+    # Al servir index.html explícitamente con GET /, evitamos el conflicto
+    # de StaticFiles que estaba bloqueando el POST /next-step.
+    return FileResponse("index.html")
+
 
 # --- BASE DE DATOS Y ESTADO DE LA SESIÓN ---
 # Carga la base de datos de comidas
@@ -92,7 +93,7 @@ def filter_meals(dislikes: List[str], allergies: List[str]) -> List[Meal]:
     
     filtered_meals = []
     for meal in MEALS_DATA:
-        if not any(ing.lower() in undesired for ing in meal.ingredients):
+        if not any(ing.lower() in undesired for ing in meal["ingredients"]):
             filtered_meals.append(Meal(**meal))
     return filtered_meals
 
@@ -224,6 +225,7 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     return {"question": "Paso no reconocido. Inicia de nuevo."}
 
 # Endpoint principal para navegar el flujo
+# Mantenemos methods=["POST", "GET"] en /next-step
 @app.api_route("/next-step", methods=["POST", "GET"])
 async def next_step(req: NextStepRequest):
     session_id = req.session_id
