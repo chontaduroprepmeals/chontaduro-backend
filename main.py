@@ -1,7 +1,7 @@
 # Importaciones necesarias
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse # Se añade FileResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
 import random
 import json
@@ -225,7 +225,6 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     return {"question": "Paso no reconocido. Inicia de nuevo."}
 
 # Endpoint principal para navegar el flujo
-# Mantenemos methods=["POST", "GET"] en /next-step
 @app.api_route("/next-step", methods=["POST", "GET"])
 async def next_step(req: NextStepRequest):
     session_id = req.session_id
@@ -238,6 +237,10 @@ async def next_step(req: NextStepRequest):
 
     state = SessionState(**sessions[session_id])
     
+    # Variable para almacenar el nombre del siguiente paso a renderizar
+    # Inicialmente, es el paso actual (por si hay un error de validación o 'else')
+    step_to_render_name = state.current_step 
+    
     # --- Manejo del botón 'Back' ---
     if step_name == "back" and state.history:
         # Recuperar el estado del paso anterior
@@ -245,7 +248,7 @@ async def next_step(req: NextStepRequest):
         prev_state = SessionState(**prev_state_data)
         sessions[session_id] = prev_state.model_dump()
         
-        # Regresar al paso anterior (el último paso en el historial antes de hacer pop)
+        # Regresar al paso anterior
         return get_form_fields(prev_state.current_step, prev_state)
 
     # --- Procesar Respuesta y Actualizar Estado ---
@@ -253,45 +256,64 @@ async def next_step(req: NextStepRequest):
     # Guardar el estado actual antes de avanzar
     if step_name != "start":
         state.history.append(sessions[session_id].copy())
-    
-    if step_name == "pick_plan" and "Plan" in answer:
+
+    # 1. Start/Initialization: Esto asegura que el primer paso sea 'pick_plan'
+    if step_name == "start":
+        step_to_render_name = steps_mapping["start"] # "pick_plan"
+        
+    # 2. Pick Plan
+    elif step_name == "pick_plan" and "Plan" in answer:
         plan_str = answer["Plan"].split(":")[0].replace("Plan ", "").strip()
         state.plan = int(plan_str)
-        state.current_step = steps_mapping["pick_plan"]
+        step_to_render_name = steps_mapping["pick_plan"] # "duration"
     
-    elif step_name == "duration" and "Días" in answer:
+    # 3. Duration (Con validación para evitar 422 si el input es incorrecto)
+    elif step_name == "duration":
         try:
-            state.days = int(answer["Días"])
-            state.current_step = steps_mapping["duration"]
-        except ValueError:
-            pass # No actualizar si no es un número
+            days_input = answer.get("Días")
+            # Validación: debe existir, ser digito y estar en rango 1-30
+            if days_input and str(days_input).isdigit() and 1 <= int(days_input) <= 30:
+                state.days = int(days_input)
+                step_to_render_name = steps_mapping["duration"] # "dislikes"
+            else:
+                # Quedarse en el mismo paso (duration) si la entrada no es válida
+                step_to_render_name = "duration" 
+                # Opcional: podrías añadir un mensaje de error aquí si el frontend no lo maneja
+        except Exception:
+            # Quedarse en el mismo paso si hay error de parseo
+            step_to_render_name = "duration"
     
+    # 4. Dislikes
     elif step_name == "dislikes" and "Ingredientes_No_Deseados" in answer:
         state.dislikes = answer["Ingredientes_No_Deseados"] if isinstance(answer["Ingredientes_No_Deseados"], list) else [answer["Ingredientes_No_Deseados"]]
-        state.current_step = steps_mapping["dislikes"]
+        step_to_render_name = steps_mapping["dislikes"] # "allergies"
 
+    # 5. Allergies
     elif step_name == "allergies" and "Alergias" in answer:
         state.allergies = answer["Alergias"] if isinstance(answer["Alergias"], list) else [answer["Alergias"]]
-        state.current_step = steps_mapping["allergies"]
+        step_to_render_name = steps_mapping["allergies"] # "extra_protein"
 
+    # 6. Extra Protein
     elif step_name == "extra_protein" and "Gramos_Extra_Proteína" in answer:
         try:
-            state.extra_protein_grams = int(answer["Gramos_Extra_Proteína"])
-            state.current_step = steps_mapping["extra_protein"]
-        except ValueError:
-             state.extra_protein_grams = 0 # Valor por defecto
-             state.current_step = steps_mapping["extra_protein"]
+            protein_input = answer.get("Gramos_Extra_Proteína")
+            if protein_input is not None and str(protein_input).isdigit() and 0 <= int(protein_input) <= 100:
+                state.extra_protein_grams = int(protein_input)
+            elif protein_input == "" or protein_input is None:
+                 state.extra_protein_grams = 0 # Input vacío se trata como 0
+            
+            step_to_render_name = steps_mapping["extra_protein"] # "review"
+        except Exception:
+             state.extra_protein_grams = 0 # Valor por defecto en caso de error
+             step_to_render_name = steps_mapping["extra_protein"] # Avanzar al siguiente paso (review)
 
+    # 7. Review (Generación del menú final)
     elif step_name == "review":
-        # Se asume que el usuario confirmó el review, pasamos a generar el menú
-        state.current_step = steps_mapping["extra_protein"] # El paso de review es el penúltimo en la navegación lógica
-        
         # --- GENERACIÓN FINAL DEL MENÚ ---
         state.menu = generate_menu(state)
         sessions[session_id] = state.model_dump()
         
         if not state.menu:
-             # Retornar a la revisión con un mensaje de error si el menú está vacío
             return {
                 "question": "Error: Los filtros son muy restrictivos. Vuelve atrás y ajusta tus preferencias.",
                 "fields": []
@@ -305,15 +327,16 @@ async def next_step(req: NextStepRequest):
             "message": "¡Tu menú está listo!"
         }
         
-    elif step_name == "start":
-        state.current_step = steps_mapping["start"]
-
+    # --- Final Step Update and Return ---
+    
+    # Actualizamos el estado con el nuevo paso a renderizar
+    state.current_step = step_to_render_name
+    
     # Guardar el estado actualizado
     sessions[session_id] = state.model_dump()
 
     # Devolver el formulario para el siguiente paso
-    next_step_name = steps_mapping.get(state.current_step, "review")
-    return get_form_fields(next_step_name, state)
+    return get_form_fields(state.current_step, state)
 
 
 # Endpoint para cambiar una comida individual
