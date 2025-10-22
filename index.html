@@ -11,6 +11,16 @@
       font-family: 'Inter', sans-serif;
       background-color: #f7f3f0; /* Color crema suave */
     }
+    /* Estilo para el spinner de carga */
+    .loader {
+      border-color: #f3f3f3;
+      border-top-color: #ff7b00;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
@@ -54,6 +64,7 @@
         if (!response.ok) {
           // Si el servidor responde con un error HTTP (ej: 400, 500)
           const errorData = await response.json();
+          // Muestra el error específico de la API para mejor diagnóstico
           throw new Error(`HTTP Error ${response.status}: ${errorData.detail || 'Server error'}`);
         }
         return await response.json();
@@ -64,7 +75,7 @@
         document.getElementById("app").innerHTML = `
           <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4">
             <strong class="font-bold">❌ Error: Failed to fetch.</strong>
-            <span class="block sm:inline">Check network connection or console for details.</span>
+            <span class="block sm:inline">Verifica tu conexión o los logs de Render para detalles.</span>
           </div>`;
         throw err; // Propaga el error para detener el flujo
       }
@@ -76,6 +87,13 @@
      * @param {string} nextStepAction - 'next' o 'back'.
      */
     async function fetchStep(answer = {}, nextStepAction = 'next') {
+      // Mostrar spinner de carga
+      document.getElementById("app").innerHTML = `
+        <div class="py-10">
+          <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4 mx-auto" style="border-top-color: #ff7b00;"></div>
+          <p class="text-gray-600">Loading...</p>
+        </div>`;
+        
       const stepToSend = nextStepAction === 'back' ? 'back' : currentStepName;
       
       const payload = { 
@@ -83,20 +101,26 @@
         step: stepToSend, 
         answer: answer 
       };
-
-      // Si no es la primera llamada ni "Back", guardamos el estado en el historial
-      if (nextStepAction === 'next' && currentStepName !== 'start') {
-          history.push(currentStepName); // Solo guardamos el nombre del paso completado
-      }
       
-      const data = await apiRequest("/next-step", payload);
+      try {
+          // Si no es la primera llamada ni "Back", guardamos el estado en el historial
+          if (nextStepAction === 'next' && currentStepName !== 'start') {
+              // El historial se maneja completamente en el backend, solo enviamos la acción.
+          }
+          
+          const data = await apiRequest("/next-step", payload);
 
-      // El backend devuelve el nombre del *próximo* paso
-      if (data.step === "menu_final") {
-        showMenu(data);
-      } else {
-        currentStepName = data.step; // Actualiza el paso actual al que el backend nos envió
-        showForm(data.question, data.fields);
+          // Si la respuesta incluye un menú, se muestra el resultado final
+          if (data.menu) {
+            showMenu(data);
+          } else {
+            // Si no hay menú, se muestra el formulario del siguiente paso
+            currentStepName = nextStepAction === 'back' ? data.current_step : data.current_step; 
+            showForm(data.question, data.fields);
+          }
+      } catch (error) {
+          // El error ya fue manejado y mostrado por apiRequest
+          console.error("Error during step transition:", error);
       }
     }
 
@@ -120,12 +144,8 @@
     }
     
     function handleBack() {
-      if (history.length > 0) {
-        // Sacamos el último paso completado del historial.
-        history.pop(); 
-        // El backend maneja la lógica de qué paso mostrar.
-        fetchStep({}, 'back'); 
-      }
+      // El backend maneja la lógica de qué paso mostrar y la restauración de estado
+      fetchStep({}, 'back'); 
     }
 
 
@@ -151,14 +171,22 @@
             ${f.options.map(o => `<option value="${o}">${o}</option>`).join("")}
           </select>`;
         } else {
+          // Incluye min y max para los inputs numéricos (como en duration y extra_protein)
+          const minAttr = f.min !== undefined ? `min="${f.min}"` : '';
+          const maxAttr = f.max !== undefined ? `max="${f.max}"` : '';
+          const placeholderAttr = f.placeholder ? `placeholder="${f.placeholder}"` : '';
+
           formHtml += `<input type="${f.type}" id="${inputId}" name="${f.name}" required 
+            ${minAttr} ${maxAttr} ${placeholderAttr}
             class="shadow-sm focus:ring-orange-500 focus:border-orange-500 block w-full sm:text-sm border-gray-300 rounded-md p-2" />`;
         }
         formHtml += `</div>`;
       });
 
       formHtml += `<div class="flex justify-between mt-8">`;
-      if (history.length > 0) {
+      // La longitud del historial ahora se determina implícitamente por el backend (si devuelve el botón "Back")
+      // Sin embargo, para la UI, podemos basarnos en si no es el primer paso.
+      if (currentStepName !== 'start') {
         formHtml += `<button type="button" id="backBtn" class="bg-gray-400 hover:bg-gray-500 text-white font-medium py-2 px-4 rounded-lg transition duration-150">
           ← Back
         </button>`;
@@ -190,11 +218,12 @@
       `;
       
       data.menu.forEach(m => {
+        // Corregido: Removida la referencia a m.day ya que el backend no la incluye.
         menuHtml += `
           <div class="meal bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200 flex justify-between items-center">
             <div>
               <strong class="text-base text-gray-900">${m.name}</strong> 
-              <span class="text-sm text-gray-500"> (Day ${m.day} - ${m.type})</span><br>
+              <span class="text-sm text-gray-500"> (${m.type})</span><br>
               <span class="text-sm text-gray-700">${m.calories} kcal - $${m.price.toFixed(2)}</span>
             </div>
             <button onclick="handleSwapMeal('${m.name}')" 
@@ -210,7 +239,6 @@
           <button onclick="handleRedoMenu()" class="bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-150">
             Regenerate Menu
           </button>
-          <!-- Se puede agregar un modal para la proteína aquí -->
         </div>
       `;
       document.getElementById("app").innerHTML = menuHtml;
@@ -219,22 +247,23 @@
     // --- Funciones de Interacción del Menú ---
 
     async function handleSwapMeal(mealName) {
-      // Usar un modal en lugar de confirm(), pero para la prueba rápida:
       if (!confirm(`Are you sure you want to swap ${mealName}?`)) return;
       
       const payload = { 
         session_id: sessionId, 
-        meal_name: mealName 
+        // CORRECCIÓN: Usar meal_to_swap para que coincida con el modelo Pydantic
+        meal_to_swap: mealName 
       };
       
       const data = await apiRequest("/swap-meal", payload);
-      if (data) {
+      if (data && data.menu) {
         showMenu(data);
+      } else if (data.message) {
+        alert(data.message); // Usamos un alert simple para el mensaje de error o éxito
       }
     }
 
     async function handleRedoMenu() {
-      // Usar un modal en lugar de confirm(), pero para la prueba rápida:
       if (!confirm("Are you sure you want to regenerate the entire menu?")) return;
       
       const payload = { 
@@ -242,8 +271,10 @@
       };
       
       const data = await apiRequest("/redo-menu", payload);
-      if (data) {
+      if (data && data.menu) {
         showMenu(data);
+      } else if (data.message) {
+        alert(data.message); // Usamos un alert simple para el mensaje de error o éxito
       }
     }
 
