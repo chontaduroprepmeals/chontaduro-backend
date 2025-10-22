@@ -1,21 +1,22 @@
-from fastapi import FastAPI, HTTPException
+# Importaciones necesarias
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles # ¡Nueva importación!
-from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 import random
 import json
 from typing import List, Dict, Any, Optional
 
 app = FastAPI()
 
-# --- SERVICIO DE ARCHIVOS ESTÁTICOS Y ROOT (¡NUEVO!) ---
-# Monta el directorio actual para servir index.html directamente.
+# --- SERVICIO DE ARCHIVOS ESTÁTICOS Y ROOT ---
+# Monta el directorio actual para servir index.html.
 # Esto hace que FastAPI busque 'index.html' en la carpeta raíz para la ruta '/'
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
 
-# --- CORS ---
+# --- CORS (Permite la comunicación entre frontend y backend) ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,320 +25,366 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Modelos Pydantic ---
+# --- BASE DE DATOS Y ESTADO DE LA SESIÓN ---
+# Carga la base de datos de comidas
+try:
+    with open("meals.json", "r") as f:
+        MEALS_DATA = json.load(f)
+except FileNotFoundError:
+    MEALS_DATA = []
 
-class UserInput(BaseModel):
-    session_id: str
-    step: str # El paso actual (ej. 'pick_plan', 'allergies', o 'start', 'back')
-    answer: Dict[str, Any] = {} # Respuesta del formulario
-
-class AddProteinInput(BaseModel):
-    session_id: str
-    extra_protein_g: int
-    distribute_all: bool = True
-    meal_name: Optional[str] = None
-
-class SwapInput(BaseModel):
-    session_id: str
-    meal_name: str
-
-class SessionInput(BaseModel):
-    session_id: str
-
-# --- Sesiones y Data ---
+# Almacenamiento de sesiones (simula una base de datos de usuario)
 sessions: Dict[str, Dict[str, Any]] = {}
 
-try:
-    # Intenta leer meals.json
-    with open("meals.json", "r") as f:
-        all_meals = json.load(f)
-except FileNotFoundError:
-    print("WARNING: meals.json not found. Meal functions will not work.")
-    all_meals = []
-
-# --- Configuración del Flujo ---
-
-# Pasos interactivos del formulario
-steps_order = ["pick_plan", "duration", "personal_data", "preferences", "allergies"]
-
-# Estructura de cada paso del formulario (para el frontend)
+# Mapeo del flujo de la aplicación
 steps_mapping = {
-    "pick_plan": {"question": "Pick your plan", "fields":[{"name":"Plan","type":"select","options":["Plan 1","Plan 2","Plan 3","Plan 4"]}]},
-    "duration": {"question":"How many days?","fields":[{"name":"Days","type":"select","options":["1","2","3","4","5","6","7"]}]},
-    "personal_data":{"question":"Enter your personal data","fields":[
-        {"name":"Age","type":"number"},
-        {"name":"Weight","type":"number", "unit":"lbs"},
-        {"name":"Height","type":"number", "unit":"in"},
-        {"name":"Gender","type":"select","options":["M","F"]},
-        {"name":"Goal","type":"select","options":["lose fat","maintain","gain muscle"]}
-    ]},
-    "preferences":{"question":"Dietary Preferences","fields":[
-        {"name":"Dietary Preferences","type":"select","options":["Vegetarian","Vegan","Pescatarian","Omnivore"]},
-        {"name":"Dislikes","type":"multiselect","options":["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}
-    ]},
-    "allergies":{"question":"Allergies","fields":[
-        {"name":"Allergies","type":"multiselect","options":["Nuts","Gluten","Dairy","Eggs","Soy","Fish","Shellfish","Meat","Peanuts","None"]}
-    ]}
+    "start": "pick_plan",
+    "pick_plan": "duration",
+    "duration": "dislikes",
+    "dislikes": "allergies",
+    "allergies": "extra_protein",
+    "extra_protein": "review",
 }
 
-# --- Funciones Clave del Backend ---
+# --- MODELOS DE DATOS (Pydantic) ---
 
-def filter_meals(meal_type: Optional[str] = None, dislikes: List[str] = None, allergies: List[str] = None) -> List[Dict[str, Any]]:
-    """Filtra comidas según tipo, aversiones e ingredientes alérgenos."""
-    meals = all_meals.copy()
+class Meal(BaseModel):
+    name: str
+    type: str
+    ingredients: List[str]
+    calories: int
+    price: float
+    image_url: Optional[str] = None
+
+class SessionState(BaseModel):
+    plan: Optional[int] = None
+    days: Optional[int] = None
+    dislikes: List[str] = []
+    allergies: List[str] = []
+    extra_protein_grams: int = 0
+    menu: List[Meal] = []
+    current_step: str = "start"
+    history: List[Dict[str, Any]] = [] # Para el botón 'Back'
+
+class NextStepRequest(BaseModel):
+    session_id: str
+    step: str
+    answer: Dict[str, Any]
+
+class SwapMealRequest(BaseModel):
+    session_id: str
+    meal_to_swap: str
+
+class RedoMenuRequest(BaseModel):
+    session_id: str
+
+# --- LÓGICA DE NEGOCIO ---
+
+def calculate_price(menu: List[Meal], extra_protein: int) -> float:
+    """Calcula el precio total del menú, incluyendo proteína extra."""
+    base_price = sum(meal.price for meal in menu)
+    protein_cost = extra_protein * 1.00  # $1.00 por gramo extra
+    return round(base_price + protein_cost, 2)
+
+def filter_meals(dislikes: List[str], allergies: List[str]) -> List[Meal]:
+    """Filtra las comidas que contienen ingredientes no deseados."""
+    undesired = set([d.lower() for d in dislikes] + [a.lower() for a in allergies])
     
-    if meal_type:
-        meals = [m for m in meals if m.get("type") == meal_type]
+    filtered_meals = []
+    for meal in MEALS_DATA:
+        if not any(ing.lower() in undesired for ing in meal.ingredients):
+            filtered_meals.append(Meal(**meal))
+    return filtered_meals
+
+def generate_menu(state: SessionState) -> List[Meal]:
+    """Genera el menú completo basado en las preferencias del usuario."""
+    if not state.plan or not state.days:
+        return []
+
+    meals_per_day = {1: 1, 2: 2, 3: 3, 4: 3}[state.plan]
+    total_meals_required = state.days * meals_per_day
     
-    # Asegurar que las restricciones sean listas de strings en minúsculas
-    dislikes = [d.lower() for d in dislikes or [] if d.lower() != "none"]
-    allergies = [a.lower() for a in allergies or [] if a.lower() != "none"]
+    # Filtrar comidas
+    available_meals = filter_meals(state.dislikes, state.allergies)
 
-    def is_compatible(meal, restrictions):
-        ingredients = [i.lower() for i in meal.get("ingredients", [])]
-        return not any(r in ingredients for r in restrictions)
+    if not available_meals:
+        # En caso de filtros muy restrictivos
+        return []
 
-    if dislikes:
-        meals = [m for m in meals if is_compatible(m, dislikes)]
-    
-    if allergies:
-        meals = [m for m in meals if is_compatible(m, allergies)]
-        
-    return meals
+    # Crear categorías de comidas para balancear
+    categories = {
+        "Breakfast": [m for m in available_meals if m.type == "Breakfast"],
+        "Main Meal": [m for m in available_meals if m.type == "Main Meal"]
+    }
 
-def calculate_calories(weight_lbs: float, height_in: float, age: int, sex: str, goal: str) -> int:
-    """Calcula las calorías diarias usando el BMR y factor de actividad/objetivo."""
-    weight_kg = weight_lbs * 0.453592
-    height_cm = height_in * 2.54
-    sex_upper = sex.upper()
-    
-    # Fórmula de Mifflin-St Jeor (adaptada)
-    if sex_upper == "M":
-        bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
-    else: # F
-        bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age - 161
-
-    # Factores de actividad/objetivo (simulación)
-    if goal == "lose fat":
-        factor = 1.2 
-    elif goal == "gain muscle":
-        factor = 1.5 
-    else: # maintain
-        factor = 1.35
-        
-    return int(bmr * factor)
-
-def generate_menu(session_id: str) -> Dict[str, Any]:
-    """Genera el menú completo basado en los datos de la sesión."""
-    session = sessions.get(session_id)
-    if not session or not session.get('personal_data'):
-        raise HTTPException(status_code=400, detail="Incomplete data to generate menu")
-        
-    plan = session.get("pick_plan", {}).get("Plan")
-    days = int(session.get("duration", {}).get("Days", 1))
-    
-    dislikes = session.get("preferences", {}).get("Dislikes", [])
-    allergies = session.get("allergies", {}).get("Allergies", [])
-    personal = session.get("personal_data", {})
-
-    # Calcular calorías (aunque no se usa para filtrar, es bueno guardarlas)
-    calories_needed = calculate_calories(
-        weight_lbs=float(personal.get("Weight", 0)),
-        height_in=float(personal.get("Height", 0)),
-        age=int(personal.get("Age", 0)),
-        sex=personal.get("Gender", "F"),
-        goal=personal.get("Goal", "maintain")
-    )
-    session['calories_needed'] = calories_needed # Opcional: guardar el cálculo
-
+    # Lógica de selección: intentar balancear comidas principales y desayunos
     menu = []
-    # Plan Map: Tipo de comida y número de veces que debe aparecer al día
-    type_map = {
-        "Plan 1": {"Main Meal": 1, "Breakfast": 0},
-        "Plan 2": {"Main Meal": 2, "Breakfast": 0},
-        "Plan 3": {"Main Meal": 1, "Breakfast": 1},
-        "Plan 4": {"Main Meal": 2, "Breakfast": 1}
-    }
+    for day in range(state.days):
+        day_meals = []
+        
+        # Siempre un desayuno si el plan lo requiere
+        if meals_per_day >= 1 and categories["Breakfast"]:
+            # Usar random.choice para seleccionar una comida al azar y evitar repetición inmediata
+            breakfast = random.choice(categories["Breakfast"])
+            day_meals.append(breakfast)
+        
+        # El resto son comidas principales
+        main_meals_required = meals_per_day - (1 if meals_per_day >= 1 else 0)
+        
+        for _ in range(main_meals_required):
+            if categories["Main Meal"]:
+                main_meal = random.choice(categories["Main Meal"])
+                day_meals.append(main_meal)
+        
+        menu.extend(day_meals)
 
-    for day in range(days):
-        for meal_type, count in type_map.get(plan, {}).items():
-            if count == 0: continue
-            
-            # Filtrar disponibles para el tipo de comida
-            available = filter_meals(meal_type, dislikes, allergies)
-            
-            if not available:
-                # Esto es un error, pero para la demo simplemente lo salta
-                continue
-                
-            for _ in range(count):
-                # Usar random.choice para seleccionar un plato
-                meal = random.choice(available).copy() # Usar .copy() para no modificar el original
-                # Opcional: añadir información de día para el frontend
-                meal['day'] = day + 1 
-                menu.append(meal)
+    # Asegurarse de que el menú tenga la longitud requerida (si hay suficientes comidas)
+    return menu[:total_meals_required]
 
-    total_price = sum(m.get("price", 0) for m in menu)
-    sessions[session_id]['menu'] = menu
-    sessions[session_id]['price'] = round(total_price, 2)
-    return {"step": "menu_final", "menu": menu, "price": round(total_price, 2)}
 
-# --- Endpoints ---
+# --- ENDPOINTS DE LA APLICACIÓN ---
 
+# Endpoint para obtener la estructura del formulario (si el frontend lo necesita)
 @app.get("/form")
-def get_form():
-    """Devuelve la estructura completa de pasos y data para iniciar el formulario (para HTML)."""
+async def get_form_structure():
+    """Devuelve la estructura del formulario y los pasos."""
     return {
-        "steps_order": steps_order, 
-        "steps_data": steps_mapping 
+        "steps_order": list(steps_mapping.keys()),
+        "meals_types": list(set(m['type'] for m in MEALS_DATA))
     }
 
-@app.post("/next-step")
-def next_step(input: UserInput):
-    """Maneja el flujo principal del formulario (Next y Back)."""
-    session_id = input.session_id
-    current_step = input.step.lower() 
-    answer = input.answer or {}
+def get_form_fields(step_name: str, state: Optional[SessionState] = None):
+    """Genera la pregunta y los campos de entrada para el paso actual."""
+    
+    if step_name == "pick_plan":
+        return {
+            "question": "¿Qué plan de dieta deseas seguir?",
+            "fields": [
+                {"name": "Plan", "type": "select", "options": [
+                    "Plan 1: 1 comida al día",
+                    "Plan 2: 2 comidas al día",
+                    "Plan 3: 3 comidas al día (con postre)",
+                    "Plan 4: 3 comidas al día (con extra de proteína)"
+                ]}
+            ]
+        }
+    
+    elif step_name == "duration":
+        return {
+            "question": "¿Por cuántos días deseas este plan?",
+            "fields": [
+                {"name": "Días", "type": "number", "min": 1, "max": 30, "placeholder": "Ej: 7 días"}
+            ]
+        }
+    
+    elif step_name == "dislikes":
+        return {
+            "question": "Selecciona los ingredientes que NO te gustan (opcional):",
+            "fields": [
+                {"name": "Ingredientes_No_Deseados", "type": "multiselect", "options": [
+                    "Oats", "Berries", "Milk", "Chicken", "Rice", "Broccoli", 
+                    "Salmon", "Lettuce", "Avocado", "Tofu", "Carrots"
+                ]}
+            ]
+        }
+        
+    elif step_name == "allergies":
+        return {
+            "question": "¿Tienes alguna alergia alimentaria? (opcional)",
+            "fields": [
+                {"name": "Alergias", "type": "multiselect", "options": [
+                    "Gluten", "Lactosa", "Nueces", "Mariscos", "Soya"
+                ]}
+            ]
+        }
+        
+    elif step_name == "extra_protein":
+        return {
+            "question": "¿Cuántos gramos de proteína extra deseas por menú? (opcional)",
+            "fields": [
+                {"name": "Gramos_Extra_Proteína", "type": "number", "min": 0, "max": 100, "placeholder": "0"}
+            ]
+        }
+    
+    elif step_name == "review":
+        if not state:
+            return {"question": "Error de estado. Comienza de nuevo."}
+            
+        summary = (
+            f"**Plan Seleccionado:** {state.plan} comidas/día por {state.days} días.<br>"
+            f"**No me gusta:** {', '.join(state.dislikes) if state.dislikes else 'Ninguno'}<br>"
+            f"**Alergias:** {', '.join(state.allergies) if state.allergies else 'Ninguna'}<br>"
+            f"**Proteína Extra:** {state.extra_protein_grams} gramos."
+        )
+        return {
+            "question": f"Resumen de tu pedido: ¿Deseas generar el menú?<br><br>{summary}",
+            "fields": []
+        }
+    
+    return {"question": "Paso no reconocido. Inicia de nuevo."}
+
+# Endpoint principal para navegar el flujo
+@app.api_route("/next-step", methods=["POST", "GET"])
+async def next_step(req: NextStepRequest):
+    session_id = req.session_id
+    step_name = req.step
+    answer = req.answer
+
+    # Inicializar o cargar estado
+    if session_id not in sessions:
+        sessions[session_id] = SessionState().model_dump()
+
+    state = SessionState(**sessions[session_id])
+    
+    # --- Manejo del botón 'Back' ---
+    if step_name == "back" and state.history:
+        # Recuperar el estado del paso anterior
+        prev_state_data = state.history.pop()
+        prev_state = SessionState(**prev_state_data)
+        sessions[session_id] = prev_state.model_dump()
+        
+        # Regresar al paso anterior (el último paso en el historial antes de hacer pop)
+        return get_form_fields(prev_state.current_step, prev_state)
+
+    # --- Procesar Respuesta y Actualizar Estado ---
+    
+    # Guardar el estado actual antes de avanzar
+    if step_name != "start":
+        state.history.append(sessions[session_id].copy())
+    
+    if step_name == "pick_plan" and "Plan" in answer:
+        plan_str = answer["Plan"].split(":")[0].replace("Plan ", "").strip()
+        state.plan = int(plan_str)
+        state.current_step = steps_mapping["pick_plan"]
+    
+    elif step_name == "duration" and "Días" in answer:
+        try:
+            state.days = int(answer["Días"])
+            state.current_step = steps_mapping["duration"]
+        except ValueError:
+            pass # No actualizar si no es un número
+    
+    elif step_name == "dislikes" and "Ingredientes_No_Deseados" in answer:
+        state.dislikes = answer["Ingredientes_No_Deseados"] if isinstance(answer["Ingredientes_No_Deseados"], list) else [answer["Ingredientes_No_Deseados"]]
+        state.current_step = steps_mapping["dislikes"]
+
+    elif step_name == "allergies" and "Alergias" in answer:
+        state.allergies = answer["Alergias"] if isinstance(answer["Alergias"], list) else [answer["Alergias"]]
+        state.current_step = steps_mapping["allergies"]
+
+    elif step_name == "extra_protein" and "Gramos_Extra_Proteína" in answer:
+        try:
+            state.extra_protein_grams = int(answer["Gramos_Extra_Proteína"])
+            state.current_step = steps_mapping["extra_protein"]
+        except ValueError:
+             state.extra_protein_grams = 0 # Valor por defecto
+             state.current_step = steps_mapping["extra_protein"]
+
+    elif step_name == "review":
+        # Se asume que el usuario confirmó el review, pasamos a generar el menú
+        state.current_step = steps_mapping["extra_protein"] # El paso de review es el penúltimo en la navegación lógica
+        
+        # --- GENERACIÓN FINAL DEL MENÚ ---
+        state.menu = generate_menu(state)
+        sessions[session_id] = state.model_dump()
+        
+        if not state.menu:
+             # Retornar a la revisión con un mensaje de error si el menú está vacío
+            return {
+                "question": "Error: Los filtros son muy restrictivos. Vuelve atrás y ajusta tus preferencias.",
+                "fields": []
+            }
+
+        total_price = calculate_price(state.menu, state.extra_protein_grams)
+        
+        return {
+            "menu": state.menu,
+            "price": total_price,
+            "message": "¡Tu menú está listo!"
+        }
+        
+    elif step_name == "start":
+        state.current_step = steps_mapping["start"]
+
+    # Guardar el estado actualizado
+    sessions[session_id] = state.model_dump()
+
+    # Devolver el formulario para el siguiente paso
+    next_step_name = steps_mapping.get(state.current_step, "review")
+    return get_form_fields(next_step_name, state)
+
+
+# Endpoint para cambiar una comida individual
+@app.api_route("/swap-meal", methods=["POST", "GET"])
+async def swap_meal(req: SwapMealRequest):
+    session_id = req.session_id
+    meal_to_swap_name = req.meal_to_swap
+
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    
+    state = SessionState(**sessions[session_id])
+    
+    # 1. Encontrar la comida a reemplazar
+    meal_to_swap_info = next((m for m in state.menu if m.name == meal_to_swap_name), None)
+    
+    if not meal_to_swap_info:
+        raise HTTPException(status_code=404, detail="Meal not found in current menu.")
+        
+    meal_type = meal_to_swap_info.type
+    
+    # 2. Generar nueva comida
+    available_meals = filter_meals(state.dislikes, state.allergies)
+    
+    # Filtra solo las comidas del mismo tipo y que NO estén ya en el menú
+    potential_replacements = [
+        m for m in available_meals 
+        if m.type == meal_type and m.name != meal_to_swap_name and m.name not in [x.name for x in state.menu]
+    ]
+
+    if not potential_replacements:
+        return {"message": "No hay reemplazos disponibles con tus filtros."}
+    
+    new_meal = random.choice(potential_replacements)
+    
+    # 3. Reemplazar en la lista del menú
+    for i, meal in enumerate(state.menu):
+        if meal.name == meal_to_swap_name:
+            state.menu[i] = new_meal
+            break
+            
+    # 4. Actualizar estado y calcular nuevo precio
+    sessions[session_id] = state.model_dump()
+    total_price = calculate_price(state.menu, state.extra_protein_grams)
+
+    return {
+        "menu": state.menu,
+        "price": total_price,
+        "message": f"Comida '{meal_to_swap_name}' reemplazada por '{new_meal.name}'."
+    }
+
+# Endpoint para regenerar el menú completo
+@app.api_route("/redo-menu", methods=["POST", "GET"])
+async def redo_menu(req: RedoMenuRequest):
+    session_id = req.session_id
     
     if session_id not in sessions:
-        sessions[session_id] = {}
-
-    # 1. Manejo del "Back"
-    if current_step == "back":
-        # Encuentra los pasos que ya tienen data guardada
-        completed_steps = [s for s in steps_order if s in sessions[session_id]]
+        raise HTTPException(status_code=404, detail="Session not found.")
         
-        if len(completed_steps) <= 1:
-            next_step_name = steps_order[0] # Vuelve al primer paso
-        else:
-            # Vuelve al penúltimo paso completado
-            next_step_name = completed_steps[-2]
-            
-        # Devolver la estructura del paso anterior
-        return {
-            "step": next_step_name,
-            "question": steps_mapping[next_step_name]["question"],
-            "fields": steps_mapping[next_step_name]["fields"]
-        }
-
-    # 2. Guardar respuesta del paso actual (si no es 'start' o 'back')
-    if current_step != "start" and current_step in steps_order and answer:
-        # La respuesta se guarda bajo el nombre del paso
-        sessions[session_id][current_step] = answer
-
-    # 3. Determinar el siguiente paso
-    try:
-        if current_step == "start":
-            current_index = -1
-        else:
-            current_index = steps_order.index(current_step)
-            
-        next_index = current_index + 1
-        next_step_name = steps_order[next_index]
+    state = SessionState(**sessions[session_id])
+    
+    # Generar un nuevo menú completo
+    state.menu = generate_menu(state)
+    
+    if not state.menu:
+        return {"message": "No se pudo generar un nuevo menú con tus filtros actuales."}
         
-    except (ValueError, IndexError):
-        # Todos los pasos completados -> generar menú
-        return generate_menu(session_id)
+    # Actualizar estado y calcular precio
+    sessions[session_id] = state.model_dump()
+    total_price = calculate_price(state.menu, state.extra_protein_grams)
 
-    # 4. Devolver la estructura del siguiente paso
     return {
-        "step": next_step_name, 
-        "question": steps_mapping[next_step_name]["question"],
-        "fields": steps_mapping[next_step_name]["fields"]
+        "menu": state.menu,
+        "price": total_price,
+        "message": "¡Menú completo regenerado!"
     }
-
-@app.post("/swap-meal")
-def swap_meal_endpoint(input: SwapInput):
-    """Sustituye un plato específico por otro compatible."""
-    session = sessions.get(input.session_id)
-    if not session or 'menu' not in session:
-        raise HTTPException(status_code=400, detail="No active session or menu.")
-        
-    menu = session['menu']
-    
-    # Encontrar la comida a reemplazar
-    original_meal_index = next((i for i, m in enumerate(menu) if m.get('name') == input.meal_name), -1)
-    
-    if original_meal_index == -1:
-        raise HTTPException(status_code=404, detail=f"Meal '{input.meal_name}' not found in current menu.")
-
-    original_meal = menu[original_meal_index]
-    
-    dislikes = session.get("preferences", {}).get("Dislikes", [])
-    allergies = session.get("allergies", {}).get("Allergies", [])
-    
-    # Filtrar comidas compatibles (mismo 'type')
-    available_meals = filter_meals(
-        meal_type=original_meal.get('type'), 
-        dislikes=dislikes, 
-        allergies=allergies
-    )
-    
-    # Excluir el plato actual para asegurar que sea un 'swap'
-    swap_candidates = [m for m in available_meals if m.get('name') != original_meal.get('name')]
-    
-    if not swap_candidates:
-        raise HTTPException(status_code=400, detail="No compatible alternative meals found.")
-        
-    # Seleccionar un nuevo plato aleatoriamente
-    new_meal = random.choice(swap_candidates).copy() # Usar .copy() para evitar problemas
-    
-    # Reemplazar y recalcular precio
-    # Opcional: mantener el día del plato original
-    new_meal['day'] = original_meal.get('day')
-    menu[original_meal_index] = new_meal
-    
-    total_price = sum(m.get("price", 0) for m in menu)
-    
-    sessions[input.session_id]['menu'] = menu
-    sessions[input.session_id]['price'] = round(total_price, 2)
-    
-    return {"menu": menu, "price": round(total_price, 2)}
-
-@app.post("/redo-menu")
-def redo_menu(input: SessionInput):
-    """Regenera todo el menú usando los datos de la sesión guardados."""
-    if input.session_id not in sessions or not sessions[input.session_id].get('personal_data'):
-        raise HTTPException(status_code=400, detail="Incomplete data to regenerate menu.")
-    
-    # La función generate_menu re-utiliza todos los datos guardados
-    return generate_menu(input.session_id)
-
-@app.post("/add-protein")
-def add_protein(input: AddProteinInput):
-    """Ajusta calorías y precio del menú según proteína extra."""
-    session_id = input.session_id
-    menu = sessions[session_id].get('menu', [])
-    
-    if not menu:
-        raise HTTPException(status_code=400, detail="No menu generated")
-        
-    # La proteína tiene aprox. 4 kcal/g y asumimos 1 USD/g para el precio extra
-    CAL_PER_PROTEIN_G = 4
-    PRICE_PER_PROTEIN_G = 1.0
-    
-    if input.distribute_all:
-        # Distribuir equitativamente en todas las comidas del menú
-        if not menu:
-            raise HTTPException(status_code=400, detail="Menu is empty.")
-            
-        protein_per_meal = input.extra_protein_g / len(menu)
-        for m in menu:
-            m['calories'] = m.get('calories', 0) + protein_per_meal * CAL_PER_PROTEIN_G
-            m['price'] = m.get('price', 0) + protein_per_meal * PRICE_PER_PROTEIN_G
-    else:
-        # Añadir a una comida específica
-        found = False
-        for m in menu:
-            if m.get('name') == input.meal_name:
-                m['calories'] = m.get('calories', 0) + input.extra_protein_g * CAL_PER_PROTEIN_G
-                m['price'] = m.get('price', 0) + input.extra_protein_g * PRICE_PER_PROTEIN_G
-                found = True
-                break
-        if not found:
-            raise HTTPException(status_code=404, detail=f"Meal '{input.meal_name}' not found for addition.")
-
-    total_price = sum(m.get("price", 0) for m in menu)
-    sessions[session_id]['menu'] = menu
-    sessions[session_id]['price'] = round(total_price, 2)
-    return {"menu": menu, "price": round(total_price, 2), "message": "Protein added and price adjusted."}
