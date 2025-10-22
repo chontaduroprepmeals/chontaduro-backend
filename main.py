@@ -53,6 +53,9 @@ def normalize_meal_keys(raw: Dict[str, Any]) -> Dict[str, Any]:
         out[key] = v
     if "ingredients" in out and isinstance(out["ingredients"], str):
         out["ingredients"] = [i.strip() for i in out["ingredients"].split(",") if i.strip()]
+    # ensure tags list exists
+    if "tags" in out and isinstance(out["tags"], str):
+        out["tags"] = [t.strip().lower() for t in out["tags"].split(",") if t.strip()]
     return out
 
 def sanitize_meal_data(data: List[Dict[str, Any]]):
@@ -106,6 +109,7 @@ class Meal(BaseModel):
     calories: int
     price: float
     image_url: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
 
     model_config = {"extra": "ignore"}
 
@@ -121,14 +125,24 @@ class SessionState(BaseModel):
 
     # personal/nutrition fields
     objective: Optional[str] = None  # "Lose Fat", "Gain Muscle", "Maintain Shape"
-    weight: Optional[float] = None
+    # Reordered: store unit before weight is used in UI; values saved the same
     weight_unit: Optional[str] = "kg"  # "kg" or "lbs"
-    height: Optional[float] = None
+    weight: Optional[float] = None
     height_unit: Optional[str] = "cm"  # "cm" or "in"
+    height: Optional[float] = None
     age: Optional[int] = None
     sex: Optional[str] = None  # "male" | "female"
-    activity_level: Optional[str] = None  # one of the factor keys
+    # New activity detail fields
+    activity_days_bucket: Optional[str] = None      # "0","1-2","3-4","5-7"
+    activity_duration_bucket: Optional[str] = None  # "<30","30-60","60-120"
+    activity_intensity: Optional[str] = None        # "Low","Moderate","High"
     body_fat: Optional[float] = None  # percentage optional
+
+    # Diet preference
+    diet_preference: Optional[str] = None  # "omnivore","vegetarian","vegan","pescatarian","i eat almost everything"
+
+    # free text note
+    user_note: Optional[str] = None
 
     model_config = {"extra": "ignore"}
 
@@ -172,14 +186,27 @@ def calc_tmb_mifflin(weight_kg: float, height_cm: float, age: int, sex: str) -> 
     else:
         return round((10 * weight_kg) + (6.25 * height_cm) - (5 * age) - 161, 1)
 
-def get_activity_factor(level: str) -> Optional[float]:
-    if not level:
-        return None
-    level_low = str(level).lower()
-    return ACTIVITY_FACTORS.get(level_low) or (float(level_low) if level_low.replace('.', '', 1).isdigit() else None)
+def compute_activity_factor(days_bucket: str, duration_bucket: str, intensity: str) -> Optional[float]:
+    """
+    Convert the user-friendly buckets to an activity multiplier.
+    days_bucket: "0","1-2","3-4","5-7"
+    duration_bucket: "<30","30-60","60-120"
+    intensity: "Low","Moderate","High"
+    """
+    days_map = {"0": 1.2, "1-2": 1.3, "3-4": 1.45, "5-7": 1.6}
+    base = days_map.get(str(days_bucket), 1.2)
 
-def calc_tdee(tmb: float, activity_level: str) -> Optional[float]:
-    factor = get_activity_factor(activity_level)
+    dur_map = {"<30": 0.0, "30-60": 0.05, "60-120": 0.08}
+    dur_adj = dur_map.get(str(duration_bucket), 0.0)
+
+    int_map = {"low": 0.0, "moderate": 0.03, "high": 0.06}
+    int_adj = int_map.get((intensity or "").lower(), 0.0)
+
+    factor = base + dur_adj + int_adj
+    return round(min(factor, 1.9), 3)
+
+def calc_tdee_with_details(tmb: float, days_bucket: str, duration_bucket: str, intensity: str) -> Optional[float]:
+    factor = compute_activity_factor(days_bucket, duration_bucket, intensity)
     if tmb is None or factor is None:
         return None
     return round(tmb * factor, 1)
@@ -233,27 +260,97 @@ def calc_macros(calories: int, objective: str, weight_kg: Optional[float]) -> Di
     }
 
 
+# --- DIET / COMPATIBILITY HELPERS ---
+MEAT_KEYWORDS = {"chicken", "beef", "pork", "turkey", "steak", "bacon", "ham", "lamb"}
+FISH_KEYWORDS = {"salmon", "shrimp", "fish", "tuna", "trout", "cod", "shellfish", "prawns", "crab", "lobster"}
+DAIRY_KEYWORDS = {"milk", "yogurt", "cheese", "butter", "cream"}
+EGG_KEYWORDS = {"egg", "eggs"}
+HONEY_KEYWORDS = {"honey"}
+
+def is_meal_compatible_with_diet(meal: Dict[str, Any], diet: Optional[str]) -> bool:
+    """
+    Returns True if meal matches the user's diet preference.
+    Logic:
+      - If diet is None or 'omnivore' or 'i eat almost everything' -> True
+      - If meal has tags and tag matches (e.g., 'vegan' for vegan) -> True
+      - Otherwise check ingredients for forbidden keywords per diet.
+    """
+    if not diet:
+        return True
+    diet_low = diet.lower()
+    if diet_low in ["omnivore", "i eat almost everything", "everything"]:
+        return True
+
+    tags = [t.lower() for t in meal.get("tags", [])] if meal.get("tags") else []
+    ingredients = [str(i).lower() for i in meal.get("ingredients", [])]
+
+    # Vegan: require no meat, no fish, no dairy, no egg, no honey
+    if diet_low == "vegan":
+        if "vegan" in tags:
+            return True
+        forbidden = MEAT_KEYWORDS | FISH_KEYWORDS | DAIRY_KEYWORDS | EGG_KEYWORDS | HONEY_KEYWORDS
+        return not any(any(k in ing for ing in ingredients) for k in forbidden)
+
+    # Vegetarian: allow dairy/eggs, but no meat/fish
+    if diet_low == "vegetarian":
+        if "vegetarian" in tags or "vegan" in tags:
+            return True
+        forbidden = MEAT_KEYWORDS | FISH_KEYWORDS
+        return not any(any(k in ing for ing in ingredients) for k in forbidden)
+
+    # Pescatarian: allow fish/seafood, but no meat (beef/pork/chicken)
+    if diet_low == "pescatarian":
+        if "pescatarian" in tags or "vegan" in tags or "vegetarian" in tags:
+            return True
+        forbidden = MEAT_KEYWORDS
+        return not any(any(k in ing for ing in ingredients) for k in forbidden)
+
+    # Fallback conservative: allow only if no obvious conflict
+    return True
+
+
 # --- BUSINESS LOGIC (MEALS) ---
 def calculate_price(menu: List[Meal], extra_protein: int) -> float:
     base_price = sum(meal.price for meal in menu)
     protein_cost = (extra_protein or 0) * 1.00
     return round(base_price + protein_cost, 2)
 
-def filter_meals(dislikes: List[str], allergies: List[str]) -> List[Meal]:
-    undesired = set([d.lower() for d in (dislikes or [])] + [a.lower() for a in (allergies or [])])
+def filter_meals(dislikes: List[str], allergies: List[str], diet: Optional[str] = None) -> List[Meal]:
+    # Interpret "I like everything" sentinel: empty lists means no filtering
+    undesired = set()
+    if dislikes:
+        # if the either sentinel appears, treat as no dislikes
+        if isinstance(dislikes, list) and any(str(x).lower().startswith("none") or str(x).lower().startswith("i like") for x in dislikes):
+            undesired = set()
+        else:
+            undesired.update([d.lower() for d in dislikes])
+    if allergies:
+        if isinstance(allergies, list) and any(str(x).lower().startswith("none") or str(x).lower().startswith("i like") for x in allergies):
+            # ignore allergies sentinel
+            pass
+        else:
+            undesired.update([a.lower() for a in allergies])
+
     filtered_meals = []
     for meal in MEALS_DATA:
+        # First check diet compatibility
+        if not is_meal_compatible_with_diet(meal, diet):
+            continue
+
         ingredients = [str(i).lower() for i in meal.get("ingredients", [])]
         if not any(ing in undesired for ing in ingredients):
             try:
-                filtered_meals.append(Meal(**meal))
+                # Ensure tags exist
+                meal_copy = meal.copy()
+                meal_copy["tags"] = [t.lower() for t in meal_copy.get("tags", [])] if meal_copy.get("tags") else []
+                filtered_meals.append(Meal(**meal_copy))
             except Exception as e:
                 print(f"Error validating meal data: {e} for meal {meal.get('name')}")
     return filtered_meals
 
 def generate_menu(state: SessionState) -> List[Meal]:
     """
-    Generate menu according to the plan mapping the user specified:
+    Generate menu according to the plan mapping:
       plan 1: 1 main meal
       plan 2: 2 main meals
       plan 3: 1 main meal + 1 breakfast
@@ -262,20 +359,14 @@ def generate_menu(state: SessionState) -> List[Meal]:
     if not state.plan or not state.days:
         return []
 
-    # mapping: plan -> (num_main_per_day, num_breakfast_per_day)
-    plan_map = {
-        1: (1, 0),
-        2: (2, 0),
-        3: (1, 1),
-        4: (2, 1)
-    }
+    plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
     meals_config = plan_map.get(state.plan)
     if not meals_config:
         return []
 
     num_main, num_breakfast = meals_config
     total_meals_required = state.days * (num_main + num_breakfast)
-    available_meals = filter_meals(state.dislikes, state.allergies)
+    available_meals = filter_meals(state.dislikes, state.allergies, state.diet_preference)
     if not available_meals:
         return []
 
@@ -285,29 +376,22 @@ def generate_menu(state: SessionState) -> List[Meal]:
     menu: List[Meal] = []
     for _ in range(state.days):
         day_meals = []
-        # pick breakfasts
         for _ in range(num_breakfast):
             if breakfasts:
                 day_meals.append(random.choice(breakfasts))
-        # pick mains
         for _ in range(num_main):
             if mains:
                 day_meals.append(random.choice(mains))
-        # If day_meals is empty because of missing category, fall back to any available meals
         if not day_meals and available_meals:
             day_meals.append(random.choice(available_meals))
         menu.extend(day_meals)
 
-    # limit to required count
     return menu[:total_meals_required]
 
 def assess_menu_possibility(state: SessionState) -> Dict[str, Any]:
     """
-    Check if there are enough meals available, after applying dislikes/allergies,
-    for the user's selected plan and days. Returns dict:
-      { ok: bool, reason: str, details: {...} }
+    Check if there are enough meals available after filters for user's plan and days.
     """
-    # Basic sanity checks
     if not state.plan or not state.days:
         return {"ok": False, "reason": "missing_data", "message": "Plan or days are not set."}
 
@@ -320,9 +404,9 @@ def assess_menu_possibility(state: SessionState) -> Dict[str, Any]:
     need_mains_total = need_main_per_day * state.days
     need_breakfasts_total = need_breakfast_per_day * state.days
 
-    available_meals = filter_meals(state.dislikes, state.allergies)
+    available_meals = filter_meals(state.dislikes, state.allergies, state.diet_preference)
     if not available_meals:
-        return {"ok": False, "reason": "no_meals", "message": "No meals available after applying your dislikes/allergies."}
+        return {"ok": False, "reason": "no_meals", "message": "No meals available after applying your diet/dislikes/allergies."}
 
     mains = [m for m in available_meals if m.type == "Main Meal"]
     breakfasts = [m for m in available_meals if m.type == "Breakfast"]
@@ -343,7 +427,31 @@ def assess_menu_possibility(state: SessionState) -> Dict[str, Any]:
     return {"ok": True, "reason": None, "details": details}
 
 # --- FORM UI ---
+def get_dislikes_options_for_diet(diet: Optional[str]) -> List[str]:
+    base = ["None - I like everything", "Oats", "Berries", "Milk", "Chicken", "Rice", "Broccoli",
+            "Salmon", "Lettuce", "Avocado", "Tofu", "Carrots", "Beef", "Pork", "Shellfish", "Banana"]
+    if not diet:
+        return base
+    diet_low = diet.lower()
+    if diet_low == "vegetarian":
+        # remove meat/fish options
+        return [o for o in base if o.lower() not in {"chicken", "beef", "pork", "salmon", "shellfish"}]
+    if diet_low == "vegan":
+        # remove meat/fish/dairy/egg/honey related options
+        return [o for o in base if o.lower() not in {"chicken", "beef", "pork", "salmon", "shellfish", "milk", "banana"}]
+    if diet_low == "pescatarian":
+        # allow fish but remove red meat/pork/chicken
+        return [o for o in base if o.lower() not in {"chicken", "beef", "pork"}]
+    # omnivore / everything
+    return base
+
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
+    """
+    Returns the UI structure for each step. NOTE: order matters for UI rendering.
+    For personal_info we put Weight Unit before Weight as requested.
+    Activity inputs are split into three fields so users can choose days/duration/intensity.
+    Dislikes/Allergies are rendered as checkboxes on the frontend (type=multiselect).
+    """
     if step_name == "pick_plan":
         return {
             "question": "Which plan do you want?",
@@ -354,7 +462,8 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
                     "Plan 3: 1 main meal + 1 breakfast",
                     "Plan 4: 2 main meals + 1 breakfast (full day)"
                 ]}
-            ]
+            ],
+            "current_step": "pick_plan"
         }
 
     if step_name == "objective":
@@ -366,24 +475,28 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
                     "Gain Muscle",
                     "Maintain Shape"
                 ]}
-            ]
+            ],
+            "current_step": "objective"
         }
 
     if step_name == "personal_info":
         return {
             "question": "Tell us your personal data (used to calculate calories & macros):",
             "fields": [
-                {"name": "Weight", "type": "number", "placeholder": "e.g. 70", "unit": "kg or lbs"},
+                {"name": "Diet Preference", "type": "select", "options": ["omnivore", "vegetarian", "vegan", "pescatarian", "i eat almost everything"]},
                 {"name": "Weight Unit", "type": "select", "options": ["kg", "lbs"]},
-                {"name": "Height", "type": "number", "placeholder": "e.g. 175", "unit": "cm or in"},
+                {"name": "Weight", "type": "number", "placeholder": "e.g. 70", "unit": "kg or lbs"},
                 {"name": "Height Unit", "type": "select", "options": ["cm", "in"]},
+                {"name": "Height", "type": "number", "placeholder": "e.g. 175", "unit": "cm or in"},
                 {"name": "Age", "type": "number", "placeholder": "e.g. 30"},
                 {"name": "Sex", "type": "select", "options": ["Male", "Female"]},
-                {"name": "Activity Level", "type": "select", "options": [
-                    "sedentary", "light", "moderate", "intense", "very_intense"
-                ], "unit": "Choose one (see app for definitions)"},
+                # Activity split into three fields (days, duration, intensity)
+                {"name": "Days per week", "type": "select", "options": ["0", "1-2", "3-4", "5-7"], "unit": "How many days do you exercise on average?"},
+                {"name": "Avg session duration", "type": "select", "options": ["<30", "30-60", "60-120"], "unit": "Typical length of each session (minutes)"},
+                {"name": "Intensity", "type": "select", "options": ["Low", "Moderate", "High"], "unit": "Low = easy; Moderate = pushed but can talk; High = breathless, HIIT/heavy lifting."},
                 {"name": "Body Fat % (optional)", "type": "number", "placeholder": "e.g. 18", "required": False}
-            ]
+            ],
+            "current_step": "personal_info"
         }
 
     if step_name == "duration":
@@ -391,18 +504,19 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
             "question": "For how many days do you want this plan?",
             "fields": [
                 {"name": "Días", "type": "number", "min": 1, "max": 30, "placeholder": "e.g. 7"}
-            ]
+            ],
+            "current_step": "duration"
         }
 
     if step_name == "dislikes":
+        diet = state.diet_preference if state else None
+        options = get_dislikes_options_for_diet(diet)
         return {
             "question": "Select ingredients you DON'T like (optional):",
             "fields": [
-                {"name": "Ingredientes_No_Deseados", "type": "multiselect", "options": [
-                    "Oats", "Berries", "Milk", "Chicken", "Rice", "Broccoli",
-                    "Salmon", "Lettuce", "Avocado", "Tofu", "Carrots"
-                ]}
-            ]
+                {"name": "Ingredientes_No_Deseados", "type": "multiselect", "options": options}
+            ],
+            "current_step": "dislikes"
         }
 
     if step_name == "allergies":
@@ -410,28 +524,32 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
             "question": "Any food allergies? (optional)",
             "fields": [
                 {"name": "Alergias", "type": "multiselect", "options": [
-                    "Gluten", "Lactose", "Nuts", "Shellfish", "Soy"
+                    "None - I like everything",
+                    "Gluten", "Lactose", "Nuts", "Shellfish", "Soy", "Eggs", "Fish"
                 ]}
-            ]
+            ],
+            "current_step": "allergies"
         }
 
     if step_name == "review":
         if not state:
-            return {"question": "State error. Start again."}
+            return {"question": "State error. Start again.", "current_step": "review"}
         summary = (
             f"Plan: {state.plan} meals/day for {state.days} days.\n"
             f"Goal: {state.objective or 'N/A'}\n"
-            f"Weight: {state.weight} {state.weight_unit}\n"
-            f"Height: {state.height} {state.height_unit}\n"
-            f"Age: {state.age}\n"
-            f"Activity: {state.activity_level}\n"
+            f"Diet: {state.diet_preference or 'N/A'}\n"
+            f"Weight: {state.weight or 'N/A'} {state.weight_unit}\n"
+            f"Height: {state.height or 'N/A'} {state.height_unit}\n"
+            f"Age: {state.age or 'N/A'}\n"
+            f"Activity days: {state.activity_days_bucket or 'N/A'}, duration: {state.activity_duration_bucket or 'N/A'}, intensity: {state.activity_intensity or 'N/A'}\n"
         )
         return {
             "question": f"Review your info and generate the menu:\n\n{summary}",
-            "fields": []
+            "fields": [],
+            "current_step": "review"
         }
 
-    return {"question": "Unknown step. Start again."}
+    return {"question": "Unknown step. Start again.", "current_step": "start"}
 
 
 # --- ENDPOINTS ---
@@ -455,6 +573,7 @@ async def next_step(request: Request):
     step_name = (req.step or "start")
     answer = req.answer or {}
 
+    # ensure step_name valid fallback
     if step_name not in steps_mapping and step_name not in ["review", "start", "back"]:
         step_name = "start"
 
@@ -479,7 +598,7 @@ async def next_step(request: Request):
                 translated_answer["dislikes"] = value
             elif key_norm in ["allergies", "alergias", "alergieslist"]:
                 translated_answer["allergies"] = value
-            elif key_norm in ["extraprotein", "protein", "gramosextraproteina", "gramosextraprotena", "gramos_extra_proteina"]:
+            elif key_norm in ["extraprotein", "protein", "gramosextraproteina", "gramosextraprotena", "gramosextraproteina", "gramos_extra_proteina"]:
                 translated_answer["extra_protein_grams"] = value
             elif key_norm in ["objective", "goal", "objetivo"]:
                 translated_answer["objective"] = value
@@ -495,10 +614,18 @@ async def next_step(request: Request):
                 translated_answer["age"] = value
             elif key_norm in ["sex", "gender"]:
                 translated_answer["sex"] = value
-            elif key_norm in ["activitylevel", "activity_level", "activity"]:
-                translated_answer["activity_level"] = value
+            elif key_norm in ["daysperweek", "daysperweek", "days", "daysperwk", "daysperweekbucket"]:
+                translated_answer["activity_days_bucket"] = value
+            elif key_norm in ["avgsessionduration", "avg_session_duration", "avgduration", "sessionduration", "durationbucket"]:
+                translated_answer["activity_duration_bucket"] = value
+            elif key_norm in ["intensity", "activityintensity"]:
+                translated_answer["activity_intensity"] = value
             elif key_norm in ["bodyfat", "body_fat", "bfpercent", "bf"]:
                 translated_answer["body_fat"] = value
+            elif key_norm in ["diet", "dietpreference", "diet_preference", "dietpreferencechoice"]:
+                translated_answer["diet_preference"] = value
+            elif key_norm in ["note", "usernote", "tellus", "tellussomething"]:
+                translated_answer["user_note"] = value
             else:
                 translated_answer[key] = value
 
@@ -515,7 +642,7 @@ async def next_step(request: Request):
     if step_name != "start":
         state.history.append(sessions[session_id].copy())
 
-    # Step handling (similar to prior implementation)
+    # Step handling
     if step_name == "start":
         step_to_render_name = steps_mapping["start"]
 
@@ -545,35 +672,63 @@ async def next_step(request: Request):
 
     elif step_name == "personal_info":
         try:
-            w = answer.get("weight")
-            if w is not None and str(w) != "":
-                state.weight = float(w)
+            # diet first (if provided)
+            dp = answer.get("diet_preference")
+            if dp:
+                state.diet_preference = str(dp)
+
+            # unit first (frontend sends weight_unit before weight)
             wu = answer.get("weight_unit")
             if wu:
                 state.weight_unit = str(wu)
 
-            h = answer.get("height")
-            if h is not None and str(h) != "":
-                state.height = float(h)
+            w = answer.get("weight")
+            if w is not None and str(w) != "":
+                try:
+                    state.weight = float(w)
+                except Exception:
+                    state.weight = None
+
             hu = answer.get("height_unit")
             if hu:
                 state.height_unit = str(hu)
 
+            h = answer.get("height")
+            if h is not None and str(h) != "":
+                try:
+                    state.height = float(h)
+                except Exception:
+                    state.height = None
+
             a = answer.get("age")
             if a is not None and str(a) != "":
-                state.age = int(a)
+                try:
+                    state.age = int(a)
+                except Exception:
+                    state.age = None
 
             s = answer.get("sex")
             if s:
                 state.sex = str(s)
 
-            al = answer.get("activity_level")
-            if al:
-                state.activity_level = str(al)
+            adb = answer.get("activity_days_bucket")
+            if adb:
+                state.activity_days_bucket = str(adb)
+
+            adb2 = answer.get("activity_duration_bucket")
+            if adb2:
+                state.activity_duration_bucket = str(adb2)
+
+            ai = answer.get("activity_intensity")
+            if ai:
+                state.activity_intensity = str(ai)
 
             bf = answer.get("body_fat")
             if bf is not None and str(bf) != "":
-                state.body_fat = float(bf)
+                try:
+                    state.body_fat = float(bf)
+                except Exception:
+                    state.body_fat = None
 
             step_to_render_name = steps_mapping["personal_info"]
         except Exception:
@@ -592,12 +747,19 @@ async def next_step(request: Request):
 
     elif step_name == "dislikes" and ("dislikes" in answer or "Ingredientes_No_Deseados" in answer):
         data = answer.get("dislikes") or answer.get("Ingredientes_No_Deseados")
-        state.dislikes = data if isinstance(data, list) else [data] if data else []
+        # Interpret "None - I like everything" as empty list
+        if isinstance(data, list) and any(str(x).lower().startswith("none") or str(x).lower().startswith("i like") for x in data):
+            state.dislikes = []
+        else:
+            state.dislikes = data if isinstance(data, list) else [data] if data else []
         step_to_render_name = steps_mapping["dislikes"]
 
     elif step_name == "allergies" and ("allergies" in answer or "Alergias" in answer):
         data = answer.get("allergies") or answer.get("Alergias")
-        state.allergies = data if isinstance(data, list) else [data] if data else []
+        if isinstance(data, list) and any(str(x).lower().startswith("none") or str(x).lower().startswith("i like") for x in data):
+            state.allergies = []
+        else:
+            state.allergies = data if isinstance(data, list) else [data] if data else []
         step_to_render_name = steps_mapping["allergies"]
 
     elif step_name == "review":
@@ -605,6 +767,7 @@ async def next_step(request: Request):
         assessment = assess_menu_possibility(state)
         if not assessment["ok"]:
             # Return a clear guidance payload instead of a generic error
+            # include current_step so frontend stays synchronized
             return {
                 "question": assessment.get("message", "Could not generate menu with current settings."),
                 "fields": [],
@@ -630,9 +793,17 @@ async def next_step(request: Request):
         weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
         height_cm = to_cm(state.height, state.height_unit) if state.height else None
         tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
-        tdee = calc_tdee(tmb, state.activity_level) if tmb else None
+
+        # Compute TDEE using detailed inputs if present (days/duration/intensity)
+        tdee = None
+        if state.activity_days_bucket or state.activity_duration_bucket or state.activity_intensity:
+            tdee = calc_tdee_with_details(tmb, state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low")
+        else:
+            # fallback to a default multiplier if user didn't provide detailed activity (conservative)
+            tdee = calc_tdee_with_details(tmb, "0", "<30", "Low") if tmb else None
+
         calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
-        macros = calc_macros(calorie_target, state.objective, weight_kg)
+        macros = calc_macros(calorie_target, state.objective, to_kg(state.weight, state.weight_unit) if state.weight else None)
 
         total_price = calculate_price(state.menu, 0)  # price WITHOUT extra protein at generation time
 
@@ -684,7 +855,10 @@ async def add_protein(request: Request):
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
     tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
-    tdee = calc_tdee(tmb, state.activity_level) if tmb else None
+    if state.activity_days_bucket or state.activity_duration_bucket or state.activity_intensity:
+        tdee = calc_tdee_with_details(tmb, state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low")
+    else:
+        tdee = calc_tdee_with_details(tmb, "0", "<30", "Low") if tmb else None
     calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
     base_macros = calc_macros(calorie_target, state.objective, weight_kg)
 
@@ -716,6 +890,21 @@ async def add_protein(request: Request):
     }
 
 
+@app.post("/add-note")
+async def add_note(request: Request):
+    payload = await request.json()
+    session_id = payload.get("session_id") or payload.get("sessionId")
+    note = payload.get("note") or payload.get("user_note") or payload.get("tellus") or ""
+    if not session_id or session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    state = SessionState(**sessions[session_id])
+    state.user_note = str(note)[:1000]  # limit
+    sessions[session_id] = state.model_dump()
+    current_menu_objects = [Meal(**m) if isinstance(m, dict) else m for m in state.menu]
+    total_price = calculate_price(current_menu_objects, state.extra_protein_grams)
+    return {"menu": state.menu, "price": total_price, "message": "Note saved.", "note": state.user_note}
+
+
 @app.post("/swap-meal")
 async def swap_meal(request: Request):
     payload = await request.json()
@@ -729,14 +918,19 @@ async def swap_meal(request: Request):
     if not meal_to_swap_info:
         raise HTTPException(status_code=404, detail="Meal not found in current menu.")
     meal_type = meal_to_swap_info.type
-    available_meals = filter_meals(state.dislikes, state.allergies)
+    available_meals = filter_meals(state.dislikes, state.allergies, state.diet_preference)
+
+    # Filter only meals of the same type and that are NOT already in the menu and compatible with diet
     potential_replacements = [
         m for m in available_meals
         if m.type == meal_type and m.name != meal_to_swap_name and m.name not in [x.name for x in current_menu_objects]
     ]
+
     if not potential_replacements:
         return {"menu": [m.model_dump() for m in current_menu_objects], "price": calculate_price(current_menu_objects, state.extra_protein_grams), "message": "No replacements available with your filters."}
+
     new_meal = random.choice(potential_replacements)
+
     new_menu = []
     replaced = False
     for meal in current_menu_objects:
@@ -745,6 +939,7 @@ async def swap_meal(request: Request):
             replaced = True
         else:
             new_menu.append(meal)
+
     state.menu = [m.model_dump() for m in new_menu]
     sessions[session_id] = state.model_dump()
     total_price = calculate_price(new_menu, state.extra_protein_grams)

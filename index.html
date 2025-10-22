@@ -23,6 +23,7 @@
     </div>
   </div>
 
+  <!-- Confirmation / Helper Modal -->
   <div id="customModal" class="modal-overlay fixed inset-0 hidden items-center justify-center p-4">
     <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full transform transition-all">
       <h3 id="modalTitle" class="text-xl font-bold mb-3 text-gray-900"></h3>
@@ -35,6 +36,7 @@
   </div>
 
   <script>
+    // Ajusta si tu backend está en otra URL
     const BASE_URL = "https://chontaduro-backend.onrender.com";
     let sessionId = Math.random().toString(36).substring(2);
     let currentStepName = "start";
@@ -54,8 +56,13 @@
       "Height Unit": "height_unit",
       "Age": "age",
       "Sex": "sex",
-      "Activity Level": "activity_level",
-      "Body Fat % (optional)": "body_fat"
+      "Days per week": "activity_days_bucket",
+      "Avg session duration": "activity_duration_bucket",
+      "Intensity": "activity_intensity",
+      "Body Fat % (optional)": "body_fat",
+      "Diet Preference": "diet_preference",
+      "Weight Unit": "weight_unit",
+      "Weight": "weight"
     };
 
     const STEPS_FALLBACK = {
@@ -110,6 +117,17 @@
       }
     }
 
+    // Helper to escape single quotes and HTML-unsafe characters for attributes
+    function escapeAttr(s) {
+      if (s === null || s === undefined) return "";
+      return String(s)
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
     async function fetchStep(answer = {}, nextStepAction = 'next') {
       document.getElementById("app").innerHTML = `<div class="py-10"><div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4 mx-auto" style="border-top-color: #ff7b00;"></div><p class="text-gray-600">Loading...</p></div>`;
       const stepToSend = nextStepAction === 'back' ? 'back' : currentStepName;
@@ -137,11 +155,12 @@
       const answer = {};
       fieldsMeta.forEach(f => {
         const key = f.payloadKey || FIELD_KEY_MAP[f.name] || f.name;
-        const values = formData.getAll(key);
         if (f.type === 'multiselect') {
-          answer[key] = values;
+          // collect checkboxes with name=payloadKey
+          const checked = Array.from(document.querySelectorAll(`input[name="${f.payloadKey}"]:checked`)).map(i => i.value);
+          answer[key] = checked;
         } else {
-          const val = values && values[0] !== undefined ? values[0] : "";
+          const val = formData.getAll(f.payloadKey)[0] || "";
           if (f.type === 'number') {
             answer[key] = val === "" ? null : Number(val);
           } else {
@@ -165,13 +184,20 @@
 
       enhancedFields.forEach(f => {
         const inputId = `input-${(f.payloadKey || f.name).replace(/\s/g, '-')}`;
-        formHtml += `<div class="mb-4"><label for="${inputId}" class="block text-sm font-medium text-gray-700 mb-1">${f.name} ${f.unit ? `(${f.unit})` : ''}</label>`;
-        if (f.type === "select" || f.type === "multiselect") {
-          const isMultiple = f.type === "multiselect" ? 'multiple' : '';
-          const sizeAttr = f.type === "multiselect" ? 'size="5"' : '';
-          formHtml += `<select id="${inputId}" name="${f.payloadKey}" ${isMultiple} ${sizeAttr} class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm rounded-md shadow-sm">`;
+        formHtml += `<div class="mb-4 text-left"><label for="${inputId}" class="block text-sm font-medium text-gray-700 mb-1">${f.name} ${f.unit ? `(${f.unit})` : ''}</label>`;
+        if (f.type === "select") {
+          formHtml += `<select id="${inputId}" name="${f.payloadKey}" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm rounded-md shadow-sm">`;
           (f.options || []).forEach(o => { formHtml += `<option value="${o}">${o}</option>`; });
           formHtml += `</select>`;
+        } else if (f.type === "multiselect") {
+          // Render checkboxes for better UX on mobile
+          formHtml += `<div class="grid grid-cols-1 gap-2">`;
+          (f.options || []).forEach(o => {
+            const val = o;
+            const checkboxId = `${inputId}-${val.replace(/\s+/g, '-')}`;
+            formHtml += `<label class="inline-flex items-center"><input type="checkbox" id="${checkboxId}" name="${f.payloadKey}" value="${val}" class="mr-2 form-checkbox h-4 w-4 text-orange-600" /> <span class="text-sm">${val}</span></label><br/>`;
+          });
+          formHtml += `</div>`;
         } else {
           const minAttr = f.min !== undefined ? `min="${f.min}"` : '';
           const maxAttr = f.max !== undefined ? `max="${f.max}"` : '';
@@ -196,12 +222,39 @@
       document.getElementById("stepForm").onsubmit = (e) => handleFormSubmit(e, enhancedFields);
       const backBtn = document.getElementById("backBtn");
       if (backBtn) backBtn.onclick = handleBack;
+
+      // special behavior: if "None - I like everything" checkbox toggled, uncheck others
+      enhancedFields.forEach(f => {
+        if (f.type === 'multiselect') {
+          const noneCheckbox = document.querySelector(`input[name="${f.payloadKey}"][value^="None"]`);
+          if (noneCheckbox) {
+            noneCheckbox.addEventListener('change', (ev) => {
+              const checked = ev.target.checked;
+              const all = document.querySelectorAll(`input[name="${f.payloadKey}"]`);
+              all.forEach(ch => {
+                if (ch !== noneCheckbox) ch.checked = !checked ? ch.checked : false;
+              });
+            });
+            const others = document.querySelectorAll(`input[name="${f.payloadKey}"]`);
+            others.forEach(ch => {
+              if (ch !== noneCheckbox) {
+                ch.addEventListener('change', () => {
+                  if (ch.checked) noneCheckbox.checked = false;
+                });
+              }
+            });
+          }
+        }
+      });
     }
 
     function showMenu(data) {
-      let menuHtml = `<h2 class="text-2xl font-bold mb-4 text-gray-800">Your Menu is Ready!</h2><p class="text-lg font-medium mb-4 text-gray-600">Estimated Total Price: <span id="priceTag" class="text-2xl font-extrabold text-green-600">$${(data.price||0).toFixed(2)}</span></p>`;
+      // Build menu HTML safely using escapeAttr for dynamic values inserted into attributes
+      let menuHtml = `<h2 class="text-2xl font-bold mb-4 text-gray-800">Your Menu is Ready!</h2>`;
+      menuHtml += `<p class="text-lg font-medium mb-4 text-gray-600">Estimated Total Price: <span id="priceTag" class="text-2xl font-extrabold text-green-600">$${(data.price||0).toFixed(2)}</span></p>`;
+
       if (data.nutrition) {
-        menuHtml += `<div class="mb-4 text-left p-4 bg-gray-50 rounded-md border border-gray-200"><strong>Nutrition summary (without extra protein):</strong><div class="text-sm mt-2">TMB: ${data.nutrition.tmb || 'N/A'} kcal<br/>TDEE: ${data.nutrition.tdee || 'N/A'} kcal<br/>Target Calories: ${data.nutrition.calorie_target || 'N/A'} kcal<br/>Protein: ${data.nutrition.macros.protein_grams || 0} g | Fat: ${data.nutrition.macros.fat_grams || 0} g | Carbs: ${data.nutrition.macros.carbs_grams || 0} g</div></div>`;
+        menuHtml += `<div id="nutritionBox" class="mb-4 text-left p-4 bg-gray-50 rounded-md border border-gray-200"><strong>Nutrition summary (without extra protein):</strong><div class="text-sm mt-2">TMB: ${data.nutrition.tmb || 'N/A'} kcal<br/>TDEE: ${data.nutrition.tdee || 'N/A'} kcal<br/>Target Calories: ${data.nutrition.calorie_target || 'N/A'} kcal<br/>Protein: ${data.nutrition.macros.protein_grams || 0} g | Fat: ${data.nutrition.macros.fat_grams || 0} g | Carbs: ${data.nutrition.macros.carbs_grams || 0} g</div></div>`;
       }
 
       // Control to add extra protein AFTER menu generated
@@ -211,35 +264,81 @@
         <button id="addProteinBtn" class="bg-orange-500 text-white py-2 px-3 rounded-md hover:bg-orange-600">Add Protein</button>
       </div>`;
 
+      // Note input
+      menuHtml += `<div class="mb-4 text-left"><label class="block text-sm font-medium text-gray-700 mb-1">Tell us something we should know (allergies, dislikes, notes):</label><textarea id="userNote" rows="2" class="w-full p-2 border rounded-md" placeholder="e.g. I'm allergic to banana"></textarea><div class="mt-2"><button id="saveNoteBtn" class="bg-gray-800 text-white py-2 px-3 rounded-md hover:bg-gray-900">Save Note</button></div></div>`;
+
       menuHtml += `<div id="menu" class="space-y-4 max-h-[320px] overflow-y-auto pr-2">`;
-      (data.menu||[]).forEach(m => {
-        menuHtml += `<div class="meal bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200 flex items-center">${m.image_url ? `<img src="${m.image_url}" alt="${m.name}" class="w-16 h-16 object-cover rounded-md mr-4">` : ''}<div class="flex-grow"><strong class="text-base text-gray-900">${m.name}</strong><span class="text-sm text-gray-500"> (${m.type})</span><br><span class="text-sm text-gray-700">${m.calories} kcal - $${(m.price||0).toFixed(2)}</span></div><button onclick="handleSwapMeal('${m.name.replace(/'/g, "\\'")}')" class="ml-4 bg-yellow-500 text-white text-xs font-semibold py-1 px-3 rounded-full hover:bg-yellow-600 transition duration-150 shadow-md">Swap</button></div>`;
+
+      (data.menu || []).forEach(m => {
+        const safeName = escapeAttr(m.name);
+        const ingredientsText = Array.isArray(m.ingredients) ? m.ingredients.join(", ") : String(m.ingredients || "");
+        const imgHtml = m.image_url ? `<img src="${m.image_url}" alt="${escapeAttr(m.name)}" class="w-20 h-20 object-cover rounded-md mr-4">` : '';
+        menuHtml += `<div class="meal bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200">
+          <div class="flex items-start">
+            ${imgHtml}
+            <div class="flex-grow text-left">
+              <div class="flex items-center justify-between">
+                <div>
+                  <strong class="text-lg text-gray-900">${m.name}</strong>
+                  <div class="text-sm text-gray-500">${m.type} • ${m.calories} kcal • $${(m.price||0).toFixed(2)}</div>
+                </div>
+                <div class="text-right">
+                  <button onclick="handleSwapMeal('${safeName}')" class="ml-4 bg-yellow-500 text-white text-xs font-semibold py-1 px-3 rounded-full hover:bg-yellow-600 transition duration-150 shadow-md">Swap</button>
+                </div>
+              </div>
+              <div class="mt-2 text-sm text-gray-700"><strong>Ingredients:</strong> ${escapeAttr(ingredientsText)}</div>
+            </div>
+          </div>
+        </div>`;
       });
-      menuHtml += `</div><div class="mt-6 flex justify-center space-x-4"><button onclick="handleRedoMenu()" class="bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-150 shadow-lg">Regenerate Full Menu</button></div><div class="mt-4 text-center"><button onclick="fetchStep({}, 'back')" class="text-gray-500 hover:text-gray-700 text-sm">← Adjust Preferences</button></div>`;
+
+      menuHtml += `</div>
+        <div class="mt-6 flex justify-center space-x-4">
+          <button onclick="handleRedoMenu()" class="bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-150 shadow-lg">Regenerate Full Menu</button>
+        </div>
+        <div class="mt-4 text-center">
+            <button onclick="fetchStep({}, 'back')" class="text-gray-500 hover:text-gray-700 text-sm">← Adjust Preferences</button>
+        </div>`;
 
       document.getElementById("app").innerHTML = menuHtml;
 
       // attach add protein listener
-      document.getElementById("addProteinBtn").onclick = async () => {
-        const val = Number(document.getElementById("extraProteinInput").value) || 0;
-        try {
-          const payload = { session_id: sessionId, extra_protein_grams: val };
-          const res = await apiRequest("/add-protein", payload);
-          // update UI with new price and nutrition
-          document.getElementById("priceTag").textContent = `$${(res.price||0).toFixed(2)}`;
-          if (res.nutrition) {
-            // re-render nutrition box
-            const nutritionHtml = `<div class="mb-4 text-left p-4 bg-gray-50 rounded-md border border-gray-200"><strong>Nutrition summary (with extra protein):</strong><div class="text-sm mt-2">TMB: ${res.nutrition.tmb || 'N/A'} kcal<br/>TDEE: ${res.nutrition.tdee || 'N/A'} kcal<br/>Target Calories: ${res.nutrition.calorie_target || 'N/A'} kcal<br/>Protein: ${res.nutrition.macros.protein_grams || 0} g | Fat: ${res.nutrition.macros.fat_grams || 0} g | Carbs: ${res.nutrition.macros.carbs_grams || 0} g</div></div>`;
-            // insert above menu
-            const appDiv = document.getElementById("app");
-            appDiv.querySelector("div.text-left")?.remove(); // remove old nutrition if present
-            appDiv.insertAdjacentHTML("afterbegin", nutritionHtml);
+      const addProteinBtn = document.getElementById("addProteinBtn");
+      if (addProteinBtn) {
+        addProteinBtn.onclick = async () => {
+          const val = Number(document.getElementById("extraProteinInput").value) || 0;
+          try {
+            const payload = { session_id: sessionId, extra_protein_grams: val };
+            const res = await apiRequest("/add-protein", payload);
+            const priceTag = document.getElementById("priceTag");
+            if (priceTag) priceTag.textContent = `$${(res.price||0).toFixed(2)}`;
+            if (res.nutrition) {
+              const nutritionHtml = `<div class="mb-4 text-left p-4 bg-gray-50 rounded-md border border-gray-200"><strong>Nutrition summary (with extra protein):</strong><div class="text-sm mt-2">TMB: ${res.nutrition.tmb || 'N/A'} kcal<br/>TDEE: ${res.nutrition.tdee || 'N/A'} kcal<br/>Target Calories: ${res.nutrition.calorie_target || 'N/A'} kcal<br/>Protein: ${res.nutrition.macros.protein_grams || 0} g | Fat: ${res.nutrition.macros.fat_grams || 0} g | Carbs: ${res.nutrition.macros.carbs_grams || 0} g</div></div>`;
+              const nb = document.getElementById("nutritionBox");
+              if (nb) nb.outerHTML = nutritionHtml;
+              else document.getElementById("app").insertAdjacentHTML("afterbegin", nutritionHtml);
+            }
+          } catch (e) {
+            console.error("Failed to add protein:", e);
+            showConfirmation("Error", "Could not add protein. Check console for details.", () => {});
           }
-        } catch (e) {
-          console.error("Failed to add protein:", e);
-          showConfirmation("Error", "Could not add protein. Check console for details.", () => {});
-        }
-      };
+        };
+      }
+
+      // save note listener
+      const saveNoteBtn = document.getElementById("saveNoteBtn");
+      if (saveNoteBtn) {
+        saveNoteBtn.onclick = async () => {
+          const note = document.getElementById("userNote").value || "";
+          try {
+            const res = await apiRequest("/add-note", { session_id: sessionId, note });
+            showConfirmation("Saved", "Your note was saved.", () => {});
+          } catch (e) {
+            console.error("Failed to save note:", e);
+            showConfirmation("Error", "Could not save note.", () => {});
+          }
+        };
+      }
     }
 
     async function handleSwapMeal(mealName) {
@@ -263,6 +362,24 @@
         } catch (e) { console.error(e); }
       });
     }
+
+    // Helper modal to help pick intensity (barre, heavy yoga examples)
+    function suggestIntensityFromQuickAnswers(q1, q2) {
+      if (q1 === 'not_tired') return 'Low';
+      if (q2 === true) return 'High';
+      if (q1 === 'sweat_talk') return 'Moderate';
+      return 'Moderate';
+    }
+    // Simple quick helper (uses confirm for speed; replace with better UI if desired)
+    window.quickIntensityHelper = function() {
+      const q1 = confirm("After a typical session, are you usually out of breath? (OK = Yes, Cancel = No)");
+      const q2 = confirm("Do your workouts include heavy lifting or HIIT? (OK = Yes, Cancel = No)");
+      const ans1 = q1 ? 'out_of_breath' : 'sweat_talk';
+      const intensity = suggestIntensityFromQuickAnswers(ans1, q2);
+      alert("Suggested intensity: " + intensity + ". You can update it in the form.");
+      const sel = document.querySelector('select[name="activity_intensity"]');
+      if (sel) sel.value = intensity;
+    };
 
     window.onload = () => { fetchStep({}, 'next'); };
   </script>
