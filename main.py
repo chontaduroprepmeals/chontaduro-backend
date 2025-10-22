@@ -8,7 +8,7 @@ import random
 import json
 from typing import List, Dict, Any, Optional
 
-app = FastAPI()
+app = FastAPI() # Versión FINAL de despliegue - Acepta POST
 
 # --- SERVICIO DE ARCHIVOS ESTÁTICOS Y ROOT ---
 # Monta el directorio actual para servir index.html.
