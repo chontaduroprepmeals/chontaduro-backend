@@ -8,7 +8,7 @@
   <style>
     body {
       font-family: 'Inter', sans-serif;
-      background-color: #f7f3f0; /* Color crema suave */
+      background-color: #f7f3f0;
     }
     .loader {
       border-color: #f3f3f3;
@@ -19,23 +19,20 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    /* Estilo para el modal de confirmación */
     .modal-overlay {
         background-color: rgba(0, 0, 0, 0.5);
-        z-index: 50; /* Tailwind z-50 */
+        z-index: 50;
     }
   </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
 
-  <!-- Contenedor Principal de la App -->
   <div class="w-full max-w-lg bg-white p-8 rounded-xl shadow-2xl border border-gray-100 relative">
     <h1 class="text-3xl font-bold text-center mb-6" style="color: #ff7b00;">
       🍽️ Chontaduro Menu Generator
     </h1>
 
     <div id="app" class="text-center">
-      <!-- Loader inicial -->
       <div class="py-10">
         <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4 mx-auto" style="border-top-color: #ff7b00;"></div>
         <p class="text-gray-600">Cargando...</p>
@@ -43,7 +40,6 @@
     </div>
   </div>
 
-  <!-- Modal de Confirmación Personalizado -->
   <div id="customModal" class="modal-overlay fixed inset-0 hidden items-center justify-center p-4">
     <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full transform transition-all">
       <h3 id="modalTitle" class="text-xl font-bold mb-3 text-gray-900"></h3>
@@ -52,63 +48,67 @@
         <button id="modalCancel" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-4 rounded-lg transition duration-150">
           Cancelar
         </button>
-        <button id="modalConfirm" class="font-medium py-2 px-4 rounded-lg transition duration-150" style="background-color: #ff7b00; color: white; hover:bg-orange-600;">
+        <button id="modalConfirm" class="font-medium py-2 px-4 rounded-lg transition duration-150" style="background-color: #ff7b00; color: white;">
           Confirmar
         </button>
       </div>
     </div>
   </div>
 
-
   <script>
-    // CRÍTICO: Usa la URL absoluta de Render para evitar errores de CORS/Failed to Fetch
-    const BASE_URL = "https://chontaduro-backend.onrender.com"; 
-    
+    // Ajusta a tu backend deploy URL
+    const BASE_URL = "https://chontaduro-backend.onrender.com";
+
     let sessionId = Math.random().toString(36).substring(2);
-    let currentStepName = "start"; // Usamos 'start' para la primera llamada
+    let currentStepName = "start";
 
-    // --- Funciones de Utilidad y API ---
+    // Mapeo cliente: display name -> payload key (machine-friendly)
+    const FIELD_KEY_MAP = {
+      "Plan": "plan",
+      "Días": "days",
+      "Dias": "days",
+      "Ingredientes_No_Deseados": "dislikes",
+      "Alergias": "allergies",
+      "Gramos_Extra_Proteína": "extra_protein_grams",
+      "Gramos_Extra_Proteina": "extra_protein_grams"
+    };
 
-    /**
-     * Muestra un modal de confirmación personalizado.
-     * @param {string} title - Título del modal.
-     * @param {string} message - Mensaje de confirmación.
-     * @param {function} onConfirm - Función a ejecutar si el usuario confirma.
-     */
+    // Fallback mapping de pasos si el backend no regresa current_step
+    const STEPS_FALLBACK = {
+      "start": "pick_plan",
+      "pick_plan": "duration",
+      "duration": "dislikes",
+      "dislikes": "allergies",
+      "allergies": "extra_protein",
+      "extra_protein": "review"
+    };
+
     function showConfirmation(title, message, onConfirm) {
         const modal = document.getElementById("customModal");
         document.getElementById("modalTitle").textContent = title;
         document.getElementById("modalMessage").textContent = message;
 
-        // Limpiar y re-asignar listeners
         const confirmBtn = document.getElementById("modalConfirm");
         const cancelBtn = document.getElementById("modalCancel");
-        
-        // Clonar para eliminar todos los listeners anteriores
         const newConfirmBtn = confirmBtn.cloneNode(true);
         const newCancelBtn = cancelBtn.cloneNode(true);
         confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
         cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
 
-        const closeModal = () => modal.classList.add('hidden');
-        
-        newConfirmBtn.onclick = () => {
-            closeModal();
-            onConfirm();
+        const closeModal = () => {
+          modal.classList.add('hidden');
         };
 
+        newConfirmBtn.onclick = () => {
+          closeModal();
+          onConfirm();
+        };
         newCancelBtn.onclick = closeModal;
 
         modal.classList.remove('hidden');
         modal.classList.add('flex');
     }
 
-    /**
-     * Helper para manejar las peticiones Fetch al backend.
-     * @param {string} endpoint - La parte final de la URL (ej: '/next-step').
-     * @param {Object} payload - Los datos a enviar en el cuerpo de la petición.
-     * @returns {Promise<Object>} La respuesta JSON del servidor.
-     */
     async function apiRequest(endpoint, payload) {
       const url = `${BASE_URL}${endpoint}`;
       try {
@@ -119,98 +119,114 @@
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ detail: 'No detailed error message from server.' }));
-          const errorMsg = errorData.detail || 'Server error';
-          throw new Error(`HTTP ${response.status}: ${errorMsg}`);
+          // Intentar leer JSON o texto para mostrar detalle al usuario
+          let errorData;
+          try {
+            errorData = await response.json();
+          } catch (e) {
+            errorData = { detail: await response.text() };
+          }
+          const errorMsg = (errorData && errorData.detail) ? JSON.stringify(errorData.detail) : `HTTP ${response.status}`;
+          throw new Error(errorMsg);
         }
         return await response.json();
 
       } catch (err) {
-        // Muestra el mensaje de error real en la UI (en el contenedor principal #app)
         console.error("API Request Failed:", err);
         document.getElementById("app").innerHTML = `
           <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mt-4 text-left">
             <strong class="font-bold block mb-1">❌ Error de Comunicación</strong>
             <span class="block text-sm">Causa: ${err.message || 'Fallo de red (DNS o CORS).'}</span>
-            <span class="block text-xs text-red-500 mt-2">
-                Asegúrate que tu backend en Render esté activo.
-            </span>
-            <button onclick="window.location.reload();" class="mt-3 bg-red-500 hover:bg-red-600 text-white font-medium py-1 px-3 rounded-lg text-xs">
-                Recargar
-            </button>
+            <span class="block text-xs text-red-500 mt-2">Asegúrate que tu backend en Render esté activo y que la URL BASE_URL sea correcta.</span>
+            <button onclick="window.location.reload();" class="mt-3 bg-red-500 hover:bg-red-600 text-white font-medium py-1 px-3 rounded-lg text-xs">Recargar</button>
           </div>`;
         throw err;
       }
     }
 
-    /**
-     * Inicia el flujo o avanza/retrocede un paso.
-     * @param {Object} answer - Respuesta del formulario del paso anterior.
-     * @param {string} nextStepAction - 'next' o 'back'.
-     */
     async function fetchStep(answer = {}, nextStepAction = 'next') {
-      // Mostrar spinner de carga
       document.getElementById("app").innerHTML = `
         <div class="py-10">
           <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4 mx-auto" style="border-top-color: #ff7b00;"></div>
           <p class="text-gray-600">Cargando...</p>
         </div>`;
-        
-      const stepToSend = nextStepAction === 'back' ? 'back' : currentStepName;
-      
-      const payload = { 
-        session_id: sessionId, 
-        step: stepToSend, 
-        answer: answer 
-      };
-      
-      try {
-          const data = await apiRequest("/next-step", payload);
 
-          // Si la respuesta incluye un menú, se muestra el resultado final
-          if (data.menu) {
-            showMenu(data);
+      const stepToSend = nextStepAction === 'back' ? 'back' : currentStepName;
+
+      const payload = {
+        session_id: sessionId,
+        step: stepToSend,
+        answer: answer
+      };
+
+      try {
+        const data = await apiRequest("/next-step", payload);
+
+        if (data.menu) {
+          showMenu(data);
+        } else {
+          // Actualizar currentStepName: prefer server-provided current_step, si no existe usamos fallback local
+          if (data.current_step) {
+            currentStepName = data.current_step;
           } else {
-            // Si no hay menú, se muestra el formulario del siguiente paso
-            currentStepName = data.current_step; 
-            showForm(data.question, data.fields);
+            // Intentar avanzar por fallback: si aún estamos en X, avanzar a siguiente
+            currentStepName = STEPS_FALLBACK[currentStepName] || currentStepName;
           }
+          showForm(data.question, data.fields || []);
+        }
       } catch (error) {
-          // El error ya fue manejado y mostrado por apiRequest
-          console.error("Error during step transition:", error);
+        console.error("Error during step transition:", error);
       }
     }
 
-    function handleFormSubmit(e, fields) {
+    function handleFormSubmit(e, fieldsMeta) {
       e.preventDefault();
       const formData = new FormData(e.target);
       const answer = {};
 
-      fields.forEach(f => {
-        const values = formData.getAll(f.name);
+      fieldsMeta.forEach(f => {
+        // Usamos la key normalizada en el attribute name del input/select
+        const key = f.payloadKey || FIELD_KEY_MAP[f.name] || f.name;
+        const values = formData.getAll(key);
+
         if (f.type === 'multiselect') {
-          answer[f.name] = values; 
+          answer[key] = values;
         } else {
-          answer[f.name] = values[0];
+          const val = values && values[0] !== undefined ? values[0] : "";
+          if (f.type === 'number') {
+            // Guardar number si es posible, si no enviar vacío
+            answer[key] = val === "" ? null : Number(val);
+          } else {
+            answer[key] = val;
+          }
         }
       });
-      
+
+      // Remover claves con null vacío para evitar confusión
+      Object.keys(answer).forEach(k => {
+        if (answer[k] === null || answer[k] === "") delete answer[k];
+      });
+
       fetchStep(answer, 'next');
     }
-    
+
     function handleBack() {
-      fetchStep({}, 'back'); 
+      fetchStep({}, 'back');
     }
 
-
-    // --- Funciones de Renderizado ---
-    
     function showForm(question, fields) {
       let formHtml = `<form id="stepForm" class="p-6">
         <h2 class="text-xl font-semibold mb-6 text-gray-800">${question}</h2>`;
-      
-      fields.forEach(f => {
-        const inputId = `input-${f.name.replace(/\s/g, '-')}`;
+
+      // Enhance fields meta: ensure .name exists, generate payloadKey (normalized)
+      const enhancedFields = (fields || []).map(f => {
+        const displayName = f.name || f.label || "field";
+        const payloadKey = FIELD_KEY_MAP[displayName] || displayName.replace(/\s+/g, "_").normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+        return { ...f, name: displayName, payloadKey };
+      });
+
+      enhancedFields.forEach(f => {
+        const inputId = `input-${(f.payloadKey || f.name).replace(/\s/g, '-')}`;
         formHtml += `<div class="mb-4">
           <label for="${inputId}" class="block text-sm font-medium text-gray-700 mb-1">
             ${f.name} ${f.unit ? `(${f.unit})` : ''}
@@ -219,34 +235,34 @@
         if (f.type === "select" || f.type === "multiselect") {
           const isMultiple = f.type === "multiselect" ? 'multiple' : '';
           const sizeAttr = f.type === "multiselect" ? 'size="5"' : '';
-          
-          formHtml += `<select id="${inputId}" name="${f.name}" ${isMultiple} ${sizeAttr} 
-            class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm rounded-md shadow-sm">
-            ${f.options.map(o => `<option value="${o}">${o}</option>`).join("")}
-          </select>`;
+          formHtml += `<select id="${inputId}" name="${f.payloadKey}" ${isMultiple} ${sizeAttr}
+            class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm rounded-md shadow-sm">`;
+          (f.options || []).forEach(o => {
+            // option value is the option string; if options are objects, the server should provide value/text
+            formHtml += `<option value="${o}">${o}</option>`;
+          });
+          formHtml += `</select>`;
         } else {
           const minAttr = f.min !== undefined ? `min="${f.min}"` : '';
           const maxAttr = f.max !== undefined ? `max="${f.max}"` : '';
           const placeholderAttr = f.placeholder ? `placeholder="${f.placeholder}"` : '';
-
-          formHtml += `<input type="${f.type}" id="${inputId}" name="${f.name}" 
-            ${f.type !== 'multiselect' ? 'required' : ''} 
-            ${minAttr} ${maxAttr} ${placeholderAttr}
+          const requiredAttr = f.required ? 'required' : '';
+          formHtml += `<input type="${f.type}" id="${inputId}" name="${f.payloadKey}"
+            ${requiredAttr} ${minAttr} ${maxAttr} ${placeholderAttr}
             class="shadow-sm focus:ring-orange-500 focus:border-orange-500 block w-full sm:text-sm border-gray-300 rounded-md p-2" />`;
         }
         formHtml += `</div>`;
       });
 
       formHtml += `<div class="flex justify-between mt-8">`;
-      if (currentStepName !== 'pick_plan') { // 'start' siempre avanza a 'pick_plan'
+      if (currentStepName !== 'pick_plan') {
         formHtml += `<button type="button" id="backBtn" class="bg-gray-400 hover:bg-gray-500 text-white font-medium py-2 px-4 rounded-lg transition duration-150">
           ← Volver
         </button>`;
       } else {
         formHtml += '<div></div>';
       }
-      formHtml += `<button type="submit" class="font-medium py-2 px-4 rounded-lg transition duration-150" 
-        style="background-color: #ff7b00; color: white; hover:bg-orange-600;">
+      formHtml += `<button type="submit" class="font-medium py-2 px-4 rounded-lg transition duration-150" style="background-color: #ff7b00; color: white;">
         Siguiente →
       </button>`;
       formHtml += `</div></form>`;
@@ -254,7 +270,7 @@
       const appDiv = document.getElementById("app");
       appDiv.innerHTML = formHtml;
 
-      document.getElementById("stepForm").onsubmit = (e) => handleFormSubmit(e, fields);
+      document.getElementById("stepForm").onsubmit = (e) => handleFormSubmit(e, enhancedFields);
       const backBtn = document.getElementById("backBtn");
       if (backBtn) {
         backBtn.onclick = handleBack;
@@ -264,28 +280,26 @@
     function showMenu(data) {
       let menuHtml = `
         <h2 class="text-2xl font-bold mb-4 text-gray-800">¡Tu Menú está Listo!</h2>
-        <p class="text-lg font-medium mb-6 text-gray-600">Precio Total Estimado: <span class="text-2xl font-extrabold text-green-600">$${data.price.toFixed(2)}</span></p>
-        
-        <div id="menu" class="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-      `;
-      
-      data.menu.forEach(m => {
+        <p class="text-lg font-medium mb-6 text-gray-600">Precio Total Estimado: <span class="text-2xl font-extrabold text-green-600">$${(data.price||0).toFixed(2)}</span></p>
+        <div id="menu" class="space-y-4 max-h-[400px] overflow-y-auto pr-2">`;
+
+      (data.menu||[]).forEach(m => {
         menuHtml += `
           <div class="meal bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200 flex items-center">
             ${m.image_url ? `<img src="${m.image_url}" alt="${m.name}" class="w-16 h-16 object-cover rounded-md mr-4">` : ''}
             <div class="flex-grow">
-              <strong class="text-base text-gray-900">${m.name}</strong> 
+              <strong class="text-base text-gray-900">${m.name}</strong>
               <span class="text-sm text-gray-500"> (${m.type})</span><br>
-              <span class="text-sm text-gray-700">${m.calories} kcal - $${m.price.toFixed(2)}</span>
+              <span class="text-sm text-gray-700">${m.calories} kcal - $${(m.price||0).toFixed(2)}</span>
             </div>
-            <button onclick="handleSwapMeal('${m.name}')" 
+            <button onclick="handleSwapMeal('${m.name.replace(/'/g, "\\'")}')" 
                     class="ml-4 bg-yellow-500 text-white text-xs font-semibold py-1 px-3 rounded-full hover:bg-yellow-600 transition duration-150 shadow-md">
               Cambiar
             </button>
           </div>
         `;
       });
-      
+
       menuHtml += `</div>
         <div class="mt-6 flex justify-center space-x-4">
           <button onclick="handleRedoMenu()" class="bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-150 shadow-lg">
@@ -293,61 +307,58 @@
           </button>
         </div>
         <div class="mt-4 text-center">
-            <button onclick="fetchStep({}, 'back')" class="text-gray-500 hover:text-gray-700 text-sm">
-                ← Ajustar Preferencias
-            </button>
+            <button onclick="fetchStep({}, 'back')" class="text-gray-500 hover:text-gray-700 text-sm">← Ajustar Preferencias</button>
         </div>
       `;
       document.getElementById("app").innerHTML = menuHtml;
     }
-    
-    // --- Funciones de Interacción del Menú ---
 
     async function handleSwapMeal(mealName) {
-      // Reemplazo de window.confirm()
       showConfirmation(
         "Confirmar Cambio",
         `¿Estás seguro de que deseas cambiar "${mealName}" por una alternativa compatible?`,
         async () => {
-            const payload = { 
-                session_id: sessionId, 
-                meal_to_swap: mealName 
+            const payload = {
+                session_id: sessionId,
+                meal_to_swap: mealName
             };
-            
-            const data = await apiRequest("/swap-meal", payload);
-            if (data && data.menu) {
+            try {
+              const data = await apiRequest("/swap-meal", payload);
+              if (data && data.menu) {
                 showMenu(data);
-            } else if (data.message) {
-                 // Usa el modal para mostrar la alerta también (reemplazo de window.alert)
-                 showConfirmation("Notificación", data.message, () => {});
+              } else if (data.message) {
+                showConfirmation("Notificación", data.message, () => {});
+              }
+            } catch (e) {
+              console.error(e);
             }
         }
       );
     }
 
     async function handleRedoMenu() {
-      // Reemplazo de window.confirm()
       showConfirmation(
         "Confirmar Regeneración",
         "¿Estás seguro de que deseas regenerar el menú completo? Esto anulará todos los cambios individuales.",
         async () => {
-            const payload = { 
-                session_id: sessionId 
-            };
-            
-            const data = await apiRequest("/redo-menu", payload);
-            if (data && data.menu) {
+            const payload = { session_id: sessionId };
+            try {
+              const data = await apiRequest("/redo-menu", payload);
+              if (data && data.menu) {
                 showMenu(data);
-            } else if (data.message) {
+              } else if (data.message) {
                 showConfirmation("Notificación", data.message, () => {});
+              }
+            } catch (e) {
+              console.error(e);
             }
         }
       );
     }
 
-    // Iniciar la aplicación
     window.onload = () => {
-        fetchStep({}, 'next'); 
+        // Start the flow (server will return the first form)
+        fetchStep({}, 'next');
     };
   </script>
 </body>
