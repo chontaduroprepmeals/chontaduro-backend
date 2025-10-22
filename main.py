@@ -301,6 +301,46 @@ def generate_menu(state: SessionState) -> List[Meal]:
     # limit to required count
     return menu[:total_meals_required]
 
+def assess_menu_possibility(state: SessionState) -> Dict[str, Any]:
+    """
+    Check if there are enough meals available, after applying dislikes/allergies,
+    for the user's selected plan and days. Returns dict:
+      { ok: bool, reason: str, details: {...} }
+    """
+    # Basic sanity checks
+    if not state.plan or not state.days:
+        return {"ok": False, "reason": "missing_data", "message": "Plan or days are not set."}
+
+    plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
+    config = plan_map.get(state.plan)
+    if not config:
+        return {"ok": False, "reason": "invalid_plan", "message": "Plan value not recognized."}
+
+    need_main_per_day, need_breakfast_per_day = config
+    need_mains_total = need_main_per_day * state.days
+    need_breakfasts_total = need_breakfast_per_day * state.days
+
+    available_meals = filter_meals(state.dislikes, state.allergies)
+    if not available_meals:
+        return {"ok": False, "reason": "no_meals", "message": "No meals available after applying your dislikes/allergies."}
+
+    mains = [m for m in available_meals if m.type == "Main Meal"]
+    breakfasts = [m for m in available_meals if m.type == "Breakfast"]
+
+    details = {
+        "available_total": len(available_meals),
+        "available_mains": len(mains),
+        "available_breakfasts": len(breakfasts),
+        "need_mains_total": need_mains_total,
+        "need_breakfasts_total": need_breakfasts_total
+    }
+
+    if need_mains_total > len(mains):
+        return {"ok": False, "reason": "not_enough_mains", "message": "Not enough Main Meal options for your current filters.", "details": details}
+    if need_breakfasts_total > len(breakfasts):
+        return {"ok": False, "reason": "not_enough_breakfasts", "message": "Not enough Breakfast options for your current filters.", "details": details}
+
+    return {"ok": True, "reason": None, "details": details}
 
 # --- FORM UI ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
@@ -561,11 +601,30 @@ async def next_step(request: Request):
         step_to_render_name = steps_mapping["allergies"]
 
     elif step_name == "review":
-        # Generate final menu WITHOUT using extra_protein_grams
+        # First, validate we have plan/days and enough meals available
+        assessment = assess_menu_possibility(state)
+        if not assessment["ok"]:
+            # Return a clear guidance payload instead of a generic error
+            return {
+                "question": assessment.get("message", "Could not generate menu with current settings."),
+                "fields": [],
+                "current_step": state.current_step,
+                "issue": assessment.get("reason"),
+                "details": assessment.get("details", {})
+            }
+
+        # If assessment OK, generate menu (without extra protein at generation time)
         state.menu = generate_menu(state)
         sessions[session_id] = state.model_dump()
+
+        # Defensive double-check
         if not state.menu:
-            return {"question": "Error: filters too strict. Go back and relax preferences.", "fields": []}
+            return {
+                "question": "Unexpected error: no menu items could be selected. Try changing plan or relaxing filters.",
+                "fields": [],
+                "current_step": state.current_step,
+                "issue": "generation_failed"
+            }
 
         # Nutrition calculation (no extra protein included here)
         weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
@@ -586,7 +645,8 @@ async def next_step(request: Request):
                 "tdee": tdee,
                 "calorie_target": calorie_target,
                 "macros": macros
-            }
+            },
+            "current_step": state.current_step
         }
 
     # persist and return next form
