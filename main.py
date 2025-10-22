@@ -1,11 +1,19 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles # ¡Nueva importación!
 from pydantic import BaseModel
 import random
 import json
 from typing import List, Dict, Any, Optional
 
 app = FastAPI()
+
+# --- SERVICIO DE ARCHIVOS ESTÁTICOS Y ROOT (¡NUEVO!) ---
+# Monta el directorio actual para servir index.html directamente.
+# Esto hace que FastAPI busque 'index.html' en la carpeta raíz para la ruta '/'
+app.mount("/", StaticFiles(directory=".", html=True), name="static")
+
 
 # --- CORS ---
 app.add_middleware(
@@ -40,6 +48,7 @@ class SessionInput(BaseModel):
 sessions: Dict[str, Dict[str, Any]] = {}
 
 try:
+    # Intenta leer meals.json
     with open("meals.json", "r") as f:
         all_meals = json.load(f)
 except FileNotFoundError:
@@ -163,7 +172,7 @@ def generate_menu(session_id: str) -> Dict[str, Any]:
                 
             for _ in range(count):
                 # Usar random.choice para seleccionar un plato
-                meal = random.choice(available)
+                meal = random.choice(available).copy() # Usar .copy() para no modificar el original
                 # Opcional: añadir información de día para el frontend
                 meal['day'] = day + 1 
                 menu.append(meal)
@@ -271,7 +280,7 @@ def swap_meal_endpoint(input: SwapInput):
         raise HTTPException(status_code=400, detail="No compatible alternative meals found.")
         
     # Seleccionar un nuevo plato aleatoriamente
-    new_meal = random.choice(swap_candidates)
+    new_meal = random.choice(swap_candidates).copy() # Usar .copy() para evitar problemas
     
     # Reemplazar y recalcular precio
     # Opcional: mantener el día del plato original
