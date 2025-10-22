@@ -261,11 +261,23 @@ async def next_step(req: NextStepRequest):
     if step_name == "start":
         step_to_render_name = steps_mapping["start"] # "pick_plan"
         
-    # 2. Pick Plan
-    elif step_name == "pick_plan" and "Plan" in answer:
-        plan_str = answer["Plan"].split(":")[0].replace("Plan ", "").strip()
-        state.plan = int(plan_str)
-        step_to_render_name = steps_mapping["pick_plan"] # "duration"
+    # 2. Pick Plan (Ajuste para manejar con más seguridad el input nulo/faltante)
+    elif step_name == "pick_plan":
+        plan_answer = answer.get("Plan")
+        
+        # Validación estricta: debe existir y ser una cadena de texto para procesar
+        if plan_answer and isinstance(plan_answer, str):
+            try:
+                # Safely extract the number from the string (e.g., "Plan 1: 1 comida al día" -> 1)
+                plan_str = plan_answer.split(":")[0].replace("Plan ", "").strip()
+                state.plan = int(plan_str)
+                step_to_render_name = steps_mapping["pick_plan"] # Advances to "duration"
+            except (ValueError, IndexError):
+                # Error en el parseo, se queda en el paso actual
+                step_to_render_name = "pick_plan"
+        else:
+            # Plan no seleccionado o dato incorrecto, se queda en el paso actual
+            step_to_render_name = "pick_plan"
     
     # 3. Duration (Con validación para evitar 422 si el input es incorrecto)
     elif step_name == "duration":
