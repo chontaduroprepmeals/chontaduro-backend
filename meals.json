@@ -1,34 +1,50 @@
 [
-  {
-    "name": "Oatmeal with Berries",
-    "type": "Breakfast",
-    "ingredients": ["Oats", "Berries", "Milk"],
-    "calories": 250,
-    "price": 5,
-    "image_url": "https://example.com/oatmeal.jpg"
-  },
-  {
-    "name": "Chicken Bowl",
-    "type": "Main Meal",
-    "ingredients": ["Chicken", "Rice", "Broccoli"],
-    "calories": 550,
-    "price": 12,
-    "image_url": "https://example.com/chicken_bowl.jpg"
-  },
-  {
-    "name": "Salmon Salad",
-    "type": "Main Meal",
-    "ingredients": ["Salmon", "Lettuce", "Avocado"],
-    "calories": 500,
-    "price": 14,
-    "image_url": "https://example.com/salmon_salad.jpg"
-  },
-  {
-    "name": "Vegetable Stir Fry",
-    "type": "Main Meal",
-    "ingredients": ["Broccoli", "Carrots", "Tofu"],
-    "calories": 450,
-    "price": 11,
-    "image_url": "https://example.com/veg_stirfry.jpg"
-  }
+{
+"name": "Chontaduro Bowl",
+"type": "Breakfast",
+"ingredients": ["Chontaduro", "Honey", "Salt"],
+"calories": 450,
+"price": 6.5,
+"image_url": "https://www.google.com/search?q=https://placehold.co/150x150/007D3C/FFFFFF%3Ftext%3DChontaduro"
+},
+{
+"name": "Sancocho de Pollo",
+"type": "Main Meal",
+"ingredients": ["Chicken", "Potato", "Yuca", "Cilantro", "Carrots"],
+"calories": 620,
+"price": 10.0,
+"image_url": "https://www.google.com/search?q=https://placehold.co/150x150/4B0082/FFFFFF%3Ftext%3DSancocho"
+},
+{
+"name": "Avena Fría",
+"type": "Breakfast",
+"ingredients": ["Oats", "Milk", "Cinnamon", "Sugar"],
+"calories": 310,
+"price": 4.5,
+"image_url": "https://www.google.com/search?q=https://placehold.co/150x150/8B4513/FFFFFF%3Ftext%3DAvena"
+},
+{
+"name": "Bandeja Paisa Light",
+"type": "Main Meal",
+"ingredients": ["Rice", "Beans", "Steak", "Avocado"],
+"calories": 780,
+"price": 15.0,
+"image_url": "https://www.google.com/search?q=https://placehold.co/150x150/B8860B/FFFFFF%3Ftext%3DPaisa"
+},
+{
+"name": "Ensalada de Quinoa y Salmón",
+"type": "Main Meal",
+"ingredients": ["Salmon", "Quinoa", "Lettuce", "Tomato", "Lemon"],
+"calories": 550,
+"price": 13.5,
+"image_url": "https://www.google.com/search?q=https://placehold.co/150x150/FF4500/FFFFFF%3Ftext%3DSalmon"
+},
+{
+"name": "Yogur con Berries",
+"type": "Breakfast",
+"ingredients": ["Yogurt", "Berries", "Honey"],
+"calories": 280,
+"price": 5.0,
+"image_url": "https://www.google.com/search?q=https://placehold.co/150x150/DC143C/FFFFFF%3Ftext%3DYogurt"
+}
 ]
