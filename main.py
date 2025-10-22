@@ -85,7 +85,7 @@ except json.JSONDecodeError:
 # --- SESSIONS ---
 sessions: Dict[str, Dict[str, Any]] = {}
 
-# Updated flow: we add 'objective' and 'personal_info' steps
+# Flow mapping with new objective / personal_info steps
 steps_mapping = {
     "start": "pick_plan",
     "pick_plan": "objective",
@@ -93,8 +93,9 @@ steps_mapping = {
     "personal_info": "duration",
     "duration": "dislikes",
     "dislikes": "allergies",
-    "allergies": "extra_protein",
-    "extra_protein": "review",
+    "allergies": "review",  # moved extra protein AFTER review via endpoint
+    "extra_protein": "review",  # kept for compatibility but not used for menu generation
+    "review": "review",
 }
 
 # --- MODELS ---
@@ -113,12 +114,12 @@ class SessionState(BaseModel):
     days: Optional[int] = None
     dislikes: List[str] = Field(default_factory=list)
     allergies: List[str] = Field(default_factory=list)
-    extra_protein_grams: int = 0
+    extra_protein_grams: int = 0  # stored but NOT used when generating the menu
     menu: List[Any] = Field(default_factory=list)
     current_step: str = "start"
     history: List[Dict[str, Any]] = Field(default_factory=list)
 
-    # New personal/nutrition fields
+    # personal/nutrition fields
     objective: Optional[str] = None  # "Lose Fat", "Gain Muscle", "Maintain Shape"
     weight: Optional[float] = None
     weight_unit: Optional[str] = "kg"  # "kg" or "lbs"
@@ -126,11 +127,10 @@ class SessionState(BaseModel):
     height_unit: Optional[str] = "cm"  # "cm" or "in"
     age: Optional[int] = None
     sex: Optional[str] = None  # "male" | "female"
-    activity_level: Optional[str] = None  # one of the factor keys (sedentary, light, moderate, intense, very_intense)
+    activity_level: Optional[str] = None  # one of the factor keys
     body_fat: Optional[float] = None  # percentage optional
 
     model_config = {"extra": "ignore"}
-
 
 class NextStepRequest(BaseModel):
     session_id: str
@@ -140,31 +140,30 @@ class NextStepRequest(BaseModel):
     model_config = {"extra": "allow"}
 
 
-# --- NUTRITION CALCULATION HELPERS ---
+# --- NUTRITION HELPERS ---
 ACTIVITY_FACTORS = {
     "sedentary": 1.2,
     "light": 1.375,
     "moderate": 1.55,
     "intense": 1.725,
     "very_intense": 1.9,
-    # Accept numeric string too (1.2 etc.)
 }
 
-def to_kg(weight: float, unit: str) -> float:
+def to_kg(weight: float, unit: str) -> Optional[float]:
     if weight is None:
         return None
-    if unit == "lbs" or unit.lower() in ["lb", "lbs"]:
-        return round(weight * 0.45359237, 2)
+    if unit and unit.lower() in ["lbs", "lb"]:
+        return round(float(weight) * 0.45359237, 2)
     return float(weight)
 
-def to_cm(height: float, unit: str) -> float:
+def to_cm(height: float, unit: str) -> Optional[float]:
     if height is None:
         return None
-    if unit == "in" or unit.lower() in ["inch", "inches", "in"]:
-        return round(height * 2.54, 1)
+    if unit and unit.lower() in ["in", "inch", "inches"]:
+        return round(float(height) * 2.54, 1)
     return float(height)
 
-def calc_tmb_mifflin(weight_kg: float, height_cm: float, age: int, sex: str) -> float:
+def calc_tmb_mifflin(weight_kg: float, height_cm: float, age: int, sex: str) -> Optional[float]:
     if None in (weight_kg, height_cm, age, sex):
         return None
     sex = (sex or "").lower()
@@ -190,21 +189,16 @@ def calc_calorie_target(tdee: float, objective: str) -> Optional[float]:
         return None
     objective_low = (objective or "").lower()
     if objective_low in ["lose fat", "lose", "fat", "lose_fat"]:
-        return round(tdee - 400)  # middle of 300-500
+        return round(tdee - 400)
     elif objective_low in ["gain muscle", "gain", "muscle", "gain_muscle"]:
-        return round(tdee + 350)  # middle of 250-450
+        return round(tdee + 350)
     else:
-        return round(tdee)  # maintain
+        return round(tdee)
 
 def calc_macros(calories: int, objective: str, weight_kg: Optional[float]) -> Dict[str, Any]:
-    """
-    Returns protein_grams, fat_grams, carbs_grams and percentages.
-    Uses protein per kg heuristic depending on objective, constrained to reasonable bounds.
-    """
     if calories is None:
         return {}
     obj = (objective or "").lower()
-    # default percentages
     if obj in ["lose fat", "lose", "fat"]:
         pct_protein, pct_fat, pct_carb = 0.30, 0.25, 0.45
         prot_per_kg = 2.0
@@ -215,10 +209,8 @@ def calc_macros(calories: int, objective: str, weight_kg: Optional[float]) -> Di
         pct_protein, pct_fat, pct_carb = 0.25, 0.30, 0.45
         prot_per_kg = 1.6
 
-    # calculate protein grams: prefer grams-per-kg if weight known, else percent-based
     if weight_kg:
         protein_grams = round(prot_per_kg * weight_kg)
-        # enforce reasonable bounds
         protein_grams = max(protein_grams, round((calories * pct_protein) / 4))
         protein_grams = min(protein_grams, round(2.2 * weight_kg))
     else:
@@ -244,7 +236,7 @@ def calc_macros(calories: int, objective: str, weight_kg: Optional[float]) -> Di
 # --- BUSINESS LOGIC (MEALS) ---
 def calculate_price(menu: List[Meal], extra_protein: int) -> float:
     base_price = sum(meal.price for meal in menu)
-    protein_cost = extra_protein * 1.00
+    protein_cost = (extra_protein or 0) * 1.00
     return round(base_price + protein_cost, 2)
 
 def filter_meals(dislikes: List[str], allergies: List[str]) -> List[Meal]:
@@ -260,48 +252,67 @@ def filter_meals(dislikes: List[str], allergies: List[str]) -> List[Meal]:
     return filtered_meals
 
 def generate_menu(state: SessionState) -> List[Meal]:
+    """
+    Generate menu according to the plan mapping the user specified:
+      plan 1: 1 main meal
+      plan 2: 2 main meals
+      plan 3: 1 main meal + 1 breakfast
+      plan 4: 2 main meals + 1 breakfast (full day)
+    """
     if not state.plan or not state.days:
         return []
 
-    meals_per_day = {1: 1, 2: 2, 3: 3, 4: 3}.get(state.plan)
-    if not meals_per_day:
+    # mapping: plan -> (num_main_per_day, num_breakfast_per_day)
+    plan_map = {
+        1: (1, 0),
+        2: (2, 0),
+        3: (1, 1),
+        4: (2, 1)
+    }
+    meals_config = plan_map.get(state.plan)
+    if not meals_config:
         return []
 
-    total_meals_required = state.days * meals_per_day
+    num_main, num_breakfast = meals_config
+    total_meals_required = state.days * (num_main + num_breakfast)
     available_meals = filter_meals(state.dislikes, state.allergies)
     if not available_meals:
         return []
 
-    categories = {
-        "Breakfast": [m for m in available_meals if m.type == "Breakfast"],
-        "Main Meal": [m for m in available_meals if m.type == "Main Meal"]
-    }
+    breakfasts = [m for m in available_meals if m.type == "Breakfast"]
+    mains = [m for m in available_meals if m.type == "Main Meal"]
 
     menu: List[Meal] = []
     for _ in range(state.days):
         day_meals = []
-        if meals_per_day >= 1 and categories["Breakfast"]:
-            day_meals.append(random.choice(categories["Breakfast"]))
-        main_meals_required = meals_per_day - (1 if meals_per_day >= 1 else 0)
-        for _ in range(main_meals_required):
-            if categories["Main Meal"]:
-                day_meals.append(random.choice(categories["Main Meal"]))
+        # pick breakfasts
+        for _ in range(num_breakfast):
+            if breakfasts:
+                day_meals.append(random.choice(breakfasts))
+        # pick mains
+        for _ in range(num_main):
+            if mains:
+                day_meals.append(random.choice(mains))
+        # If day_meals is empty because of missing category, fall back to any available meals
+        if not day_meals and available_meals:
+            day_meals.append(random.choice(available_meals))
         menu.extend(day_meals)
 
+    # limit to required count
     return menu[:total_meals_required]
 
 
-# --- UI FORM STRUCTURE ---
+# --- FORM UI ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "pick_plan":
         return {
             "question": "Which plan do you want?",
             "fields": [
                 {"name": "Plan", "type": "select", "options": [
-                    "Plan 1: 1 meal per day",
-                    "Plan 2: 2 meals per day",
-                    "Plan 3: 3 meals per day (with dessert)",
-                    "Plan 4: 3 meals per day (with extra protein)"
+                    "Plan 1: 1 main meal per day",
+                    "Plan 2: 2 main meals per day",
+                    "Plan 3: 1 main meal + 1 breakfast",
+                    "Plan 4: 2 main meals + 1 breakfast (full day)"
                 ]}
             ]
         }
@@ -364,14 +375,6 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
             ]
         }
 
-    if step_name == "extra_protein":
-        return {
-            "question": "Extra protein grams per menu? (optional)",
-            "fields": [
-                {"name": "Gramos_Extra_Proteína", "type": "number", "min": 0, "max": 100, "placeholder": "0"}
-            ]
-        }
-
     if step_name == "review":
         if not state:
             return {"question": "State error. Start again."}
@@ -382,7 +385,6 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
             f"Height: {state.height} {state.height_unit}\n"
             f"Age: {state.age}\n"
             f"Activity: {state.activity_level}\n"
-            f"Extra protein: {state.extra_protein_grams} g\n"
         )
         return {
             "question": f"Review your info and generate the menu:\n\n{summary}",
@@ -429,7 +431,6 @@ async def next_step(request: Request):
     if isinstance(answer, dict):
         for key, value in answer.items():
             key_norm = normalize_key(str(key))
-            # map many possible keys to internal canonical keys
             if key_norm in ["plan", "tipoplan"]:
                 translated_answer["plan"] = value
             elif key_norm in ["days", "dias", "días"]:
@@ -474,7 +475,7 @@ async def next_step(request: Request):
     if step_name != "start":
         state.history.append(sessions[session_id].copy())
 
-    # Step handling
+    # Step handling (similar to prior implementation)
     if step_name == "start":
         step_to_render_name = steps_mapping["start"]
 
@@ -503,7 +504,6 @@ async def next_step(request: Request):
             step_to_render_name = "objective"
 
     elif step_name == "personal_info":
-        # Accept variants and convert types
         try:
             w = answer.get("weight")
             if w is not None and str(w) != "":
@@ -550,36 +550,24 @@ async def next_step(request: Request):
         except Exception:
             step_to_render_name = "duration"
 
-    elif step_name == "dislikes" and "dislikes" in answer or "Ingredientes_No_Deseados" in answer:
+    elif step_name == "dislikes" and ("dislikes" in answer or "Ingredientes_No_Deseados" in answer):
         data = answer.get("dislikes") or answer.get("Ingredientes_No_Deseados")
         state.dislikes = data if isinstance(data, list) else [data] if data else []
         step_to_render_name = steps_mapping["dislikes"]
 
-    elif step_name == "allergies" and "allergies" in answer or "Alergias" in answer:
+    elif step_name == "allergies" and ("allergies" in answer or "Alergias" in answer):
         data = answer.get("allergies") or answer.get("Alergias")
         state.allergies = data if isinstance(data, list) else [data] if data else []
         step_to_render_name = steps_mapping["allergies"]
 
-    elif step_name == "extra_protein" and ("extra_protein_grams" in answer or "Gramos_Extra_Proteína" in answer):
-        try:
-            protein_input = answer.get("extra_protein_grams") or answer.get("Gramos_Extra_Proteína")
-            if protein_input is not None and str(protein_input).isdigit() and 0 <= int(protein_input) <= 100:
-                state.extra_protein_grams = int(protein_input)
-            elif protein_input == "" or protein_input is None:
-                state.extra_protein_grams = 0
-            step_to_render_name = steps_mapping["extra_protein"]
-        except Exception:
-            state.extra_protein_grams = 0
-            step_to_render_name = steps_mapping["extra_protein"]
-
     elif step_name == "review":
-        # Generate final menu and compute nutrition summary
+        # Generate final menu WITHOUT using extra_protein_grams
         state.menu = generate_menu(state)
         sessions[session_id] = state.model_dump()
         if not state.menu:
             return {"question": "Error: filters too strict. Go back and relax preferences.", "fields": []}
 
-        # Nutrition calculation
+        # Nutrition calculation (no extra protein included here)
         weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
         height_cm = to_cm(state.height, state.height_unit) if state.height else None
         tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
@@ -587,7 +575,7 @@ async def next_step(request: Request):
         calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
         macros = calc_macros(calorie_target, state.objective, weight_kg)
 
-        total_price = calculate_price(state.menu, state.extra_protein_grams)
+        total_price = calculate_price(state.menu, 0)  # price WITHOUT extra protein at generation time
 
         return {
             "menu": [m.model_dump() for m in state.menu],
@@ -606,6 +594,66 @@ async def next_step(request: Request):
     sessions[session_id] = state.model_dump()
 
     return get_form_fields(state.current_step, state)
+
+
+# --- NEW endpoint: add protein AFTER menu generated ---
+@app.post("/add-protein")
+async def add_protein(request: Request):
+    payload = await request.json()
+    session_id = payload.get("session_id") or payload.get("sessionId")
+    extra = payload.get("extra_protein_grams") or payload.get("extraProtein") or payload.get("grams") or 0
+    try:
+        extra = int(extra or 0)
+    except Exception:
+        return JSONResponse(status_code=422, content={"detail": "extra_protein_grams must be integer."})
+
+    if not session_id or session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    state = SessionState(**sessions[session_id])
+
+    # Save extra protein grams in session
+    state.extra_protein_grams = extra
+    sessions[session_id] = state.model_dump()
+
+    # Recompute price including protein cost ($1 per gram)
+    current_menu_objects = [Meal(**m) if isinstance(m, dict) else m for m in state.menu]
+    total_price = calculate_price(current_menu_objects, state.extra_protein_grams)
+
+    # Recompute nutrition: base macros + added protein calories
+    weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
+    height_cm = to_cm(state.height, state.height_unit) if state.height else None
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tdee = calc_tdee(tmb, state.activity_level) if tmb else None
+    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+    base_macros = calc_macros(calorie_target, state.objective, weight_kg)
+
+    # Add extra protein (calories and grams). We simply add protein calories on top.
+    added_protein_cal = state.extra_protein_grams * 4
+    new_calories = (base_macros.get("calories") or 0) + added_protein_cal
+    new_protein = (base_macros.get("protein_grams") or 0) + state.extra_protein_grams
+    # Keep fat/carbs unchanged for simplicity
+    new_macros = {
+        "calories": int(new_calories),
+        "protein_grams": int(new_protein),
+        "fat_grams": int(base_macros.get("fat_grams", 0)),
+        "carbs_grams": int(base_macros.get("carbs_grams", 0)),
+        "pct_protein": base_macros.get("pct_protein"),
+        "pct_fat": base_macros.get("pct_fat"),
+        "pct_carbs": base_macros.get("pct_carbs"),
+    }
+
+    return {
+        "menu": [m.model_dump() for m in current_menu_objects],
+        "price": total_price,
+        "message": f"Added {state.extra_protein_grams} g extra protein.",
+        "nutrition": {
+            "tmb": tmb,
+            "tdee": tdee,
+            "calorie_target": calorie_target,
+            "macros": new_macros
+        }
+    }
 
 
 @app.post("/swap-meal")
@@ -654,6 +702,8 @@ async def redo_menu(request: Request):
     if not new_menu_objects:
         return {"message": "Could not generate a new menu with your current filters."}
     state.menu = [m.model_dump() for m in new_menu_objects]
+    # reset extra protein when regenerating menu (user must add afterward)
+    state.extra_protein_grams = 0
     sessions[session_id] = state.model_dump()
     total_price = calculate_price(new_menu_objects, state.extra_protein_grams)
     return {"menu": state.menu, "price": total_price, "message": "Full menu regenerated!"}
