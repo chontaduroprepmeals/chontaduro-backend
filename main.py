@@ -28,11 +28,16 @@ async def serve_frontend():
 
 # --- BASE DE DATOS Y ESTADO DE LA SESIÓN ---
 # Carga la base de datos de comidas
+MEALS_DATA = []
 try:
     with open("meals.json", "r") as f:
-        MEALS_DATA = json.load(f)
+        data = json.load(f)
+        if isinstance(data, list):
+            MEALS_DATA = data
 except FileNotFoundError:
-    MEALS_DATA = []
+    print("WARNING: meals.json not found. Meal generation will fail.")
+except json.JSONDecodeError:
+    print("WARNING: meals.json could not be decoded. Check JSON format.")
 
 # Almacenamiento de sesiones (simula una base de datos de usuario)
 sessions: Dict[str, Dict[str, Any]] = {}
@@ -67,6 +72,7 @@ class SessionState(BaseModel):
     current_step: str = "start"
     history: List[Dict[str, Any]] = [] # Para el botón 'Back'
 
+# Modelo de solicitud principal. Esta es la estructura que *debe* coincidir con el JSON enviado.
 class NextStepRequest(BaseModel):
     session_id: str
     step: str
@@ -94,7 +100,12 @@ def filter_meals(dislikes: List[str], allergies: List[str]) -> List[Meal]:
     filtered_meals = []
     for meal in MEALS_DATA:
         if not any(ing.lower() in undesired for ing in meal["ingredients"]):
-            filtered_meals.append(Meal(**meal))
+            # Convertir el diccionario crudo a un objeto Meal validado por Pydantic
+            try:
+                 filtered_meals.append(Meal(**meal))
+            except Exception as e:
+                 print(f"Error validating meal data: {e} for meal {meal.get('name')}")
+                 # Skip invalid meals
     return filtered_meals
 
 def generate_menu(state: SessionState) -> List[Meal]:
@@ -102,7 +113,12 @@ def generate_menu(state: SessionState) -> List[Meal]:
     if not state.plan or not state.days:
         return []
 
-    meals_per_day = {1: 1, 2: 2, 3: 3, 4: 3}[state.plan]
+    # Manejo de KeyError si el plan es inválido (aunque debería estar validado antes)
+    try:
+        meals_per_day = {1: 1, 2: 2, 3: 3, 4: 3}[state.plan]
+    except KeyError:
+        return []
+
     total_meals_required = state.days * meals_per_day
     
     # Filtrar comidas
@@ -238,7 +254,6 @@ async def next_step(req: NextStepRequest):
     state = SessionState(**sessions[session_id])
     
     # Variable para almacenar el nombre del siguiente paso a renderizar
-    # Inicialmente, es el paso actual (por si hay un error de validación o 'else')
     step_to_render_name = state.current_step 
     
     # --- Manejo del botón 'Back' ---
@@ -270,29 +285,36 @@ async def next_step(req: NextStepRequest):
             try:
                 # Safely extract the number from the string (e.g., "Plan 1: 1 comida al día" -> 1)
                 plan_str = plan_answer.split(":")[0].replace("Plan ", "").strip()
-                state.plan = int(plan_str)
-                step_to_render_name = steps_mapping["pick_plan"] # Advances to "duration"
+                plan_num = int(plan_str)
+                
+                # Check if the extracted number is a valid plan ID (1, 2, 3, or 4)
+                if plan_num in [1, 2, 3, 4]:
+                    state.plan = plan_num
+                    step_to_render_name = steps_mapping["pick_plan"] # Advances to "duration"
+                else:
+                    # Plan number is invalid, stay in the current step
+                    step_to_render_name = "pick_plan"
+                    
             except (ValueError, IndexError):
-                # Error en el parseo, se queda en el paso actual
+                # Error in parsing, stay in the current step
                 step_to_render_name = "pick_plan"
         else:
-            # Plan no seleccionado o dato incorrecto, se queda en el paso actual
+            # Plan not selected or incorrect data, stay in the current step
             step_to_render_name = "pick_plan"
     
     # 3. Duration (Con validación para evitar 422 si el input es incorrecto)
     elif step_name == "duration":
         try:
             days_input = answer.get("Días")
-            # Validación: debe existir, ser digito y estar en rango 1-30
-            if days_input and str(days_input).isdigit() and 1 <= int(days_input) <= 30:
+            # Validation: must exist, be a digit, and be in range 1-30
+            if days_input is not None and str(days_input).isdigit() and 1 <= int(days_input) <= 30:
                 state.days = int(days_input)
                 step_to_render_name = steps_mapping["duration"] # "dislikes"
             else:
-                # Quedarse en el mismo paso (duration) si la entrada no es válida
+                # Stay in the same step (duration) if the input is invalid
                 step_to_render_name = "duration" 
-                # Opcional: podrías añadir un mensaje de error aquí si el frontend no lo maneja
         except Exception:
-            # Quedarse en el mismo paso si hay error de parseo
+            # Stay in the same step if there is a parsing error
             step_to_render_name = "duration"
     
     # 4. Dislikes
@@ -312,16 +334,16 @@ async def next_step(req: NextStepRequest):
             if protein_input is not None and str(protein_input).isdigit() and 0 <= int(protein_input) <= 100:
                 state.extra_protein_grams = int(protein_input)
             elif protein_input == "" or protein_input is None:
-                 state.extra_protein_grams = 0 # Input vacío se trata como 0
+                 state.extra_protein_grams = 0 # Empty input is treated as 0
             
             step_to_render_name = steps_mapping["extra_protein"] # "review"
         except Exception:
-             state.extra_protein_grams = 0 # Valor por defecto en caso de error
-             step_to_render_name = steps_mapping["extra_protein"] # Avanzar al siguiente paso (review)
+             state.extra_protein_grams = 0 # Default value in case of error
+             step_to_render_name = steps_mapping["extra_protein"] # Advance to the next step (review)
 
-    # 7. Review (Generación del menú final)
+    # 7. Review (Final menu generation)
     elif step_name == "review":
-        # --- GENERACIÓN FINAL DEL MENÚ ---
+        # --- FINAL MENU GENERATION ---
         state.menu = generate_menu(state)
         sessions[session_id] = state.model_dump()
         
@@ -341,17 +363,17 @@ async def next_step(req: NextStepRequest):
         
     # --- Final Step Update and Return ---
     
-    # Actualizamos el estado con el nuevo paso a renderizar
+    # Update the state with the new step to render
     state.current_step = step_to_render_name
     
-    # Guardar el estado actualizado
+    # Save the updated state
     sessions[session_id] = state.model_dump()
 
-    # Devolver el formulario para el siguiente paso
+    # Return the form for the next step
     return get_form_fields(state.current_step, state)
 
 
-# Endpoint para cambiar una comida individual
+# Endpoint for swapping an individual meal
 @app.api_route("/swap-meal", methods=["POST", "GET"])
 async def swap_meal(req: SwapMealRequest):
     session_id = req.session_id
@@ -362,7 +384,7 @@ async def swap_meal(req: SwapMealRequest):
     
     state = SessionState(**sessions[session_id])
     
-    # 1. Encontrar la comida a reemplazar
+    # 1. Find the meal to be replaced
     meal_to_swap_info = next((m for m in state.menu if m.name == meal_to_swap_name), None)
     
     if not meal_to_swap_info:
@@ -370,10 +392,10 @@ async def swap_meal(req: SwapMealRequest):
         
     meal_type = meal_to_swap_info.type
     
-    # 2. Generar nueva comida
+    # 2. Generate a new meal
     available_meals = filter_meals(state.dislikes, state.allergies)
     
-    # Filtra solo las comidas del mismo tipo y que NO estén ya en el menú
+    # Filter only meals of the same type and that are NOT already in the menu
     potential_replacements = [
         m for m in available_meals 
         if m.type == meal_type and m.name != meal_to_swap_name and m.name not in [x.name for x in state.menu]
@@ -384,13 +406,13 @@ async def swap_meal(req: SwapMealRequest):
     
     new_meal = random.choice(potential_replacements)
     
-    # 3. Reemplazar en la lista del menú
+    # 3. Replace in the menu list
     for i, meal in enumerate(state.menu):
         if meal.name == meal_to_swap_name:
             state.menu[i] = new_meal
             break
             
-    # 4. Actualizar estado y calcular nuevo precio
+    # 4. Update state and calculate new price
     sessions[session_id] = state.model_dump()
     total_price = calculate_price(state.menu, state.extra_protein_grams)
 
@@ -400,7 +422,7 @@ async def swap_meal(req: SwapMealRequest):
         "message": f"Comida '{meal_to_swap_name}' reemplazada por '{new_meal.name}'."
     }
 
-# Endpoint para regenerar el menú completo
+# Endpoint for regenerating the full menu
 @app.api_route("/redo-menu", methods=["POST", "GET"])
 async def redo_menu(req: RedoMenuRequest):
     session_id = req.session_id
@@ -410,13 +432,13 @@ async def redo_menu(req: RedoMenuRequest):
         
     state = SessionState(**sessions[session_id])
     
-    # Generar un nuevo menú completo
+    # Generate a new complete menu
     state.menu = generate_menu(state)
     
     if not state.menu:
         return {"message": "No se pudo generar un nuevo menú con tus filtros actuales."}
         
-    # Actualizar estado y calcular precio
+    # Update state and calculate price
     sessions[session_id] = state.model_dump()
     total_price = calculate_price(state.menu, state.extra_protein_grams)
 
