@@ -5,23 +5,34 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Chontaduro Menu Generator</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style> body{font-family:Inter, sans-serif;background:#f7f3f0;} </style>
+  <style>
+    body { font-family: Inter, sans-serif; background: #f7f3f0; }
+    .loader { border-top-color: #ff7b00; animation: spin 1s linear infinite; border: 4px solid #e5e7eb; border-top-width:4px; border-radius:9999px; width:48px; height:48px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
   <div class="w-full max-w-lg bg-white p-8 rounded-xl shadow">
     <h1 class="text-2xl font-bold text-center mb-6" style="color:#ff7b00;">🍽️ Chontaduro Menu Generator</h1>
     <div id="app" class="text-center">
-      <div id="loading" class="py-10"><div class="loader w-12 h-12 border-4 rounded-full border-t-4" style="border-top-color:#ff7b00;"></div><p class="text-gray-600 mt-4">Loading...</p></div>
+      <div id="loading" class="py-10">
+        <div class="loader mx-auto"></div>
+        <p class="text-gray-600 mt-4">Loading...</p>
+      </div>
     </div>
   </div>
 
   <script>
-    // Use relative path so if index served from backend it hits same origin
-    const BASE = "";
+    const BASE = ""; // relative base so frontend talks to same origin that serves index.html
     let sessionId = Math.random().toString(36).substring(2);
     let currentStep = "start";
+
     async function api(path, payload){
-      const res = await fetch(BASE + path, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+      const res = await fetch(BASE + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || res.statusText);
@@ -29,13 +40,15 @@
       return res.json();
     }
 
+    window.addEventListener('load', () => start());
+
     async function start(){
       await step({}, "next");
     }
 
-    async function step(answer={}, action="next"){
-      document.getElementById("app").innerHTML = `<div class="py-8"><div class="loader w-12 h-12 border-4 rounded-full border-t-4" style="border-top-color:#ff7b00;margin:0 auto;"></div><p class="text-gray-600 mt-4">Loading...</p></div>`;
-      const payload = { session_id: sessionId, step: (action==="back" ? "back" : currentStep), answer: answer };
+    async function step(answer = {}, action = "next"){
+      document.getElementById("app").innerHTML = `<div class="py-8"><div class="loader mx-auto"></div><p class="text-gray-600 mt-4">Loading...</p></div>`;
+      const payload = { session_id: sessionId, step: (action === "back" ? "back" : currentStep), answer: answer };
       try {
         const data = await api("/next-step", payload);
         if (data.menu) {
@@ -52,41 +65,45 @@
 
     function renderForm(question, fields){
       let html = `<form id="f"><h2 class="text-lg font-semibold mb-4">${question}</h2>`;
-      const enhanced = (fields||[]).map(f => {
-        const payloadKey = f.name.replace(/\s+/g,"_");
-        return {...f, payloadKey};
+      const enhanced = (fields || []).map(f => {
+        const payloadKey = f.name.replace(/\s+/g, "_");
+        return { ...f, payloadKey };
       });
+
       enhanced.forEach(f => {
-        html += `<div class="mb-3 text-left"><label class="block text-sm font-medium mb-1">${f.name}${f.unit?` (${f.unit})`:''}</label>`;
+        html += `<div class="mb-3 text-left"><label class="block text-sm font-medium mb-1">${f.name}${f.unit ? ` (${f.unit})` : ''}</label>`;
         if (f.type === "select") {
           html += `<select name="${f.payloadKey}" class="w-full p-2 border rounded">`;
-          (f.options||[]).forEach(o=> html+=`<option value="${o}">${o}</option>`);
+          (f.options || []).forEach(o => html += `<option value="${o}">${o}</option>`);
           html += `</select>`;
         } else if (f.type === "multiselect") {
           html += `<div class="grid gap-2">`;
-          (f.options||[]).forEach(o=>{
-            const id = `c-${f.payloadKey}-${o.replace(/\s+/g,"-")}`;
+          (f.options || []).forEach(o => {
+            const id = `c-${f.payloadKey}-${o.replace(/\s+/g, "-")}`;
             html += `<label class="inline-flex items-center"><input type="checkbox" id="${id}" name="${f.payloadKey}" value="${o}" class="mr-2"> <span class="text-sm">${o}</span></label>`;
           });
           html += `</div>`;
         } else {
-          html += `<input name="${f.payloadKey}" type="${f.type}" class="w-full p-2 border rounded" placeholder="${f.placeholder||''}">`;
+          html += `<input name="${f.payloadKey}" type="${f.type}" class="w-full p-2 border rounded" placeholder="${f.placeholder || ''}">`;
         }
         html += `</div>`;
       });
+
       html += `<div class="flex justify-between mt-4">`;
       if (currentStep !== "pick_plan") html += `<button type="button" id="back" class="px-4 py-2 bg-gray-300 rounded">← Back</button>`;
       else html += `<div></div>`;
       html += `<button type="submit" class="px-4 py-2 bg-orange-500 text-white rounded">Next →</button></div></form>`;
+
       document.getElementById("app").innerHTML = html;
+
       const form = document.getElementById("f");
       form.onsubmit = (e) => {
         e.preventDefault();
         const fd = new FormData(form);
         const answer = {};
-        enhanced.forEach(f=>{
+        enhanced.forEach(f => {
           if (f.type === "multiselect") {
-            const vals = Array.from(document.querySelectorAll(`input[name="${f.payloadKey}"]:checked`)).map(i=>i.value);
+            const vals = Array.from(document.querySelectorAll(`input[name="${f.payloadKey}"]:checked`)).map(i => i.value);
             answer[f.payloadKey] = vals;
           } else {
             const v = fd.get(f.payloadKey);
@@ -95,27 +112,57 @@
         });
         step(answer, "next");
       };
+
       const backBtn = document.getElementById("back");
       if (backBtn) backBtn.onclick = () => step({}, "back");
     }
 
     function renderMenu(data){
-      let html = `<h2 class="text-xl font-bold mb-2">Your Menu</h2><div class="mb-4">Estimated price: <strong>$${(data.price||0).toFixed(2)}</strong></div>`;
-      if (data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal</div>`;
+      let html = `<h2 class="text-xl font-bold mb-2">Your Menu</h2><div class="mb-4">Estimated price: <strong>$${(data.price || 0).toFixed(2)}</strong></div>`;
+      if (data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb || 'N/A'} kcal — TDEE: ${data.nutrition.tdee || 'N/A'} kcal</div>`;
       html += `<div class="space-y-3">`;
-      (data.menu||[]).forEach(m=>{
-        const ing = (m.ingredients||[]).join(", ");
-        html += `<div class="p-3 bg-gray-50 rounded border"><div class="flex justify-between"><div><strong>${m.name}</strong><div class="text-sm text-gray-600">${m.type} • ${m.calories} kcal • $${(m.price||0).toFixed(2)}</div></div><div><button onclick="swapMeal('${m.name.replace(/'/g, "\\'")}')" class="px-2 py-1 bg-yellow-400 rounded text-xs">Swap</button></div></div><div class="mt-2 text-sm">Ingredients: ${ing}</div></div>`;
+
+      (data.menu || []).forEach(m => {
+        const ing = (m.ingredients || []).join(", ");
+        const safeName = (m.name || "").replace(/'/g, "\\'");
+        html += `<div class="p-3 bg-gray-50 rounded border">
+          <div class="flex justify-between">
+            <div>
+              <strong>${m.name}</strong>
+              <div class="text-sm text-gray-600">${m.type} • ${m.calories} kcal • $${(m.price || 0).toFixed(2)}</div>
+            </div>
+            <div>
+              <button onclick="swapMeal('${safeName}')" class="px-2 py-1 bg-yellow-400 rounded text-xs">Swap</button>
+            </div>
+          </div>
+          <div class="mt-2 text-sm">Ingredients: ${ing}</div>
+        </div>`;
       });
-      html += `</div><div class="mt-4"><button onclick="redoMenu()" class="px-3 py-2 bg-blue-600 text-white rounded">Regenerate Full Menu</button></div><div class="mt-3 text-left"><label class="block text-sm">Tell us something we should know (notes):</label><textarea id="note" class="w-full p-2 border rounded" rows="2"></textarea><button id="saveNote" class="mt-2 px-3 py-2 bg-gray-800 text-white rounded">Save Note</button></div>`;
+
+      html += `</div>
+        <div class="mt-4">
+          <button onclick="redoMenu()" class="px-3 py-2 bg-blue-600 text-white rounded">Regenerate Full Menu</button>
+        </div>
+        <div class="mt-3 text-left">
+          <label class="block text-sm">Tell us something we should know (notes):</label>
+          <textarea id="note" class="w-full p-2 border rounded" rows="2"></textarea>
+          <button id="saveNote" class="mt-2 px-3 py-2 bg-gray-800 text-white rounded">Save Note</button>
+        </div>`;
+
       document.getElementById("app").innerHTML = html;
-      document.getElementById("saveNote").onclick = async () => {
-        const note = document.getElementById("note").value || "";
-        try {
-          await api("/add-note", { session_id: sessionId, note });
-          alert("Note saved.");
-        } catch (e) { alert("Error saving note"); }
-      };
+
+      const saveBtn = document.getElementById("saveNote");
+      if (saveBtn) {
+        saveBtn.onclick = async () => {
+          const note = document.getElementById("note").value || "";
+          try {
+            await api("/add-note", { session_id: sessionId, note });
+            alert("Note saved.");
+          } catch (e) {
+            alert("Error saving note");
+          }
+        };
+      }
     }
 
     async function swapMeal(name){
@@ -126,6 +173,7 @@
         else alert(res.message || "No replacement");
       } catch (e) { alert("Swap error"); }
     }
+
     async function redoMenu(){
       if (!confirm("Regenerate full menu?")) return;
       try {
@@ -134,8 +182,6 @@
         else alert(res.message || "Could not regenerate");
       } catch (e) { alert("Error"); }
     }
-
-    window.onload = () => start();
   </script>
 </body>
 </html>
