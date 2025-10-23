@@ -267,6 +267,9 @@ SOY_KEYWORDS = {"soy","tofu","soy sauce"}
 SESAME_KEYWORDS = {"sesame"}
 CORN_KEYWORDS = {"corn"}
 
+# Vegetables keywords used when user dislikes "Vegetables"
+VEGETABLE_KEYWORDS = {"broccoli","spinach","lettuce","carrot","zucchini","eggplant","tomato","bell pepper","cabbage","kale","arugula","asparagus","bok choy","green beans","peas","onion","mushroom"}
+
 def is_meal_compatible_with_diet(ingredients: List[str], diet: Optional[str]) -> bool:
     if not diet:
         return True
@@ -293,16 +296,25 @@ def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions
         if isinstance(lst, list):
             for it in lst:
                 if it and isinstance(it, str):
-                    if it.lower().startswith("none") or it.lower().startswith("i like"):
+                    val = it.strip().lower()
+                    if val.startswith("none") or val.startswith("i like"):
                         continue
-                    undesired.add(it.strip().lower())
+                    # map generic "vegetables" dislike to common veg keywords
+                    if "vegetable" in val or val == "vegetables":
+                        undesired.update(VEGETABLE_KEYWORDS)
+                    else:
+                        undesired.add(val)
     for lst in (allergies or []):
         if isinstance(lst, list):
             for it in lst:
                 if it and isinstance(it, str):
-                    if it.lower().startswith("none"):
+                    val = it.strip().lower()
+                    if val.startswith("none"):
                         continue
-                    undesired.add(it.strip().lower())
+                    if "vegetable" in val or val == "vegetables":
+                        undesired.update(VEGETABLE_KEYWORDS)
+                    else:
+                        undesired.add(val)
     for r in (dietary_restrictions or []):
         rr = str(r).lower()
         if "gluten" in rr:
@@ -344,17 +356,12 @@ def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions
     return out
 
 def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int]) -> List[Dict[str, Any]]:
-    """
-    Attach provided_protein to each meal in the returned list of dicts.
-    Keeps order: meals are in sequence day0_meals..., day1_meals..., etc.
-    """
     if not menu:
         return []
     plan_map = {1:(1,0), 2:(2,0), 3:(1,1), 4:(2,1)}
     num_main, num_break = plan_map.get(state.plan, (1,0))
     meals_per_day = num_main + num_break
     days = state.days or max(1, len(menu) // max(1, meals_per_day))
-    # compute daily protein target
     daily_protein = macros_daily_protein or 0
     if daily_protein == 0:
         daily_protein = 60
@@ -432,17 +439,35 @@ def assess_menu_possibility(state: SessionState) -> Dict[str, Any]:
 # --- UI form definitions (English labels) ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "pick_plan":
-        return {"question":"Which plan do you want?","fields":[{"name":"Plan","type":"select","options":["Plan 1: 1 main meal per day","Plan 2: 2 main meals per day","Plan 3: 1 main meal + 1 breakfast","Plan 4: 2 main meals + 1 breakfast (full day)"]}],"current_step":"pick_plan"}
+        return {"question":"Which plan do you want?","fields":[{"name":"Plan","type":"select","options":["Plan 1: 1 main meal per day","Plan 2: 2 main meals per day","Plan 3: 1 main meal + 1 breakfast","Plan 4: 2 main meals + 1 breakfast (full day)"], "required": True}],"current_step":"pick_plan"}
     if step_name == "objective":
-        return {"question":"What is your main goal?","fields":[{"name":"Objective","type":"select","options":["Lose Fat","Gain Muscle","Maintain Shape"]}],"current_step":"objective"}
+        return {"question":"What is your main goal?","fields":[{"name":"Objective","type":"select","options":["Lose Fat","Gain Muscle","Maintain Shape"], "required": True}],"current_step":"objective"}
     if step_name == "personal_info":
-        return {"question":"Tell us your personal data:","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Vegan","Pescatarian","Few restrictions"], "unit":"Choose the option that best describes your overall diet."},{"name":"Weight Unit","type":"select","options":["kg","lbs"]},{"name":"Weight","type":"number","placeholder":"e.g. 70","unit":"kg or lbs"},{"name":"Height Unit","type":"select","options":["cm","in"]},{"name":"Height","type":"number","placeholder":"e.g. 175","unit":"cm or in"},{"name":"Age","type":"number","placeholder":"e.g. 30"},{"name":"Sex","type":"select","options":["Male","Female"]},{"name":"Days per week","type":"select","options":["0","1-2","3-4","5-7"], "unit":"How many days do you exercise on average?"},{"name":"Avg session duration","type":"select","options":["<30","30-60","60-120"], "unit":"Typical session length (minutes)"},{"name":"Intensity","type":"select","options":["Low","Moderate","High"], "unit":"Select intensity (Low/Moderate/High)."},{"name":"Body Fat % (optional)","type":"number","placeholder":"e.g. 18","required":False}],"current_step":"personal_info"}
+        # All fields required per user request; allergies required for everyone too
+        return {
+            "question":"Tell us your personal data:",
+            "fields":[
+                {"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Vegan","Pescatarian","Few restrictions"], "unit":"Choose the option that best describes your overall diet.", "required": True},
+                {"name":"Food Allergies","type":"multiselect","options":["None - no allergies","Egg-free","Nut-free","Seafood-free","Dairy-free","Soy-free","Gluten-free"], "unit":"Medical allergies - select all that apply", "required": True},
+                {"name":"Weight Unit","type":"select","options":["kg","lbs"], "required": True},
+                {"name":"Weight","type":"number","placeholder":"e.g. 70","unit":"kg or lbs", "required": True},
+                {"name":"Height Unit","type":"select","options":["cm","in"], "required": True},
+                {"name":"Height","type":"number","placeholder":"e.g. 175","unit":"cm or in", "required": True},
+                {"name":"Age","type":"number","placeholder":"e.g. 30", "required": True},
+                {"name":"Sex","type":"select","options":["Male","Female"], "required": True},
+                {"name":"Days per week","type":"select","options":["0","1-2","3-4","5-7"], "unit":"How many days do you exercise on average?", "required": True},
+                {"name":"Avg session duration","type":"select","options":["<30","30-60","60-120"], "unit":"Typical session length (minutes)", "required": True},
+                {"name":"Intensity","type":"select","options":["Low","Moderate","High"], "unit":"Select intensity (Low/Moderate/High).", "required": True},
+                {"name":"Body Fat % (optional)","type":"number","placeholder":"e.g. 18","required": False}
+            ],
+            "current_step":"personal_info"
+        }
     if step_name == "restrictions":
-        return {"question":"Please select any foods you avoid or are allergic to.","fields":[{"name":"Dietary Restrictions","type":"multiselect","options":["None - no special restrictions","No pork","No beef","No chicken / poultry","No seafood / shellfish","Gluten-free","Lactose-free / Dairy-free","Soy-free","Corn-free","Sesame-free"],"unit":"Personal or cultural preferences (not medical)"},{"name":"Food Allergies","type":"multiselect","options":["None - no allergies","Egg-free","Nut-free","Seafood-free","Dairy-free","Soy-free","Gluten-free"],"unit":"Medical allergies - select all that apply"}],"current_step":"restrictions"}
+        return {"question":"Please select any dietary restrictions (preferences):","fields":[{"name":"Dietary Restrictions","type":"multiselect","options":["None - no special restrictions","No pork","No beef","No chicken / poultry","No seafood / shellfish","Gluten-free","Lactose-free / Dairy-free","Soy-free","Corn-free","Sesame-free"],"unit":"Personal or cultural preferences (not medical)"}],"current_step":"restrictions"}
     if step_name == "duration":
-        return {"question":"For how many days do you want this plan?","fields":[{"name":"Days","type":"number","min":1,"max":30,"placeholder":"e.g. 7"}],"current_step":"duration"}
+        return {"question":"For how many days do you want this plan?","fields":[{"name":"Days","type":"number","min":1,"max":30,"placeholder":"e.g. 7", "required": True}],"current_step":"duration"}
     if step_name == "dislikes":
-        return {"question":"Select ingredients you DON'T like (optional):","fields":[{"name":"Dislikes","type":"multiselect","options":["None - I like everything","Vegetables","Oats","Berries","Milk","Chicken","Rice","Broccoli","Salmon","Lettuce","Avocado","Tofu","Carrots","Beef","Pork","Shellfish","Banana"], "unit":"Select foods you simply dislike (taste)."}],"current_step":"dislikes"}
+        return {"question":"Select ingredients you DON'T like (optional):","fields":[{"name":"Dislikes","type":"multiselect","options":["None - I like everything","Vegetables","Oats","Berries","Milk","Chicken","Rice","Broccoli","Salmon","Lettuce","Avocado","Tofu","Carrots","Beef","Pork","Shellfish","Banana"], "unit":"Select foods you simply dislike (taste).", "required": True}],"current_step":"dislikes"}
     if step_name == "review":
         if not state:
             return {"question":"State error. Start again.","current_step":"review"}
@@ -509,7 +534,10 @@ async def next_step(request: Request):
         try:
             if "diet_preference" in answer:
                 state.diet_preference = str(answer.get("diet_preference"))
-            # IMPORTANT: dietary_restrictions is NOT read here (we ask it in the 'restrictions' step)
+            # Allergies are collected here for everyone
+            if "allergies" in answer:
+                ag = answer.get("allergies")
+                state.allergies = ag if isinstance(ag, list) else [ag]
             if "weight_unit" in answer:
                 state.weight_unit = answer.get("weight_unit")
             if "weight" in answer:
@@ -556,9 +584,6 @@ async def next_step(request: Request):
         dr = raw_answer.get("Dietary Restrictions") or raw_answer.get("DietaryRestrictions") or answer.get("dietary_restrictions")
         if dr:
             state.dietary_restrictions = dr if isinstance(dr, list) else [dr]
-        ag = raw_answer.get("Food Allergies") or raw_answer.get("FoodAllergies") or answer.get("allergies")
-        if ag:
-            state.allergies = ag if isinstance(ag, list) else [ag]
         step_to_render_name = "duration"
 
     elif step_name == "duration":
@@ -643,14 +668,6 @@ async def next_step(request: Request):
 
 @app.post("/add-protein")
 async def add_protein(request: Request):
-    """
-    Payload:
-      {
-        "session_id": "...",
-        "extra_protein_grams": 30,
-        // optional: meal_index (int) to apply to that meal; otherwise global add
-      }
-    """
     payload = await request.json()
     sid = payload.get("session_id") or payload.get("sessionId")
     extra = payload.get("extra_protein_grams") or payload.get("extraProtein") or 0
@@ -705,8 +722,8 @@ async def add_note(request: Request):
 @app.post("/swap-meal")
 async def swap_meal(request: Request):
     """
-    Swaps a meal in the current menu (meal_to_swap is the name).
-    After swap we recompute per-meal allocations to preserve daily protein totals.
+    Swap a single meal in the current menu by name. Recompute allocations,
+    but keep other meals unchanged.
     """
     payload = await request.json()
     sid = payload.get("session_id") or payload.get("sessionId")
@@ -714,18 +731,53 @@ async def swap_meal(request: Request):
     if not sid or sid not in sessions:
         raise HTTPException(status_code=404, detail="Session not found.")
     state = SessionState(**sessions[sid])
+
+    # state.menu is a list of dicts (with provided_protein, meal_index, etc.)
     target_idx = next((i for i, m in enumerate(state.menu) if m.get("name") == meal_to_swap), None)
     if target_idx is None:
         raise HTTPException(status_code=404, detail="Meal not in current menu.")
+
+    # Determine the type of meal we want to replace (breakfast / main meal)
+    replaced_meal = state.menu[target_idx]
+    replaced_type = (replaced_meal.get("type") or "").lower()
+
+    # Find available candidates (respecting filters)
     avail = filter_meals(state.dislikes, state.allergies, state.dietary_restrictions, state.diet_preference)
-    current_names = [m.get("name") if isinstance(m, dict) else m.name for m in state.menu]
-    potential = [m for m in avail if m.name not in current_names]
+    current_names = [m.get("name") for m in state.menu]
+    # keep only same type replacements not already in menu
+    potential = [m for m in avail if m.name not in current_names and m.type.lower() == replaced_type]
     if not potential:
-        return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)), "message":"No replacements available."}
+        # If none with same type, try any available not in menu as fallback
+        potential = [m for m in avail if m.name not in current_names]
+    if not potential:
+        return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)), "message": "No replacements available."}
+
     new_meal = random.choice(potential)
-    base_menu_objs = generate_menu(state)
+
+    # Build base_menu_objs from current state.menu (lookup MEALS_DATA for full fields when possible)
+    base_menu_objs: List[Meal] = []
+    for m in state.menu:
+        found = next((x for x in MEALS_DATA if str(x.get("name")).strip() == str(m.get("name")).strip()), None)
+        if found:
+            base_menu_objs.append(Meal(**found))
+        else:
+            partial = {
+                "name": m.get("name"),
+                "type": m.get("type", "Main Meal"),
+                "ingredients": m.get("ingredients", []),
+                "calories": int(m.get("calories") or 0),
+                "price": float(m.get("price") or 0.0),
+                "image_url": m.get("image_url")
+            }
+            base_menu_objs.append(Meal(**partial))
+
+    # replace only the targeted index
     if target_idx < len(base_menu_objs):
         base_menu_objs[target_idx] = new_meal
+    else:
+        base_menu_objs.append(new_meal)
+
+    # Recompute tmb/tdee/macros to get daily protein target
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
     tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
@@ -735,10 +787,17 @@ async def swap_meal(request: Request):
     calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
     macros = calc_macros(calorie_target, state.objective, weight_kg)
     daily_protein_target = macros.get("protein_grams", 0)
+
+    # Reallocate protein across the updated base menu
     menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
+
+    # Keep extra_protein_map as-is (keys are meal indices); no shift required
     state.menu = menu_with_protein
     sessions[sid] = state.model_dump()
-    total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0))
+
+    extra_total = sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)
+    total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], extra_total)
+
     return {"menu": state.menu, "price": total_price, "message": f"Swapped '{meal_to_swap}' -> '{new_meal.name}'.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
 
 

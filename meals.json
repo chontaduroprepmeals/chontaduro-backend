@@ -520,5 +520,185 @@
     "price": 14.0,
     "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Beef+Broccoli",
     "tags": []
+  },
+  {
+    "name": "Steak with Mashed Potatoes",
+    "type": "Main Meal",
+    "ingredients": ["beef steak", "potatoes", "butter", "cream", "garlic", "salt", "pepper"],
+    "calories": 820,
+    "price": 16.5,
+    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Steak+Mashed+Potatoes",
+    "tags": []
+  },
+  {
+    "name": "Grilled Lemon Chicken with Rice",
+    "type": "Main Meal",
+    "ingredients": ["chicken", "rice", "olive oil", "lemon", "garlic", "salt", "pepper"],
+    "calories": 650,
+    "price": 13.0,
+    "image_url": "https://placehold.co/150x150/ffd1a9/333333?text=Grilled+Chicken",
+    "tags": ["nut_free"]
+  },
+  {
+    "name": "Honey Garlic Salmon with Jasmine Rice",
+    "type": "Main Meal",
+    "ingredients": ["salmon", "honey", "garlic", "soy sauce", "rice", "butter"],
+    "calories": 640,
+    "price": 15.0,
+    "image_url": "https://placehold.co/150x150/9ad1ff/333333?text=Honey+Salmon",
+    "tags": ["pescatarian"]
+  },
+  {
+    "name": "Pork Chop with Apple Compote",
+    "type": "Main Meal",
+    "ingredients": ["pork chop", "apple", "cinnamon", "butter", "brown sugar", "salt"],
+    "calories": 720,
+    "price": 14.0,
+    "image_url": "https://placehold.co/150x150/ffd1c1/333333?text=Pork+Chop",
+    "tags": []
+  },
+  {
+    "name": "Lamb Kofta with Saffron Rice",
+    "type": "Main Meal",
+    "ingredients": ["lamb", "spices", "yogurt", "rice", "saffron", "olive oil"],
+    "calories": 760,
+    "price": 15.5,
+    "image_url": "https://placehold.co/150x150/dbe7ff/333333?text=Lamb+Kofta",
+    "tags": []
+  },
+  {
+    "name": "Beef in Cream Sauce with Egg Noodles",
+    "type": "Main Meal",
+    "ingredients": ["beef", "cream", "butter", "mustard", "egg noodles", "salt", "pepper"],
+    "calories": 800,
+    "price": 14.5,
+    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Beef+Cream+Noodles",
+    "tags": []
+  },
+  {
+    "name": "BBQ Pulled Pork with Sweet Potato Mash",
+    "type": "Main Meal",
+    "ingredients": ["pulled pork", "bbq sauce", "sweet potato", "butter", "brown sugar", "salt"],
+    "calories": 820,
+    "price": 14.0,
+    "image_url": "https://placehold.co/150x150/ffd6a9/333333?text=Pulled+Pork",
+    "tags": []
+  },
+  {
+    "name": "Garlic Butter Shrimp with Rice",
+    "type": "Main Meal",
+    "ingredients": ["shrimp", "garlic", "butter", "lemon", "rice", "parsley"],
+    "calories": 560,
+    "price": 14.0,
+    "image_url": "https://placehold.co/150x150/a9fff0/333333?text=Garlic+Shrimp",
+    "tags": ["pescatarian", "shellfish"]
+  },
+  {
+    "name": "Teriyaki Chicken and Rice",
+    "type": "Main Meal",
+    "ingredients": ["chicken", "soy sauce", "mirin", "honey", "ginger", "rice"],
+    "calories": 630,
+    "price": 12.5,
+    "image_url": "https://placehold.co/150x150/ffd1ff/333333?text=Teriyaki+Chicken",
+    "tags": []
+  },
+  {
+    "name": "Sausage and Potato Bake",
+    "type": "Main Meal",
+    "ingredients": ["sausage", "potatoes", "olive oil", "rosemary", "salt", "pepper"],
+    "calories": 760,
+    "price": 12.5,
+    "image_url": "https://placehold.co/150x150/e6ffd8/333333?text=Sausage+Potato",
+    "tags": []
+  },
+  {
+    "name": "Baked Cod with Lemon Butter and Rice",
+    "type": "Main Meal",
+    "ingredients": ["cod", "butter", "lemon", "olive oil", "rice", "salt"],
+    "calories": 520,
+    "price": 14.0,
+    "image_url": "https://placehold.co/150x150/9ad1ff/333333?text=Baked+Cod",
+    "tags": ["pescatarian", "gluten_free"]
+  },
+  {
+    "name": "Turkey Meatloaf with Mustard Glaze and Mash",
+    "type": "Main Meal",
+    "ingredients": ["turkey", "breadcrumbs", "egg", "mustard", "potatoes", "butter"],
+    "calories": 680,
+    "price": 12.8,
+    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Turkey+Meatloaf",
+    "tags": []
+  },
+  {
+    "name": "Creamy Prawn Pasta",
+    "type": "Main Meal",
+    "ingredients": ["prawns", "cream", "pasta", "garlic", "olive oil", "parmesan"],
+    "calories": 720,
+    "price": 14.5,
+    "image_url": "https://placehold.co/150x150/ffd4a9/333333?text=Prawn+Pasta",
+    "tags": ["pescatarian"]
+  },
+  {
+    "name": "Ham & Cheese Omelette with Roasted Potatoes",
+    "type": "Main Meal",
+    "ingredients": ["eggs", "ham", "cheddar", "potatoes", "butter", "salt"],
+    "calories": 580,
+    "price": 11.0,
+    "image_url": "https://placehold.co/150x150/ffe7d6/333333?text=Ham+Omelette",
+    "tags": ["breakfast_style"]
+  },
+  {
+    "name": "Tuna Melt with Rustic Bread",
+    "type": "Main Meal",
+    "ingredients": ["tuna", "cheese", "mayonnaise", "bread", "lemon", "pepper"],
+    "calories": 610,
+    "price": 10.5,
+    "image_url": "https://placehold.co/150x150/ffd1f5/333333?text=Tuna+Melt",
+    "tags": []
+  },
+  {
+    "name": "Chicken & Bacon Carbonara",
+    "type": "Main Meal",
+    "ingredients": ["chicken", "bacon", "pasta", "egg", "parmesan", "black pepper"],
+    "calories": 760,
+    "price": 13.5,
+    "image_url": "https://placehold.co/150x150/ffd1ff/333333?text=Chicken+Carbonara",
+    "tags": []
+  },
+  {
+    "name": "Beef and Cheese Quesadilla",
+    "type": "Main Meal",
+    "ingredients": ["beef", "cheddar", "tortilla", "sour cream", "spices"],
+    "calories": 780,
+    "price": 12.0,
+    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Beef+Quesadilla",
+    "tags": []
+  },
+  {
+    "name": "Seared Scallops with Lemon Butter and Rice",
+    "type": "Main Meal",
+    "ingredients": ["scallops", "butter", "lemon", "rice", "salt", "pepper"],
+    "calories": 480,
+    "price": 16.0,
+    "image_url": "https://placehold.co/150x150/a9fff0/333333?text=Seared+Scallops",
+    "tags": ["pescatarian", "shellfish"]
+  },
+  {
+    "name": "Chicken Alfredo with Fettuccine",
+    "type": "Main Meal",
+    "ingredients": ["chicken", "cream", "parmesan", "fettuccine", "butter", "garlic"],
+    "calories": 840,
+    "price": 14.0,
+    "image_url": "https://placehold.co/150x150/ffd1a9/333333?text=Chicken+Alfredo",
+    "tags": []
+  },
+  {
+    "name": "Lamb & Chickpea Stew (no veg)",
+    "type": "Main Meal",
+    "ingredients": ["lamb", "chickpeas", "spices", "olive oil", "apricot", "stock"],
+    "calories": 700,
+    "price": 14.5,
+    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Lamb+Chickpea+Stew",
+    "tags": ["halal"]
   }
 ]
