@@ -99,7 +99,8 @@ class SessionState(BaseModel):
     dislikes: List[str] = Field(default_factory=list)
     allergies: List[str] = Field(default_factory=list)
     dietary_restrictions: List[str] = Field(default_factory=list)
-    extra_protein_grams: int = 0
+    extra_protein_grams: int = 0  # global extra (legacy)
+    extra_protein_map: Dict[int, int] = Field(default_factory=dict)  # map meal_index -> extra grams
     menu: List[Any] = Field(default_factory=list)
     current_step: str = "start"
     history: List[Dict[str, Any]] = Field(default_factory=list)
@@ -143,7 +144,6 @@ def normalize_step_name(step: str) -> str:
         return s
     if s in spanish_equiv:
         return spanish_equiv[s]
-    # fallback to start
     return "start"
 
 def normalize_key(k: str) -> str:
@@ -253,7 +253,7 @@ def calc_macros(calories: int, objective: str, weight_kg: Optional[float]) -> Di
     return {"calories": int(calories), "protein_grams": int(protein_grams), "fat_grams": int(fat_grams), "carbs_grams": int(carbs_grams), "pct_protein": pct_protein, "pct_fat": pct_fat, "pct_carbs": pct_carb}
 
 
-# --- DIET / RESTRICTION KEYWORDS ---
+# --- DIET / RESTRICTION KEYWORDS (unchanged) ---
 MEAT_KEYWORDS = {"chicken","beef","pork","turkey","lamb","bacon","ham","steak"}
 FISH_KEYWORDS = {"salmon","shrimp","fish","tuna","trout","cod","shellfish","prawns"}
 DAIRY_KEYWORDS = {"milk","yogurt","cheese","butter","cream"}
@@ -283,7 +283,7 @@ def is_meal_compatible_with_diet(ingredients: List[str], diet: Optional[str]) ->
     return True
 
 
-# --- BUSINESS LOGIC (MEALS) ---
+# --- BUSINESS LOGIC (MEALS) with per-meal protein allocation ---
 def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions: List[str], diet: Optional[str]) -> List[Meal]:
     undesired = set()
     for lst in (dislikes or []):
@@ -340,6 +340,60 @@ def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions
                 print("meal validation error", e)
     return out
 
+def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int]) -> List[Dict[str, Any]]:
+    """
+    Attach provided_protein to each meal in the returned list of dicts.
+    Keeps order: meals are in sequence day0_meals..., day1_meals..., etc.
+    """
+    if not menu:
+        return []
+    plan_map = {1:(1,0), 2:(2,0), 3:(1,1), 4:(2,1)}
+    num_main, num_break = plan_map.get(state.plan, (1,0))
+    meals_per_day = num_main + num_break
+    if meetings := state.days:
+        days = state.days
+    else:
+        days = max(1, len(menu) // max(1, meals_per_day))
+    # compute daily protein target
+    daily_protein = macros_daily_protein or 0
+    # If daily_protein zero, set a sensible default (e.g., 60g)
+    if daily_protein == 0:
+        daily_protein = 60
+
+    # Build output meal dicts and assign provided_protein
+    out = []
+    idx = 0
+    for day in range(days):
+        # allocate evenly for the day
+        per_base = daily_protein // meals_per_day
+        remainder = daily_protein - (per_base * meals_per_day)
+        # For deterministic distribution, give +1 to first `remainder` meals
+        for m_idx_in_day in range(meals_per_day):
+            if idx >= len(menu):
+                break
+            provided_base = per_base + (1 if m_idx_in_day < remainder else 0)
+            # Include any extra_protein_map for this absolute meal idx
+            extra_for_meal = int(state.extra_protein_map.get(idx, 0) if isinstance(state.extra_protein_map, dict) else 0)
+            meal_obj = menu[idx]
+            # For plan 4 we will compute other macros later
+            meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
+            meal_dict["provided_protein"] = int(provided_base + extra_for_meal)
+            meal_dict["day_index"] = day
+            meal_dict["meal_index"] = idx
+            out.append(meal_dict)
+            idx += 1
+    # if there are leftover meals (incomplete last day), give them small protein share
+    while idx < len(menu):
+        meal_obj = menu[idx]
+        meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
+        extra_for_meal = int(state.extra_protein_map.get(idx, 0) if isinstance(state.extra_protein_map, dict) else 0)
+        meal_dict["provided_protein"] = int((daily_protein // max(1, meals_per_day)) + extra_for_meal)
+        meal_dict["day_index"] = idx // max(1, meals_per_day)
+        meal_dict["meal_index"] = idx
+        out.append(meal_dict)
+        idx += 1
+    return out
+
 def generate_menu(state: SessionState) -> List[Meal]:
     if not state.plan or not state.days:
         return []
@@ -357,7 +411,7 @@ def generate_menu(state: SessionState) -> List[Meal]:
             if breakfasts: day_items.append(random.choice(breakfasts))
         for _ in range(num_main):
             if mains: day_items.append(random.choice(mains))
-        if not day_items:
+        if not day_items and available:
             day_items.append(random.choice(available))
         menu.extend(day_items)
     return menu[: state.days * (num_main + num_break)]
@@ -536,10 +590,9 @@ async def next_step(request: Request):
             assessment = assess_menu_possibility(state)
             if not assessment["ok"]:
                 return {"question": assessment.get("message", "Could not generate menu with current settings."), "fields": [], "current_step": state.current_step, "issue": assessment.get("reason"), "details": assessment.get("details", {})}
-            state.menu = generate_menu(state)
-            sessions[session_id] = state.model_dump()
-            if not state.menu:
-                return {"question": "Unexpected error: no menu items could be selected. Try changing plan or relaxing filters.", "fields": [], "current_step": state.current_step, "issue": "generation_failed"}
+            # generate base menu (Meal objects)
+            base_menu_objs = generate_menu(state)
+            # compute daily macros (protein target) for allocation
             weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
             height_cm = to_cm(state.height, state.height_unit) if state.height else None
             tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
@@ -547,10 +600,49 @@ async def next_step(request: Request):
             if tmb is not None:
                 tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
             calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
-            macros = calc_macros(calorie_target, state.objective, to_kg(state.weight, state.weight_unit) if state.weight else None)
-            total_price = calculate_price(state.menu, 0)
+            macros = calc_macros(calorie_target, state.objective, weight_kg)
+            daily_protein_target = macros.get("protein_grams", 0)
+            # allocate per-meal protein and attach provided_protein
+            menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
+            # store in session
+            state.menu = menu_with_protein
             sessions[session_id] = state.model_dump()
-            return {"menu":[m.model_dump() for m in state.menu],"price":total_price,"message":"Your menu is ready!","nutrition":{"tmb":tmb,"tdee":tdee,"calorie_target":calorie_target,"macros":macros},"current_step":state.current_step}
+            # prepare response fields according to plan:
+            # - Plan1: show per-meal protein only
+            # - Plan2/3: show per-meal protein + carbs (we'll estimate carbs per meal proportionally)
+            # - Plan4: show full macros per meal (approximate proportional by calories)
+            response_menu = []
+            # compute per-day totals and per-meal macros for plan4
+            for m in menu_with_protein:
+                # m already has name,type,calories,price,ingredients
+                meal_entry = dict(m)
+                # add extra_protein_map if present
+                meal_entry["extra_protein_added"] = int(state.extra_protein_map.get(m.get("meal_index"), 0) if isinstance(state.extra_protein_map, dict) else 0)
+                # compute carbs/fat per meal only for plan 2/3/4, plan4 full macros
+                if state.plan == 4:
+                    # estimate per-meal macros proportionally by calories (if calories 0 fallback equal split)
+                    day_meals = [x for x in menu_with_protein if x.get("day_index") == m.get("day_index")]
+                    total_cal_day = sum((mm.get("calories",0) or 0) for mm in day_meals) or 1
+                    frac = (m.get("calories",0) or 0) / total_cal_day
+                    meal_entry["calories_assigned"] = int(round((calorie_target or 0) * frac)) if calorie_target else m.get("calories")
+                    meal_entry["protein_assigned"] = int(m.get("provided_protein",0))
+                    # distribute fat/carbs proportionally from macros if available
+                    meal_entry["fat_assigned"] = int(round((macros.get("fat_grams",0) * frac))) if macros else 0
+                    meal_entry["carbs_assigned"] = int(round((macros.get("carbs_grams",0) * frac))) if macros else 0
+                elif state.plan in (2,3):
+                    # show protein + carbs (approximate carbs proportional by calories)
+                    day_meals = [x for x in menu_with_protein if x.get("day_index") == m.get("day_index")]
+                    total_cal_day = sum((mm.get("calories",0) or 0) for mm in day_meals) or 1
+                    frac = (m.get("calories",0) or 0) / total_cal_day
+                    meal_entry["protein_assigned"] = int(m.get("provided_protein",0))
+                    meal_entry["carbs_assigned"] = int(round((macros.get("carbs_grams",0) * frac))) if macros else 0
+                else:
+                    # plan 1: only protein
+                    meal_entry["protein_assigned"] = int(m.get("provided_protein",0))
+                response_menu.append(meal_entry)
+            total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in response_menu], 0)
+            sessions[session_id] = state.model_dump()
+            return {"menu": response_menu, "price": total_price, "message": "Your menu is ready!", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}, "current_step": state.current_step}
         except Exception as e:
             tb = traceback.format_exc()
             print(f"[ERROR] menu generation failed for session {session_id}:\n{tb}")
@@ -565,22 +657,61 @@ async def next_step(request: Request):
 
 
 # --- Additional endpoints ---
+
+
 @app.post("/add-protein")
 async def add_protein(request: Request):
+    """
+    Payload:
+      {
+        "session_id": "...",
+        "extra_protein_grams": 30,
+        // optional: meal_index (int) to apply to that meal; otherwise global add (applies to menu recompute)
+      }
+    """
     payload = await request.json()
     sid = payload.get("session_id") or payload.get("sessionId")
     extra = payload.get("extra_protein_grams") or payload.get("extraProtein") or 0
+    meal_index = payload.get("meal_index")
     try:
         extra = int(extra)
     except Exception:
-        extra = 0
+        return JSONResponse(status_code=422, content={"detail":"extra_protein_grams must be integer."})
     if not sid or sid not in sessions:
         raise HTTPException(status_code=404, detail="Session not found.")
     state = SessionState(**sessions[sid])
-    state.extra_protein_grams = extra
+    if meal_index is not None:
+        try:
+            mi = int(meal_index)
+        except Exception:
+            return JSONResponse(status_code=422, content={"detail":"meal_index must be integer."})
+        # add to map
+        state.extra_protein_map[mi] = int(state.extra_protein_map.get(mi, 0)) + extra
+    else:
+        # global extra: store as extra_protein_grams (legacy) -> distribute later
+        state.extra_protein_grams = int(state.extra_protein_grams or 0) + extra
+    # after adding protein, recompute menu allocations to include extra map when generating response
+    # We'll just regenerate the menu allocation using saved state.menu base (state.menu has already assigned provided_protein)
+    # For simplicity: regenerate fresh from current parameters
+    base_menu_objs = [Meal(**m) if isinstance(m, dict) else m for m in generate_menu(state)]
+    # recompute macros daily
+    weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
+    height_cm = to_cm(state.height, state.height_unit) if state.height else None
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tdee = None
+    if tmb is not None:
+        tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
+    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+    macros = calc_macros(calorie_target, state.objective, weight_kg)
+    daily_protein_target = macros.get("protein_grams", 0)
+    menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
+    state.menu = menu_with_protein
     sessions[sid] = state.model_dump()
-    menu_objs = [Meal(**m) if isinstance(m, dict) else m for m in state.menu]
-    return {"menu":[m.model_dump() for m in menu_objs], "price": calculate_price(menu_objs, extra), "message": f"Added {extra} g extra protein."}
+    # compute price with extras (price + $1 per extra protein gram)
+    extra_total = sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)
+    total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], extra_total)
+    return {"menu": state.menu, "price": total_price, "message": f"Added {extra} g extra protein.", "extra_total": extra_total}
+
 
 @app.post("/add-note")
 async def add_note(request: Request):
@@ -592,10 +723,15 @@ async def add_note(request: Request):
     state = SessionState(**sessions[sid])
     state.user_note = str(note)[:1000]
     sessions[sid] = state.model_dump()
-    return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], state.extra_protein_grams), "message":"Note saved.", "note": state.user_note}
+    return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)), "message":"Note saved.", "note": state.user_note}
+
 
 @app.post("/swap-meal")
 async def swap_meal(request: Request):
+    """
+    Swaps a meal in the current menu (meal_to_swap is the name).
+    After swap we recompute per-meal allocations to preserve daily protein totals.
+    """
     payload = await request.json()
     sid = payload.get("session_id") or payload.get("sessionId")
     meal_to_swap = payload.get("meal_to_swap") or payload.get("mealToSwap")
@@ -603,25 +739,37 @@ async def swap_meal(request: Request):
         raise HTTPException(status_code=404, detail="Session not found.")
     state = SessionState(**sessions[sid])
     current_menu = [Meal(**m) if isinstance(m, dict) else m for m in state.menu]
-    target = next((m for m in current_menu if m.name == meal_to_swap), None)
-    if not target:
+    # find index to replace
+    target_idx = next((i for i, m in enumerate(state.menu) if m.get("name") == meal_to_swap), None)
+    if target_idx is None:
         raise HTTPException(status_code=404, detail="Meal not in current menu.")
+    # find available replacements (respect filters and not currently in menu)
     avail = filter_meals(state.dislikes, state.allergies, state.dietary_restrictions, state.diet_preference)
-    potential = [m for m in avail if m.type == target.type and m.name != target.name and m.name not in [x.name for x in current_menu]]
+    current_names = [m.get("name") if isinstance(m, dict) else m.name for m in state.menu]
+    potential = [m for m in avail if m.name not in current_names]
     if not potential:
-        return {"menu":[m.model_dump() for m in current_menu], "price": calculate_price(current_menu, state.extra_protein_grams), "message":"No replacements available."}
-    new = random.choice(potential)
-    new_menu = []
-    replaced = False
-    for m in current_menu:
-        if not replaced and m.name == meal_to_swap:
-            new_menu.append(new)
-            replaced = True
-        else:
-            new_menu.append(m)
-    state.menu = [m.model_dump() for m in new_menu]
+        return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)), "message":"No replacements available."}
+    new_meal = random.choice(potential)
+    # replace in base menu generation: generate base menu objects, replace by index then recompute allocation
+    base_menu_objs = generate_menu(state)
+    if target_idx < len(base_menu_objs):
+        base_menu_objs[target_idx] = new_meal
+    # recompute macros/daily proteins
+    weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
+    height_cm = to_cm(state.height, state.height_unit) if state.height else None
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tdee = None
+    if tmb is not None:
+        tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
+    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+    macros = calc_macros(calorie_target, state.objective, weight_kg)
+    daily_protein_target = macros.get("protein_grams", 0)
+    menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
+    state.menu = menu_with_protein
     sessions[sid] = state.model_dump()
-    return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], state.extra_protein_grams), "message":f"Swapped {meal_to_swap} -> {new.name}"}
+    total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0))
+    return {"menu": state.menu, "price": total_price, "message": f"Swapped '{meal_to_swap}' -> '{new_meal.name}'."}
+
 
 @app.post("/redo-menu")
 async def redo_menu(request: Request):
@@ -633,10 +781,22 @@ async def redo_menu(request: Request):
     menu_objs = generate_menu(state)
     if not menu_objs:
         return {"message":"Could not generate a menu with current filters."}
-    state.menu = [m.model_dump() for m in menu_objs]
+    # Recompute macros/daily protein
+    weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
+    height_cm = to_cm(state.height, state.height_unit) if state.height else None
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tdee = None
+    if tmb is not None:
+        tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
+    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+    macros = calc_macros(calorie_target, state.objective, weight_kg)
+    daily_protein_target = macros.get("protein_grams", 0)
+    state.menu = allocate_protein_to_menu(state, menu_objs, daily_protein_target)
     state.extra_protein_grams = 0
+    state.extra_protein_map = {}
     sessions[sid] = state.model_dump()
-    return {"menu": state.menu, "price": calculate_price(menu_objs, 0), "message":"Menu regenerated."}
+    total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], 0)
+    return {"menu": state.menu, "price": total_price, "message":"Full menu regenerated."}
 
 def calculate_price(menu: List[Meal], extra_protein: int) -> float:
     base = 0.0

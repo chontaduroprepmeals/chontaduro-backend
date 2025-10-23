@@ -23,7 +23,7 @@
   </div>
 
   <script>
-    const BASE = ""; // relative base so frontend talks to same origin that serves index.html
+    const BASE = "";
     let sessionId = Math.random().toString(36).substring(2);
     let currentStep = "start";
 
@@ -119,28 +119,57 @@
 
     function renderMenu(data){
       let html = `<h2 class="text-xl font-bold mb-2">Your Menu</h2><div class="mb-4">Estimated price: <strong>$${(data.price || 0).toFixed(2)}</strong></div>`;
-      if (data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb || 'N/A'} kcal — TDEE: ${data.nutrition.tdee || 'N/A'} kcal</div>`;
+      if (data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal</div>`;
+
+      // Global add-protein control
+      html += `<div class="mb-4 flex items-center justify-center gap-2">
+        <label class="text-sm font-medium">Add extra protein (g):</label>
+        <input id="extraProteinInput" type="number" min="0" value="0" class="w-24 p-2 border rounded" />
+        <button id="addProteinBtn" class="px-3 py-2 bg-orange-500 text-white rounded">Add Protein (global)</button>
+      </div>`;
+
       html += `<div class="space-y-3">`;
 
-      (data.menu || []).forEach(m => {
+      (data.menu || []).forEach((m, idx) => {
         const ing = (m.ingredients || []).join(", ");
         const safeName = (m.name || "").replace(/'/g, "\\'");
+        const protein = m.protein_assigned || m.provided_protein || 0;
+        const carbs = m.carbs_assigned || m.carbs_assigned || 0;
+        const fat = m.fat_assigned || m.fat_assigned || 0;
+        let detailsHtml = "";
+        if (data.nutrition && data.nutrition.macros) {
+          // show depending on plan: we rely on API to only include fields relevant to plan
+          if (m.calories_assigned !== undefined) {
+            detailsHtml += `<div class="text-sm">Calories: ${m.calories_assigned} kcal</div>`;
+          }
+        }
+        // build per-plan visible info
+        let perMealInfo = `<div class="text-sm text-gray-700"><strong>Protein:</strong> ${protein} g`;
+        if (m.carbs_assigned !== undefined) perMealInfo += ` • <strong>Carbs:</strong> ${m.carbs_assigned} g`;
+        if (m.fat_assigned !== undefined) perMealInfo += ` • <strong>Fat:</strong> ${m.fat_assigned} g`;
+        perMealInfo += `</div>`;
+
         html += `<div class="p-3 bg-gray-50 rounded border">
           <div class="flex justify-between">
-            <div>
+            <div class="text-left">
               <strong>${m.name}</strong>
-              <div class="text-sm text-gray-600">${m.type} • ${m.calories} kcal • $${(m.price || 0).toFixed(2)}</div>
+              <div class="text-sm text-gray-600">${m.type} • ${m.calories || ''} kcal • $${(m.price||0).toFixed(2)}</div>
+              <div class="mt-2 text-sm">Ingredients: ${ing}</div>
+              <div class="mt-2">${perMealInfo}</div>
             </div>
-            <div>
+            <div class="flex flex-col items-end gap-2">
               <button onclick="swapMeal('${safeName}')" class="px-2 py-1 bg-yellow-400 rounded text-xs">Swap</button>
+              <div class="flex items-center gap-1">
+                <input id="p-${idx}" type="number" min="0" placeholder="g" class="w-16 p-1 border rounded text-sm" />
+                <button onclick="addProteinToMeal(${idx})" class="px-2 py-1 bg-green-500 text-white rounded text-xs">+Protein</button>
+              </div>
             </div>
           </div>
-          <div class="mt-2 text-sm">Ingredients: ${ing}</div>
         </div>`;
       });
 
       html += `</div>
-        <div class="mt-4">
+        <div class="mt-4 flex gap-3 justify-center">
           <button onclick="redoMenu()" class="px-3 py-2 bg-blue-600 text-white rounded">Regenerate Full Menu</button>
         </div>
         <div class="mt-3 text-left">
@@ -151,6 +180,15 @@
 
       document.getElementById("app").innerHTML = html;
 
+      document.getElementById("addProteinBtn").onclick = async () => {
+        const val = Number(document.getElementById("extraProteinInput").value) || 0;
+        if (val <= 0) { alert("Enter grams > 0"); return; }
+        try {
+          const res = await api("/add-protein", { session_id: sessionId, extra_protein_grams: val });
+          renderMenu(res);
+        } catch (e) { alert("Error adding protein"); console.error(e); }
+      };
+
       const saveBtn = document.getElementById("saveNote");
       if (saveBtn) {
         saveBtn.onclick = async () => {
@@ -158,11 +196,19 @@
           try {
             await api("/add-note", { session_id: sessionId, note });
             alert("Note saved.");
-          } catch (e) {
-            alert("Error saving note");
-          }
+          } catch (e) { alert("Error saving note"); }
         };
       }
+    }
+
+    async function addProteinToMeal(mealIndex){
+      const inp = document.getElementById(`p-${mealIndex}`);
+      const val = Number(inp.value) || 0;
+      if (val <= 0) { alert("Enter grams > 0"); return; }
+      try {
+        const res = await api("/add-protein", { session_id: sessionId, extra_protein_grams: val, meal_index: mealIndex });
+        renderMenu(res);
+      } catch (e) { alert("Error adding protein"); console.error(e); }
     }
 
     async function swapMeal(name){
@@ -171,7 +217,7 @@
         const res = await api("/swap-meal", { session_id: sessionId, meal_to_swap: name });
         if (res.menu) renderMenu(res);
         else alert(res.message || "No replacement");
-      } catch (e) { alert("Swap error"); }
+      } catch (e) { alert("Swap error"); console.error(e); }
     }
 
     async function redoMenu(){
@@ -180,7 +226,7 @@
         const res = await api("/redo-menu", { session_id: sessionId });
         if (res.menu) renderMenu(res);
         else alert(res.message || "Could not regenerate");
-      } catch (e) { alert("Error"); }
+      } catch (e) { alert("Error"); console.error(e); }
     }
   </script>
 </body>
