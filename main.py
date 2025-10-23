@@ -99,8 +99,8 @@ class SessionState(BaseModel):
     dislikes: List[str] = Field(default_factory=list)
     allergies: List[str] = Field(default_factory=list)
     dietary_restrictions: List[str] = Field(default_factory=list)
-    extra_protein_grams: int = 0  # global extra (legacy)
-    extra_protein_map: Dict[int, int] = Field(default_factory=dict)  # map meal_index -> extra grams
+    extra_protein_grams: int = 0  # global extra grams to distribute
+    extra_protein_map: Dict[int, int] = Field(default_factory=dict)  # per-meal extras
     menu: List[Any] = Field(default_factory=list)
     current_step: str = "start"
     history: List[Dict[str, Any]] = Field(default_factory=list)
@@ -133,7 +133,6 @@ def normalize_step_name(step: str) -> str:
     if not step:
         return "start"
     s = str(step).strip().lower()
-    # Accept explicit 'back' (and spanish variants) so it is handled correctly
     if s in ("back", "volver", "regresar"):
         return "back"
     spanish_equiv = {
@@ -184,7 +183,7 @@ def map_answer_keys(answer: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-# --- NUTRITION helpers ---
+# --- NUTRITION helpers (unchanged) ---
 def to_kg(weight: float, unit: str) -> Optional[float]:
     if weight is None:
         return None
@@ -256,7 +255,7 @@ def calc_macros(calories: int, objective: str, weight_kg: Optional[float]) -> Di
     return {"calories": int(calories), "protein_grams": int(protein_grams), "fat_grams": int(fat_grams), "carbs_grams": int(carbs_grams), "pct_protein": pct_protein, "pct_fat": pct_fat, "pct_carbs": pct_carb}
 
 
-# --- DIET / RESTRICTION KEYWORDS (unchanged) ---
+# --- DIET / RESTRICTION KEYWORDS (expanded vegetables list) ---
 MEAT_KEYWORDS = {"chicken","beef","pork","turkey","lamb","bacon","ham","steak"}
 FISH_KEYWORDS = {"salmon","shrimp","fish","tuna","trout","cod","shellfish","prawns"}
 DAIRY_KEYWORDS = {"milk","yogurt","cheese","butter","cream"}
@@ -267,8 +266,13 @@ SOY_KEYWORDS = {"soy","tofu","soy sauce"}
 SESAME_KEYWORDS = {"sesame"}
 CORN_KEYWORDS = {"corn"}
 
-# Vegetables keywords used when user dislikes "Vegetables"
-VEGETABLE_KEYWORDS = {"broccoli","spinach","lettuce","carrot","zucchini","eggplant","tomato","bell pepper","cabbage","kale","arugula","asparagus","bok choy","green beans","peas","onion","mushroom"}
+# Expanded vegetable synonyms/keywords to better detect 'Vegetables' dislike
+VEGETABLE_KEYWORDS = {
+    "broccoli","spinach","lettuce","carrot","zucchini","eggplant","tomato","bell pepper",
+    "cabbage","kale","arugula","asparagus","bok choy","green beans","peas","onion","mushroom",
+    "greens","mixed greens","salad","mixed vegetables","vegetables","veg","spring mix","spinach leaves"
+}
+
 
 def is_meal_compatible_with_diet(ingredients: List[str], diet: Optional[str]) -> bool:
     if not diet:
@@ -289,32 +293,53 @@ def is_meal_compatible_with_diet(ingredients: List[str], diet: Optional[str]) ->
     return True
 
 
-# --- BUSINESS LOGIC (MEALS) with per-meal protein allocation ---
+# --- BUSINESS LOGIC (MEALS) with robust filtering and per-meal protein allocation ---
 def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions: List[str], diet: Optional[str]) -> List[Meal]:
+    """
+    Build a set of undesired keywords from dislikes/allergies/dietary_restrictions,
+    including expanding "vegetables" into many vegetable keywords. Then exclude any meal
+    where any undesired keyword appears in any ingredient token or in tags.
+    """
     undesired = set()
+    def add_term(val: str):
+        v = str(val or "").strip().lower()
+        if not v:
+            return
+        # expand vegetables
+        if "vegetable" in v or v == "vegetables" or v == "veg":
+            undesired.update(VEGETABLE_KEYWORDS)
+            return
+        # map common synonyms
+        if v in ("no pork","pork-free"):
+            undesired.update({"pork","bacon","ham"})
+            return
+        undesired.add(v)
+
+    # collect dislikes
     for lst in (dislikes or []):
         if isinstance(lst, list):
             for it in lst:
                 if it and isinstance(it, str):
-                    val = it.strip().lower()
-                    if val.startswith("none") or val.startswith("i like"):
+                    val = it.strip()
+                    if val.lower().startswith("none") or val.lower().startswith("i like"):
                         continue
-                    # map generic "vegetables" dislike to common veg keywords
-                    if "vegetable" in val or val == "vegetables":
-                        undesired.update(VEGETABLE_KEYWORDS)
-                    else:
-                        undesired.add(val)
+                    add_term(val)
+        elif isinstance(lst, str):
+            add_term(lst)
+
+    # collect allergies
     for lst in (allergies or []):
         if isinstance(lst, list):
             for it in lst:
                 if it and isinstance(it, str):
-                    val = it.strip().lower()
-                    if val.startswith("none"):
+                    val = it.strip()
+                    if val.lower().startswith("none"):
                         continue
-                    if "vegetable" in val or val == "vegetables":
-                        undesired.update(VEGETABLE_KEYWORDS)
-                    else:
-                        undesired.add(val)
+                    add_term(val)
+        elif isinstance(lst, str):
+            add_term(lst)
+
+    # dietary restrictions (preferences)
     for r in (dietary_restrictions or []):
         rr = str(r).lower()
         if "gluten" in rr:
@@ -341,11 +366,30 @@ def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions
     out = []
     for m in MEALS_DATA:
         ings = [i.lower() for i in m.get("ingredients", [])]
+        # diet compatibility first
         if not is_meal_compatible_with_diet(ings, diet):
             continue
+
+        # Check tags too
+        tags = [t.lower() for t in (m.get("tags") or [])]
+
         conflict = False
         for u in undesired:
-            if any(u in ing for ing in ings):
+            # check against ingredients tokens and tags
+            for ing in ings:
+                # split ingredient into words and tokens, check tokens and substring
+                tokens = [tok.strip() for tok in ing.replace('/', ' ').replace('-', ' ').split()]
+                if any(u == tok or u in tok or tok in u for tok in tokens):
+                    conflict = True
+                    break
+                # fallback substring
+                if u in ing:
+                    conflict = True
+                    break
+            if conflict:
+                break
+            # tags match
+            if any(u == t or u in t for t in tags):
                 conflict = True
                 break
         if not conflict:
@@ -355,44 +399,72 @@ def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions
                 print("meal validation error", e)
     return out
 
+
 def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int]) -> List[Dict[str, Any]]:
+    """
+    Attach provided_protein to each meal in the returned list of dicts.
+    Distributes:
+      - baseline daily_protein (macros) evenly per day & per meal
+      - plus state.extra_protein_grams (global) evenly across ALL meals
+      - plus per-meal extras from state.extra_protein_map
+    """
     if not menu:
         return []
     plan_map = {1:(1,0), 2:(2,0), 3:(1,1), 4:(2,1)}
     num_main, num_break = plan_map.get(state.plan, (1,0))
     meals_per_day = num_main + num_break
     days = state.days or max(1, len(menu) // max(1, meals_per_day))
-    daily_protein = macros_daily_protein or 0
+    total_meals = min(len(menu), days * meals_per_day) if meals_per_day > 0 else len(menu)
+    if total_meals == 0:
+        total_meals = len(menu)
+
+    # baseline daily protein target
+    daily_protein = int(macros_daily_protein or 0)
     if daily_protein == 0:
         daily_protein = 60
+
+    # global extra protein (in grams)
+    extra_global = int(state.extra_protein_grams or 0)
+    # split extra_global evenly across ALL meals
+    per_extra_global = extra_global // total_meals if total_meals > 0 else 0
+    rem_extra_global = extra_global - (per_extra_global * total_meals)
 
     out = []
     idx = 0
     for day in range(days):
-        per_base = daily_protein // meals_per_day
-        remainder = daily_protein - (per_base * meals_per_day)
+        per_base = daily_protein // meals_per_day if meals_per_day > 0 else daily_protein
+        remainder = daily_protein - (per_base * meals_per_day) if meals_per_day > 0 else 0
         for m_idx_in_day in range(meals_per_day):
             if idx >= len(menu):
                 break
             provided_base = per_base + (1 if m_idx_in_day < remainder else 0)
-            extra_for_meal = int(state.extra_protein_map.get(idx, 0) if isinstance(state.extra_protein_map, dict) else 0)
+            # global share for this meal (distribute remainder to first N meals)
+            extra_for_meal_from_global = per_extra_global + (1 if idx < rem_extra_global else 0)
+            # per-meal map extras
+            extra_for_meal_specific = int(state.extra_protein_map.get(idx, 0) if isinstance(state.extra_protein_map, dict) else 0)
             meal_obj = menu[idx]
             meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
-            meal_dict["provided_protein"] = int(provided_base + extra_for_meal)
+            meal_dict["provided_protein"] = int(provided_base + extra_for_meal_from_global + extra_for_meal_specific)
             meal_dict["day_index"] = day
             meal_dict["meal_index"] = idx
             out.append(meal_dict)
             idx += 1
+
+    # leftover meals (if any)
     while idx < len(menu):
         meal_obj = menu[idx]
+        per_base = daily_protein // max(1, meals_per_day)
+        extra_for_meal_from_global = per_extra_global + (1 if idx < rem_extra_global else 0)
+        extra_for_meal_specific = int(state.extra_protein_map.get(idx, 0) if isinstance(state.extra_protein_map, dict) else 0)
         meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
-        extra_for_meal = int(state.extra_protein_map.get(idx, 0) if isinstance(state.extra_protein_map, dict) else 0)
-        meal_dict["provided_protein"] = int((daily_protein // max(1, meals_per_day)) + extra_for_meal)
+        meal_dict["provided_protein"] = int(per_base + extra_for_meal_from_global + extra_for_meal_specific)
         meal_dict["day_index"] = idx // max(1, meals_per_day)
         meal_dict["meal_index"] = idx
         out.append(meal_dict)
         idx += 1
+
     return out
+
 
 def generate_menu(state: SessionState) -> List[Meal]:
     if not state.plan or not state.days:
@@ -416,6 +488,7 @@ def generate_menu(state: SessionState) -> List[Meal]:
         menu.extend(day_items)
     return menu[: state.days * (num_main + num_break)]
 
+
 def assess_menu_possibility(state: SessionState) -> Dict[str, Any]:
     if not state.plan or not state.days:
         return {"ok": False, "reason":"missing_data", "message":"Plan or days are not set."}
@@ -436,14 +509,13 @@ def assess_menu_possibility(state: SessionState) -> Dict[str, Any]:
     return {"ok": True, "details": details}
 
 
-# --- UI form definitions (English labels) ---
+# --- UI form definitions (unchanged) ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "pick_plan":
         return {"question":"Which plan do you want?","fields":[{"name":"Plan","type":"select","options":["Plan 1: 1 main meal per day","Plan 2: 2 main meals per day","Plan 3: 1 main meal + 1 breakfast","Plan 4: 2 main meals + 1 breakfast (full day)"], "required": True}],"current_step":"pick_plan"}
     if step_name == "objective":
         return {"question":"What is your main goal?","fields":[{"name":"Objective","type":"select","options":["Lose Fat","Gain Muscle","Maintain Shape"], "required": True}],"current_step":"objective"}
     if step_name == "personal_info":
-        # All fields required per user request; allergies required for everyone too
         return {
             "question":"Tell us your personal data:",
             "fields":[
@@ -467,7 +539,7 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "duration":
         return {"question":"For how many days do you want this plan?","fields":[{"name":"Days","type":"number","min":1,"max":30,"placeholder":"e.g. 7", "required": True}],"current_step":"duration"}
     if step_name == "dislikes":
-        return {"question":"Select ingredients you DON'T like (optional):","fields":[{"name":"Dislikes","type":"multiselect","options":["None - I like everything","Vegetables","Oats","Berries","Milk","Chicken","Rice","Broccoli","Salmon","Lettuce","Avocado","Tofu","Carrots","Beef","Pork","Shellfish","Banana"], "unit":"Select foods you simply dislike (taste).", "required": True}],"current_step":"dislikes"}
+        return {"question":"Select ingredients you DON'T like:","fields":[{"name":"Dislikes","type":"multiselect","options":["None - I like everything","Vegetables","Oats","Berries","Milk","Chicken","Rice","Broccoli","Salmon","Lettuce","Avocado","Tofu","Carrots","Beef","Pork","Shellfish","Banana"], "unit":"Select foods you simply dislike (taste).", "required": True}],"current_step":"dislikes"}
     if step_name == "review":
         if not state:
             return {"question":"State error. Start again.","current_step":"review"}
@@ -476,7 +548,7 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     return {"question":"Unknown step. Start again.","current_step":"start"}
 
 
-# --- ENDPOINTS & FLOW HANDLER ---
+# --- ENDPOINTS & FLOW HANDLER (uses new allocation) ---
 def normalize_request_payload(payload: Dict[str, Any]) -> NextStepRequest:
     session_id = payload.get("session_id") or payload.get("sessionId") or payload.get("id") or str(random.randint(1000,9999))
     step = payload.get("step") or payload.get("current_step") or payload.get("currentStep") or "start"
@@ -620,7 +692,7 @@ async def next_step(request: Request):
             calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
             macros = calc_macros(calorie_target, state.objective, weight_kg)
             daily_protein_target = macros.get("protein_grams", 0)
-            # allocate per-meal protein and attach provided_protein
+            # allocate per-meal protein and attach provided_protein (this will include global extras)
             menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
             # store in session
             state.menu = menu_with_protein
@@ -663,11 +735,18 @@ async def next_step(request: Request):
     return get_form_fields(state.current_step, state)
 
 
-# --- Additional endpoints ---
-
+# --- Additional endpoints (fixed global protein distribution) ---
 
 @app.post("/add-protein")
 async def add_protein(request: Request):
+    """
+    Payload:
+      {
+        "session_id": "...",
+        "extra_protein_grams": 30,
+        // optional: meal_index (int) to apply to that meal; otherwise global add
+      }
+    """
     payload = await request.json()
     sid = payload.get("session_id") or payload.get("sessionId")
     extra = payload.get("extra_protein_grams") or payload.get("extraProtein") or 0
@@ -686,9 +765,32 @@ async def add_protein(request: Request):
             return JSONResponse(status_code=422, content={"detail":"meal_index must be integer."})
         state.extra_protein_map[mi] = int(state.extra_protein_map.get(mi, 0)) + extra
     else:
+        # add global extra and it WILL be distributed in allocation below
         state.extra_protein_grams = int(state.extra_protein_grams or 0) + extra
-    # Recompute base menu and macros similarly to /review
-    base_menu_objs = generate_menu(state)
+
+    # Recompute using the current session menu as base (if present) to avoid regenerating different menu
+    # Build base_menu_objs from current state.menu if available, else generate one
+    base_menu_objs: List[Meal] = []
+    if state.menu:
+        for m in state.menu:
+            found = next((x for x in MEALS_DATA if str(x.get("name")).strip() == str(m.get("name")).strip()), None)
+            if found:
+                base_menu_objs.append(Meal(**found))
+            else:
+                # fallback: reconstruct minimal Meal
+                partial = {
+                    "name": m.get("name"),
+                    "type": m.get("type", "Main Meal"),
+                    "ingredients": m.get("ingredients", []),
+                    "calories": int(m.get("calories") or 0),
+                    "price": float(m.get("price") or 0.0),
+                    "image_url": m.get("image_url")
+                }
+                base_menu_objs.append(Meal(**partial))
+    else:
+        base_menu_objs = generate_menu(state)
+
+    # recompute macros/daily protein
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
     tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
@@ -698,25 +800,13 @@ async def add_protein(request: Request):
     calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
     macros = calc_macros(calorie_target, state.objective, weight_kg)
     daily_protein_target = macros.get("protein_grams", 0)
+
     menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
     state.menu = menu_with_protein
     sessions[sid] = state.model_dump()
     extra_total = sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)
     total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], extra_total)
     return {"menu": state.menu, "price": total_price, "message": f"Added {extra} g extra protein.", "extra_total": extra_total, "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
-
-
-@app.post("/add-note")
-async def add_note(request: Request):
-    payload = await request.json()
-    sid = payload.get("session_id") or payload.get("sessionId")
-    note = payload.get("note") or payload.get("user_note") or ""
-    if not sid or sid not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found.")
-    state = SessionState(**sessions[sid])
-    state.user_note = str(note)[:1000]
-    sessions[sid] = state.model_dump()
-    return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)), "message":"Note saved.", "note": state.user_note}
 
 
 @app.post("/swap-meal")
@@ -732,29 +822,24 @@ async def swap_meal(request: Request):
         raise HTTPException(status_code=404, detail="Session not found.")
     state = SessionState(**sessions[sid])
 
-    # state.menu is a list of dicts (with provided_protein, meal_index, etc.)
     target_idx = next((i for i, m in enumerate(state.menu) if m.get("name") == meal_to_swap), None)
     if target_idx is None:
         raise HTTPException(status_code=404, detail="Meal not in current menu.")
 
-    # Determine the type of meal we want to replace (breakfast / main meal)
     replaced_meal = state.menu[target_idx]
     replaced_type = (replaced_meal.get("type") or "").lower()
 
-    # Find available candidates (respecting filters)
     avail = filter_meals(state.dislikes, state.allergies, state.dietary_restrictions, state.diet_preference)
     current_names = [m.get("name") for m in state.menu]
-    # keep only same type replacements not already in menu
     potential = [m for m in avail if m.name not in current_names and m.type.lower() == replaced_type]
     if not potential:
-        # If none with same type, try any available not in menu as fallback
         potential = [m for m in avail if m.name not in current_names]
     if not potential:
         return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)), "message": "No replacements available."}
 
     new_meal = random.choice(potential)
 
-    # Build base_menu_objs from current state.menu (lookup MEALS_DATA for full fields when possible)
+    # Build base_menu_objs from current state.menu
     base_menu_objs: List[Meal] = []
     for m in state.menu:
         found = next((x for x in MEALS_DATA if str(x.get("name")).strip() == str(m.get("name")).strip()), None)
@@ -771,13 +856,12 @@ async def swap_meal(request: Request):
             }
             base_menu_objs.append(Meal(**partial))
 
-    # replace only the targeted index
     if target_idx < len(base_menu_objs):
         base_menu_objs[target_idx] = new_meal
     else:
         base_menu_objs.append(new_meal)
 
-    # Recompute tmb/tdee/macros to get daily protein target
+    # Recompute macros/daily proteins
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
     tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
@@ -788,16 +872,10 @@ async def swap_meal(request: Request):
     macros = calc_macros(calorie_target, state.objective, weight_kg)
     daily_protein_target = macros.get("protein_grams", 0)
 
-    # Reallocate protein across the updated base menu
     menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
-
-    # Keep extra_protein_map as-is (keys are meal indices); no shift required
     state.menu = menu_with_protein
     sessions[sid] = state.model_dump()
-
-    extra_total = sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)
-    total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], extra_total)
-
+    total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0))
     return {"menu": state.menu, "price": total_price, "message": f"Swapped '{meal_to_swap}' -> '{new_meal.name}'.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
 
 
