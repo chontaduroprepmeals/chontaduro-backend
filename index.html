@@ -118,8 +118,9 @@
     }
 
     function renderMenu(data){
-      let html = `<h2 class="text-xl font-bold mb-2">Your Menu</h2><div class="mb-4">Estimated price: <strong>$${(data.price || 0).toFixed(2)}</strong></div>`;
-      if (data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal</div>`;
+      let html = `<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">Your Menu</h2><div><button onclick="step({}, 'back')" class="px-3 py-1 bg-gray-200 rounded">← Adjust Preferences</button></div></div>`;
+      html += `<div class="mb-4">Estimated price: <strong>$${(data.price || 0).toFixed(2)}</strong></div>`;
+      if (data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal — Target: ${data.nutrition.calorie_target||'N/A'} kcal</div>`;
 
       // Global add-protein control
       html += `<div class="mb-4 flex items-center justify-center gap-2">
@@ -134,19 +135,11 @@
         const ing = (m.ingredients || []).join(", ");
         const safeName = (m.name || "").replace(/'/g, "\\'");
         const protein = m.protein_assigned || m.provided_protein || 0;
-        const carbs = m.carbs_assigned || m.carbs_assigned || 0;
-        const fat = m.fat_assigned || m.fat_assigned || 0;
-        let detailsHtml = "";
-        if (data.nutrition && data.nutrition.macros) {
-          // show depending on plan: we rely on API to only include fields relevant to plan
-          if (m.calories_assigned !== undefined) {
-            detailsHtml += `<div class="text-sm">Calories: ${m.calories_assigned} kcal</div>`;
-          }
-        }
-        // build per-plan visible info
+        const carbs = m.carbs_assigned || 0;
+        const fat = m.fat_assigned || 0;
         let perMealInfo = `<div class="text-sm text-gray-700"><strong>Protein:</strong> ${protein} g`;
-        if (m.carbs_assigned !== undefined) perMealInfo += ` • <strong>Carbs:</strong> ${m.carbs_assigned} g`;
-        if (m.fat_assigned !== undefined) perMealInfo += ` • <strong>Fat:</strong> ${m.fat_assigned} g`;
+        if (m.carbs_assigned !== undefined) perMealInfo += ` • <strong>Carbs:</strong> ${carbs} g`;
+        if (m.fat_assigned !== undefined) perMealInfo += ` • <strong>Fat:</strong> ${fat} g`;
         perMealInfo += `</div>`;
 
         html += `<div class="p-3 bg-gray-50 rounded border">
