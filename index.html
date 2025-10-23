@@ -1,316 +1,141 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>🍽️ Chontaduro Menu Generator</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chontaduro Menu Generator</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { font-family: 'Inter', sans-serif; background-color: #f7f3f0; }
-    .loader { border-color: #f3f3f3; border-top-color: #ff7b00; animation: spin 1s linear infinite; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    .modal-overlay { background-color: rgba(0, 0, 0, 0.5); z-index: 50; }
-  </style>
+  <style> body{font-family:Inter, sans-serif;background:#f7f3f0;} </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
-  <div class="w-full max-w-lg bg-white p-8 rounded-xl shadow-2xl border border-gray-100 relative">
-    <h1 class="text-3xl font-bold text-center mb-6" style="color: #ff7b00;">🍽️ Chontaduro Menu Generator</h1>
+  <div class="w-full max-w-lg bg-white p-8 rounded-xl shadow">
+    <h1 class="text-2xl font-bold text-center mb-6" style="color:#ff7b00;">🍽️ Chontaduro Menu Generator</h1>
     <div id="app" class="text-center">
-      <div class="py-10">
-        <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4 mx-auto" style="border-top-color: #ff7b00;"></div>
-        <p class="text-gray-600">Loading...</p>
-      </div>
-    </div>
-  </div>
-
-  <div id="customModal" class="modal-overlay fixed inset-0 hidden items-center justify-center p-4">
-    <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full transform transition-all">
-      <h3 id="modalTitle" class="text-xl font-bold mb-3 text-gray-900"></h3>
-      <p id="modalMessage" class="text-gray-700 mb-6"></p>
-      <div class="flex justify-end space-x-3">
-        <button id="modalCancel" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-4 rounded-lg transition duration-150">Cancel</button>
-        <button id="modalConfirm" class="font-medium py-2 px-4 rounded-lg transition duration-150" style="background-color: #ff7b00; color: white;">Confirm</button>
-      </div>
+      <div id="loading" class="py-10"><div class="loader w-12 h-12 border-4 rounded-full border-t-4" style="border-top-color:#ff7b00;"></div><p class="text-gray-600 mt-4">Loading...</p></div>
     </div>
   </div>
 
   <script>
-    const BASE_URL = "https://chontaduro-backend.onrender.com";
+    // Use relative path so if index served from backend it hits same origin
+    const BASE = "";
     let sessionId = Math.random().toString(36).substring(2);
-    let currentStepName = "start";
-
-    const FIELD_KEY_MAP = {
-      "Plan": "plan",
-      "Days": "days",
-      "Dislikes": "dislikes",
-      "Dietary Restrictions": "dietary_restrictions",
-      "Food Allergies": "allergies",
-      "Gramos_Extra_Proteína": "extra_protein_grams",
-      "Objective": "objective",
-      "Weight": "weight",
-      "Weight Unit": "weight_unit",
-      "Height": "height",
-      "Height Unit": "height_unit",
-      "Age": "age",
-      "Sex": "sex",
-      "Days per week": "activity_days_bucket",
-      "Avg session duration": "activity_duration_bucket",
-      "Intensity": "activity_intensity",
-      "Body Fat % (optional)": "body_fat",
-      "Diet Preference": "diet_preference",
-      "Dislikes": "dislikes"
-    };
-
-    const STEPS_FALLBACK = {
-      "start": "pick_plan",
-      "pick_plan": "objective",
-      "objective": "personal_info",
-      "personal_info": "restrictions",
-      "restrictions": "duration",
-      "duration": "dislikes",
-      "dislikes": "review",
-      "review": "review"
-    };
-
-    function showConfirmation(title, message, onConfirm) {
-      const modal = document.getElementById("customModal");
-      document.getElementById("modalTitle").textContent = title;
-      document.getElementById("modalMessage").textContent = message;
-      const confirmBtn = document.getElementById("modalConfirm");
-      const cancelBtn = document.getElementById("modalCancel");
-      const newConfirmBtn = confirmBtn.cloneNode(true);
-      const newCancelBtn = cancelBtn.cloneNode(true);
-      confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-      cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-      const closeModal = () => modal.classList.add('hidden');
-      newConfirmBtn.onclick = () => { closeModal(); onConfirm(); };
-      newCancelBtn.onclick = closeModal;
-      modal.classList.remove('hidden'); modal.classList.add('flex');
-    }
-
-    async function apiRequest(endpoint, payload) {
-      const url = `${BASE_URL}${endpoint}`;
-      try {
-        const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-        if (!response.ok) {
-          let errorData;
-          try { errorData = await response.json(); } catch (e) { errorData = { detail: await response.text() }; }
-          const errorMsg = (errorData && errorData.detail) ? JSON.stringify(errorData.detail) : `HTTP ${response.status}`;
-          throw new Error(errorMsg);
-        }
-        return await response.json();
-      } catch (err) {
-        console.error("API Request Failed:", err);
-        document.getElementById("app").innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mt-4 text-left"><strong class="font-bold block mb-1">❌ Communication Error</strong><span class="block text-sm">Cause: ${err.message || 'Network/CORS error.'}</span><span class="block text-xs text-red-500 mt-2">Ensure your backend URL is correct and the service is running.</span><button onclick="window.location.reload();" class="mt-3 bg-red-500 hover:bg-red-600 text-white font-medium py-1 px-3 rounded-lg text-xs">Reload</button></div>`;
-        throw err;
+    let currentStep = "start";
+    async function api(path, payload){
+      const res = await fetch(BASE + path, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
       }
+      return res.json();
     }
 
-    async function fetchStep(answer = {}, nextStepAction = 'next') {
-      document.getElementById("app").innerHTML = `<div class="py-10"><div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4 mx-auto" style="border-top-color: #ff7b00;"></div><p class="text-gray-600">Loading...</p></div>`;
-      const stepToSend = nextStepAction === 'back' ? 'back' : currentStepName;
-      const payload = { session_id: sessionId, step: stepToSend, answer: answer };
+    async function start(){
+      await step({}, "next");
+    }
+
+    async function step(answer={}, action="next"){
+      document.getElementById("app").innerHTML = `<div class="py-8"><div class="loader w-12 h-12 border-4 rounded-full border-t-4" style="border-top-color:#ff7b00;margin:0 auto;"></div><p class="text-gray-600 mt-4">Loading...</p></div>`;
+      const payload = { session_id: sessionId, step: (action==="back" ? "back" : currentStep), answer: answer };
       try {
-        const data = await apiRequest("/next-step", payload);
+        const data = await api("/next-step", payload);
         if (data.menu) {
-          showMenu(data);
+          renderMenu(data);
         } else {
-          if (data.current_step) currentStepName = data.current_step;
-          else currentStepName = STEPS_FALLBACK[currentStepName] || currentStepName;
-          showForm(data.question, data.fields || []);
+          if (data.current_step) currentStep = data.current_step;
+          renderForm(data.question, data.fields || []);
         }
-      } catch (error) {
-        console.error("Error during step transition:", error);
+      } catch (err) {
+        document.getElementById("app").innerHTML = `<div class="text-red-600 p-4">Error: ${err.message}</div>`;
+        console.error(err);
       }
     }
 
-    function handleFormSubmit(e, fieldsMeta) {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const answer = {};
-      fieldsMeta.forEach(f => {
-        const key = f.payloadKey || FIELD_KEY_MAP[f.name] || f.name;
-        if (f.type === 'multiselect') {
-          const checked = Array.from(document.querySelectorAll(`input[name="${f.payloadKey}"]:checked`)).map(i => i.value);
-          answer[key] = checked;
-        } else {
-          const val = formData.getAll(f.payloadKey)[0] || "";
-          if (f.type === 'number') answer[key] = val === "" ? null : Number(val);
-          else answer[key] = val;
-        }
+    function renderForm(question, fields){
+      let html = `<form id="f"><h2 class="text-lg font-semibold mb-4">${question}</h2>`;
+      const enhanced = (fields||[]).map(f => {
+        const payloadKey = f.name.replace(/\s+/g,"_");
+        return {...f, payloadKey};
       });
-      Object.keys(answer).forEach(k => { if (answer[k] === null || answer[k] === "") delete answer[k]; });
-      fetchStep(answer, 'next');
-    }
-
-    function handleBack() { fetchStep({}, 'back'); }
-
-    function showForm(question, fields) {
-      let formHtml = `<form id="stepForm" class="p-6"><h2 class="text-xl font-semibold mb-6 text-gray-800">${question}</h2>`;
-      const enhancedFields = (fields || []).map(f => {
-        const displayName = f.name || f.label || "field";
-        const payloadKey = FIELD_KEY_MAP[displayName] || displayName.replace(/\s+/g, "_").normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
-        return { ...f, name: displayName, payloadKey };
-      });
-
-      enhancedFields.forEach(f => {
-        const inputId = `input-${(f.payloadKey || f.name).replace(/\s/g, '-')}`;
-        formHtml += `<div class="mb-4 text-left"><label for="${inputId}" class="block text-sm font-medium text-gray-700 mb-1">${f.name} ${f.unit ? `(${f.unit})` : ''}</label>`;
+      enhanced.forEach(f => {
+        html += `<div class="mb-3 text-left"><label class="block text-sm font-medium mb-1">${f.name}${f.unit?` (${f.unit})`:''}</label>`;
         if (f.type === "select") {
-          formHtml += `<select id="${inputId}" name="${f.payloadKey}" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm rounded-md shadow-sm">`;
-          (f.options || []).forEach(o => { formHtml += `<option value="${o}">${o}</option>`; });
-          formHtml += `</select>`;
+          html += `<select name="${f.payloadKey}" class="w-full p-2 border rounded">`;
+          (f.options||[]).forEach(o=> html+=`<option value="${o}">${o}</option>`);
+          html += `</select>`;
         } else if (f.type === "multiselect") {
-          formHtml += `<div class="grid grid-cols-1 gap-2">`;
-          (f.options || []).forEach(o => {
-            const val = o;
-            const checkboxId = `${inputId}-${val.replace(/\s+/g, '-')}`;
-            formHtml += `<label class="inline-flex items-center"><input type="checkbox" id="${checkboxId}" name="${f.payloadKey}" value="${val}" class="mr-2 form-checkbox h-4 w-4 text-orange-600" /> <span class="text-sm">${val}</span></label><br/>`;
+          html += `<div class="grid gap-2">`;
+          (f.options||[]).forEach(o=>{
+            const id = `c-${f.payloadKey}-${o.replace(/\s+/g,"-")}`;
+            html += `<label class="inline-flex items-center"><input type="checkbox" id="${id}" name="${f.payloadKey}" value="${o}" class="mr-2"> <span class="text-sm">${o}</span></label>`;
           });
-          formHtml += `</div>`;
+          html += `</div>`;
         } else {
-          const minAttr = f.min !== undefined ? `min="${f.min}"` : '';
-          const maxAttr = f.max !== undefined ? `max="${f.max}"` : '';
-          const placeholderAttr = f.placeholder ? `placeholder="${f.placeholder}"` : '';
-          const requiredAttr = f.required ? 'required' : '';
-          formHtml += `<input type="${f.type}" id="${inputId}" name="${f.payloadKey}" ${requiredAttr} ${minAttr} ${maxAttr} ${placeholderAttr} class="shadow-sm focus:ring-orange-500 focus:border-orange-500 block w-full sm:text-sm border-gray-300 rounded-md p-2" />`;
+          html += `<input name="${f.payloadKey}" type="${f.type}" class="w-full p-2 border rounded" placeholder="${f.placeholder||''}">`;
         }
-        formHtml += `</div>`;
+        html += `</div>`;
       });
-
-      formHtml += `<div class="flex justify-between mt-8">`;
-      if (currentStepName !== 'pick_plan') formHtml += `<button type="button" id="backBtn" class="bg-gray-400 hover:bg-gray-500 text-white font-medium py-2 px-4 rounded-lg transition duration-150">← Back</button>`;
-      else formHtml += '<div></div>';
-      formHtml += `<button type="submit" class="font-medium py-2 px-4 rounded-lg transition duration-150" style="background-color: #ff7b00; color: white;">Next →</button>`;
-      formHtml += `</div></form>`;
-
-      const appDiv = document.getElementById("app");
-      appDiv.innerHTML = formHtml;
-      document.getElementById("stepForm").onsubmit = (e) => handleFormSubmit(e, enhancedFields);
-      const backBtn = document.getElementById("backBtn");
-      if (backBtn) backBtn.onclick = handleBack;
-
-      // special behavior: if "None - ..." checkbox toggled, uncheck others
-      enhancedFields.forEach(f => {
-        if (f.type === 'multiselect') {
-          const noneCheckbox = document.querySelector(`input[name="${f.payloadKey}"][value^="None"]`);
-          if (noneCheckbox) {
-            noneCheckbox.addEventListener('change', (ev) => {
-              const checked = ev.target.checked;
-              const all = document.querySelectorAll(`input[name="${f.payloadKey}"]`);
-              all.forEach(ch => { if (ch !== noneCheckbox) ch.checked = !checked ? ch.checked : false; });
-            });
-            const others = document.querySelectorAll(`input[name="${f.payloadKey}"]`);
-            others.forEach(ch => {
-              if (ch !== noneCheckbox) {
-                ch.addEventListener('change', () => { if (ch.checked) noneCheckbox.checked = false; });
-              }
-            });
+      html += `<div class="flex justify-between mt-4">`;
+      if (currentStep !== "pick_plan") html += `<button type="button" id="back" class="px-4 py-2 bg-gray-300 rounded">← Back</button>`;
+      else html += `<div></div>`;
+      html += `<button type="submit" class="px-4 py-2 bg-orange-500 text-white rounded">Next →</button></div></form>`;
+      document.getElementById("app").innerHTML = html;
+      const form = document.getElementById("f");
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const answer = {};
+        enhanced.forEach(f=>{
+          if (f.type === "multiselect") {
+            const vals = Array.from(document.querySelectorAll(`input[name="${f.payloadKey}"]:checked`)).map(i=>i.value);
+            answer[f.payloadKey] = vals;
+          } else {
+            const v = fd.get(f.payloadKey);
+            if (v !== null) answer[f.payloadKey] = v;
           }
-        }
-      });
+        });
+        step(answer, "next");
+      };
+      const backBtn = document.getElementById("back");
+      if (backBtn) backBtn.onclick = () => step({}, "back");
     }
 
-    function escapeAttr(s) {
-      if (s === null || s === undefined) return "";
-      return String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    }
-
-    function showMenu(data) {
-      let menuHtml = `<h2 class="text-2xl font-bold mb-4 text-gray-800">Your Menu is Ready!</h2>`;
-      menuHtml += `<p class="text-lg font-medium mb-4 text-gray-600">Estimated Total Price: <span id="priceTag" class="text-2xl font-extrabold text-green-600">$${(data.price||0).toFixed(2)}</span></p>`;
-      if (data.nutrition) {
-        menuHtml += `<div id="nutritionBox" class="mb-4 text-left p-4 bg-gray-50 rounded-md border border-gray-200"><strong>Nutrition summary (without extra protein):</strong><div class="text-sm mt-2">TMB: ${data.nutrition.tmb || 'N/A'} kcal<br/>TDEE: ${data.nutrition.tdee || 'N/A'} kcal<br/>Target Calories: ${data.nutrition.calorie_target || 'N/A'} kcal<br/>Protein: ${data.nutrition.macros.protein_grams || 0} g | Fat: ${data.nutrition.macros.fat_grams || 0} g | Carbs: ${data.nutrition.macros.carbs_grams || 0} g</div></div>`;
-      }
-
-      menuHtml += `<div class="mb-4 flex items-center justify-center space-x-2"><label class="text-sm font-medium">Add extra protein (g):</label><input id="extraProteinInput" type="number" min="0" value="0" class="w-24 p-2 border rounded-md" /><button id="addProteinBtn" class="bg-orange-500 text-white py-2 px-3 rounded-md hover:bg-orange-600">Add Protein</button></div>`;
-
-      menuHtml += `<div class="mb-4 text-left"><label class="block text-sm font-medium text-gray-700 mb-1">Tell us something we should know (allergies, dislikes, notes):</label><textarea id="userNote" rows="2" class="w-full p-2 border rounded-md" placeholder="e.g. I'm allergic to banana"></textarea><div class="mt-2"><button id="saveNoteBtn" class="bg-gray-800 text-white py-2 px-3 rounded-md hover:bg-gray-900">Save Note</button></div></div>`;
-
-      menuHtml += `<div id="menu" class="space-y-4 max-h-[320px] overflow-y-auto pr-2">`;
-      (data.menu||[]).forEach(m => {
-        const safeName = escapeAttr(m.name);
-        const ingredientsText = Array.isArray(m.ingredients) ? m.ingredients.join(", ") : String(m.ingredients || "");
-        const imgHtml = m.image_url ? `<img src="${m.image_url}" alt="${escapeAttr(m.name)}" class="w-20 h-20 object-cover rounded-md mr-4">` : '';
-        menuHtml += `<div class="meal bg-gray-50 p-4 rounded-lg shadow-sm border border-gray-200"><div class="flex items-start">${imgHtml}<div class="flex-grow text-left"><div class="flex items-center justify-between"><div><strong class="text-lg text-gray-900">${m.name}</strong><div class="text-sm text-gray-500">${m.type} • ${m.calories} kcal • $${(m.price||0).toFixed(2)}</div></div><div class="text-right"><button onclick="handleSwapMeal('${safeName}')" class="ml-4 bg-yellow-500 text-white text-xs font-semibold py-1 px-3 rounded-full hover:bg-yellow-600 transition duration-150 shadow-md">Swap</button></div></div><div class="mt-2 text-sm text-gray-700"><strong>Ingredients:</strong> ${escapeAttr(ingredientsText)}</div></div></div></div>`;
+    function renderMenu(data){
+      let html = `<h2 class="text-xl font-bold mb-2">Your Menu</h2><div class="mb-4">Estimated price: <strong>$${(data.price||0).toFixed(2)}</strong></div>`;
+      if (data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal</div>`;
+      html += `<div class="space-y-3">`;
+      (data.menu||[]).forEach(m=>{
+        const ing = (m.ingredients||[]).join(", ");
+        html += `<div class="p-3 bg-gray-50 rounded border"><div class="flex justify-between"><div><strong>${m.name}</strong><div class="text-sm text-gray-600">${m.type} • ${m.calories} kcal • $${(m.price||0).toFixed(2)}</div></div><div><button onclick="swapMeal('${m.name.replace(/'/g, "\\'")}')" class="px-2 py-1 bg-yellow-400 rounded text-xs">Swap</button></div></div><div class="mt-2 text-sm">Ingredients: ${ing}</div></div>`;
       });
-      menuHtml += `</div><div class="mt-6 flex justify-center space-x-4"><button onclick="handleRedoMenu()" class="bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-150 shadow-lg">Regenerate Full Menu</button></div><div class="mt-4 text-center"><button onclick="fetchStep({}, 'back')" class="text-gray-500 hover:text-gray-700 text-sm">← Adjust Preferences</button></div>`;
-
-      document.getElementById("app").innerHTML = menuHtml;
-
-      const addProteinBtn = document.getElementById("addProteinBtn");
-      if (addProteinBtn) {
-        addProteinBtn.onclick = async () => {
-          const val = Number(document.getElementById("extraProteinInput").value) || 0;
-          try {
-            const payload = { session_id: sessionId, extra_protein_grams: val };
-            const res = await apiRequest("/add-protein", payload);
-            const priceTag = document.getElementById("priceTag");
-            if (priceTag) priceTag.textContent = `$${(res.price||0).toFixed(2)}`;
-            if (res.nutrition) {
-              const nutritionHtml = `<div class="mb-4 text-left p-4 bg-gray-50 rounded-md border border-gray-200"><strong>Nutrition summary (with extra protein):</strong><div class="text-sm mt-2">TMB: ${res.nutrition.tmb || 'N/A'} kcal<br/>TDEE: ${res.nutrition.tdee || 'N/A'} kcal<br/>Target Calories: ${res.nutrition.calorie_target || 'N/A'} kcal<br/>Protein: ${res.nutrition.macros.protein_grams || 0} g | Fat: ${res.nutrition.macros.fat_grams || 0} g | Carbs: ${res.nutrition.macros.carbs_grams || 0} g</div></div>`;
-              const nb = document.getElementById("nutritionBox");
-              if (nb) nb.outerHTML = nutritionHtml;
-              else document.getElementById("app").insertAdjacentHTML("afterbegin", nutritionHtml);
-            }
-          } catch (e) {
-            console.error("Failed to add protein:", e);
-            showConfirmation("Error", "Could not add protein. Check console for details.", () => {});
-          }
-        };
-      }
-
-      const saveNoteBtn = document.getElementById("saveNoteBtn");
-      if (saveNoteBtn) {
-        saveNoteBtn.onclick = async () => {
-          const note = document.getElementById("userNote").value || "";
-          try {
-            await apiRequest("/add-note", { session_id: sessionId, note });
-            showConfirmation("Saved", "Your note was saved.", () => {});
-          } catch (e) {
-            console.error("Failed to save note:", e);
-            showConfirmation("Error", "Could not save note.", () => {});
-          }
-        };
-      }
-    }
-
-    async function handleSwapMeal(mealName) {
-      showConfirmation("Confirm Swap", `Swap "${mealName}" for a compatible alternative?`, async () => {
-        const payload = { session_id: sessionId, meal_to_swap: mealName };
+      html += `</div><div class="mt-4"><button onclick="redoMenu()" class="px-3 py-2 bg-blue-600 text-white rounded">Regenerate Full Menu</button></div><div class="mt-3 text-left"><label class="block text-sm">Tell us something we should know (notes):</label><textarea id="note" class="w-full p-2 border rounded" rows="2"></textarea><button id="saveNote" class="mt-2 px-3 py-2 bg-gray-800 text-white rounded">Save Note</button></div>`;
+      document.getElementById("app").innerHTML = html;
+      document.getElementById("saveNote").onclick = async () => {
+        const note = document.getElementById("note").value || "";
         try {
-          const data = await apiRequest("/swap-meal", payload);
-          if (data && data.menu) showMenu(data);
-          else if (data.message) showConfirmation("Notice", data.message, () => {});
-        } catch (e) { console.error(e); }
-      });
+          await api("/add-note", { session_id: sessionId, note });
+          alert("Note saved.");
+        } catch (e) { alert("Error saving note"); }
+      };
     }
 
-    async function handleRedoMenu() {
-      showConfirmation("Confirm Regenerate", "Regenerate full menu (this will override individual swaps)?", async () => {
-        const payload = { session_id: sessionId };
-        try {
-          const data = await apiRequest("/redo-menu", payload);
-          if (data && data.menu) showMenu(data);
-          else if (data.message) showConfirmation("Notice", data.message, () => {});
-        } catch (e) { console.error(e); }
-      });
+    async function swapMeal(name){
+      if (!confirm(`Swap "${name}"?`)) return;
+      try {
+        const res = await api("/swap-meal", { session_id: sessionId, meal_to_swap: name });
+        if (res.menu) renderMenu(res);
+        else alert(res.message || "No replacement");
+      } catch (e) { alert("Swap error"); }
+    }
+    async function redoMenu(){
+      if (!confirm("Regenerate full menu?")) return;
+      try {
+        const res = await api("/redo-menu", { session_id: sessionId });
+        if (res.menu) renderMenu(res);
+        else alert(res.message || "Could not regenerate");
+      } catch (e) { alert("Error"); }
     }
 
-    // quick intensity helper
-    window.quickIntensityHelper = function() {
-      const q1 = confirm("After a typical session, are you usually out of breath? (OK = Yes, Cancel = No)");
-      const q2 = confirm("Do your workouts include heavy lifting or HIIT? (OK = Yes, Cancel = No)");
-      const ans1 = q1 ? 'out_of_breath' : 'sweat_talk';
-      let intensity = 'Moderate';
-      if (ans1 === 'out_of_breath') intensity = 'Moderate';
-      if (q2) intensity = 'High';
-      alert("Suggested intensity: " + intensity + ". You can update it in the form.");
-      const sel = document.querySelector('select[name="activity_intensity"]');
-      if (sel) sel.value = intensity;
-    };
-
-    window.onload = () => { fetchStep({}, 'next'); };
+    window.onload = () => start();
   </script>
 </body>
 </html>
