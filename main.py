@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import BaseModel, Field
-import random, json, traceback
+import random, json, traceback, datetime, math, hashlib
 from typing import List, Dict, Any, Optional
 
 app = FastAPI()
@@ -25,6 +25,8 @@ async def serve_frontend():
 
 # --- LOAD MEALS (expects English keys; tolerant with Spanish keys) ---
 MEALS_DATA: List[Dict[str, Any]] = []
+TEMPLATES_DATA: List[Dict[str, Any]] = []
+FEEDBACKS: List[Dict[str, Any]] = []  # in-memory feedback store for now
 
 def normalize_meal_keys(raw: Dict[str, Any]) -> Dict[str, Any]:
     spanish_map = {
@@ -61,7 +63,22 @@ def load_meals(file_path="meals.json"):
     except json.JSONDecodeError:
         print("WARNING: meals.json invalid JSON.")
 
+def load_templates(file_path="menus_weekly.json"):
+    global TEMPLATES_DATA
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                TEMPLATES_DATA = data
+            else:
+                print("WARNING: menus_weekly.json not a list.")
+    except FileNotFoundError:
+        print("NOTICE: menus_weekly.json not found (templates disabled).")
+    except json.JSONDecodeError:
+        print("WARNING: menus_weekly.json invalid JSON.")
+
 load_meals()
+load_templates()
 
 
 # --- SESSIONS (in-memory) ---
@@ -71,12 +88,12 @@ sessions: Dict[str, Dict[str, Any]] = {}
 # --- FLOW STEPS ---
 STEPS = {
     "start": "pick_plan",
-    "pick_plan": "objective",
-    "objective": "personal_info",
-    "personal_info": "restrictions",
-    "restrictions": "duration",
-    "duration": "dislikes",
-    "dislikes": "review",
+    "pick_plan": "pick_plan",
+    "objective": "objective",
+    "personal_info": "personal_info",
+    "restrictions": "restrictions",
+    "duration": "duration",
+    "dislikes": "dislikes",
     "review": "review"
 }
 
@@ -118,6 +135,11 @@ class SessionState(BaseModel):
     activity_intensity: Optional[str] = None
     body_fat: Optional[float] = None
     user_note: Optional[str] = None
+
+    # new fields for templates / scheduling
+    template_id: Optional[str] = None
+    selected_week: Optional[str] = None   # e.g. "2025-W45" (ISO week of delivery)
+    order_placed_at: Optional[str] = None  # ISO timestamp when user confirmed order
     model_config = {"extra": "ignore"}
 
 
@@ -170,7 +192,8 @@ def map_answer_keys(answer: Dict[str, Any]) -> Dict[str, Any]:
         "allergies": "allergies", "alergias": "allergies",
         "dislikes": "dislikes", "ingredientesnodedeseados": "dislikes",
         "extra_protein_grams": "extra_protein_grams", "extraprotein": "extra_protein_grams",
-        "note": "user_note", "usernote": "user_note"
+        "note": "user_note", "usernote": "user_note",
+        "template_id": "template_id"
     }
     out = {}
     for key, val in (answer or {}).items():
@@ -400,6 +423,273 @@ def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions
     return out
 
 
+# --- Template helpers: rotate pool by week and expand template to schedule ---
+def week_seed_string_from_date(dt: Optional[datetime.datetime] = None) -> str:
+    d = (dt or datetime.datetime.utcnow()).date()
+    iso = d.isocalendar()
+    return f"{iso[0]}-W{iso[1]}"
+
+def parse_week_string(week_str: str) -> int:
+    try:
+        return int(week_str.split("-W")[-1])
+    except Exception:
+        return 0
+
+def rotate_pool_by_week(pool: List[str], week_seed: str) -> List[str]:
+    if not pool:
+        return []
+    # compute an integer from seed (week number or hash)
+    try:
+        weeknum = parse_week_string(week_seed)
+    except Exception:
+        weeknum = 0
+    if weeknum == 0:
+        h = hashlib.sha256(week_seed.encode()).hexdigest()
+        weeknum = int(h[:8], 16)
+    offset = weeknum % len(pool)
+    return pool[offset:] + pool[:offset]
+
+def find_meal_by_name(name: str) -> Optional[Meal]:
+    if not name:
+        return None
+    nm = name.strip().lower()
+    found = next((m for m in MEALS_DATA if str(m.get("name","")).strip().lower() == nm), None)
+    if found:
+        try:
+            return Meal(**found)
+        except Exception:
+            # fallback minimal
+            return Meal(name=found.get("name",""), type=found.get("type","Main Meal"), ingredients=found.get("ingredients",[]), calories=int(found.get("calories",0)), price=float(found.get("price",0.0)), image_url=found.get("image_url"))
+    return None
+
+def expand_template_to_schedule(template: Dict[str, Any], week: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Expand a template (from menus_weekly.json) into a week schedule.
+    Returns dict with fields: template_id, week, days, sequence (list per-day slots), totals.
+    Template rules expected:
+      rules: { plan, days, mains: { unique_count, repeat_each }, breakfasts: { unique_count, total_needed } }
+      pool: { mains: [...names...], breakfasts: [...] }
+    """
+    week_seed = week or week_seed_string_from_date()
+    days = template.get("rules", {}).get("days", 7)
+    plan = template.get("rules", {}).get("plan", 4)
+    mains_pool_names = list(template.get("pool", {}).get("mains", []))
+    breaks_pool_names = list(template.get("pool", {}).get("breakfasts", []))
+
+    # rotate pools by week to vary weekly
+    mains_rot = rotate_pool_by_week(mains_pool_names, week_seed)
+    breaks_rot = rotate_pool_by_week(breaks_pool_names, week_seed)
+
+    # rules
+    mains_rules = template.get("rules", {}).get("mains", {})
+    breakfasts_rules = template.get("rules", {}).get("breakfasts", {})
+    mains_unique = mains_rules.get("unique_count", len(mains_rot))
+    mains_repeat_each = mains_rules.get("repeat_each", 1)
+    breakfasts_unique = breakfasts_rules.get("unique_count", len(breaks_rot))
+    breakfasts_total_needed = breakfasts_rules.get("total_needed", days)
+
+    # ensure we don't request more unique than available
+    mains_unique = min(mains_unique, len(mains_rot)) if mains_rot else 0
+    breakfasts_unique = min(breakfasts_unique, len(breaks_rot)) if breaks_rot else 0
+
+    # choose the unique pools (take first mains_unique names from rotated pool)
+    chosen_mains = mains_rot[:mains_unique] if mains_unique > 0 else []
+    chosen_breaks = breaks_rot[:breakfasts_unique] if breakfasts_unique > 0 else []
+
+    # Build expanded mains list by repeating each chosen main repeat_each times
+    mains_expanded = []
+    for name in chosen_mains:
+        mains_expanded.extend([name] * mains_repeat_each)
+    # if still not enough mains to reach needed (plan 4 -> mains_needed = 2 * days), repeat pool rotated
+    mains_needed = 0
+    if plan == 4:
+        mains_needed = 2 * days
+    elif plan == 3:
+        mains_needed = 1 * days
+    elif plan == 2:
+        mains_needed = 2 * days
+    else:
+        mains_needed = 1 * days
+
+    # if expanded shorter, repeat rotated pool until reach mains_needed
+    idx = 0
+    while len(mains_expanded) < mains_needed and chosen_mains:
+        mains_expanded.append(chosen_mains[idx % len(chosen_mains)])
+        idx += 1
+
+    mains_expanded = mains_expanded[:mains_needed]
+
+    # Breaks: distribute breakfasts_total_needed across chosen_breaks as evenly as possible
+    breaks_needed = breakfasts_total_needed
+    breaks_expanded = []
+    if chosen_breaks:
+        base = breaks_needed // len(chosen_breaks)
+        rem = breaks_needed - base * len(chosen_breaks)
+        for i, name in enumerate(chosen_breaks):
+            count = base + (1 if i < rem else 0)
+            breaks_expanded.extend([name] * count)
+    # if no breakfasts chosen but breaks_rot available, fallback to rotated
+    if not breaks_expanded and breaks_rot:
+        # pick first 'breaks_needed' names repeating
+        i = 0
+        while len(breaks_expanded) < breaks_needed:
+            breaks_expanded.append(breaks_rot[i % len(breaks_rot)])
+            i += 1
+
+    breaks_expanded = breaks_expanded[:breaks_needed]
+
+    # Now build day-by-day sequence: for plan 4 we want per day: [breakfast] + [main1, main2]
+    sequence = []
+    mains_idx = 0
+    breaks_idx = 0
+    for d in range(days):
+        slots = []
+        # breakfast(s)
+        num_breaks = 1 if plan == 3 or plan == 4 else (0 if plan == 1 else 0)
+        for _ in range(num_breaks):
+            if breaks_idx < len(breaks_expanded):
+                slots.append(breaks_expanded[breaks_idx]); breaks_idx += 1
+            else:
+                # fallback: use any main as breakfast if needed
+                slots.append(mains_expanded[mains_idx % len(mains_expanded)] if mains_expanded else (breaks_rot[0] if breaks_rot else None))
+        # mains
+        num_main = 0
+        if plan == 1:
+            num_main = 1
+        elif plan == 2:
+            num_main = 2
+        elif plan == 3:
+            num_main = 1
+        elif plan == 4:
+            num_main = 2
+        for _ in range(num_main):
+            if mains_idx < len(mains_expanded):
+                slots.append(mains_expanded[mains_idx]); mains_idx += 1
+            else:
+                # fallback: rotate chosen_mains
+                slots.append(chosen_mains[(mains_idx) % max(1, len(chosen_mains))] if chosen_mains else None)
+                mains_idx += 1
+        sequence.append({"day": d+1, "slots": slots})
+
+    totals = {"breakfasts": len(breaks_expanded), "mains": len(mains_expanded), "unique_mains": len(set(mains_expanded)), "unique_breakfasts": len(set(breaks_expanded))}
+    return {"template_id": template.get("id"), "week": week_seed, "days": days, "sequence": sequence, "totals": totals}
+
+
+# --- Helper: sanitize template names against user dislikes/allergies/preferences ---
+def sanitize_template_names_for_user(state: SessionState, name_list: List[str]) -> List[str]:
+    """
+    Given a sequence of meal names (from a template expanded schedule),
+    return a sanitized list where any meal incompatible with the user's dislikes/allergies/diet
+    is replaced by an allowed alternative of the same type where possible.
+    """
+    if not name_list:
+        return []
+
+    # Build allowed meals according to user's filters
+    allowed_meals = filter_meals(state.dislikes, state.allergies, state.dietary_restrictions, state.diet_preference)
+    # Map by lowercase name for fast lookup
+    allowed_by_name = {m.name.strip().lower(): m for m in allowed_meals}
+
+    # Build pools by type for replacements
+    allowed_by_type: Dict[str, List[Meal]] = {}
+    for m in allowed_meals:
+        t = (m.type or "Main Meal").strip().lower()
+        allowed_by_type.setdefault(t, []).append(m)
+
+    result: List[str] = []
+    used = set()
+
+    for orig in name_list:
+        key = (orig or "").strip().lower()
+        # if exact allowed and not exceeding naive reuse preference, keep it
+        if key and key in allowed_by_name and key not in used:
+            result.append(allowed_by_name[key].name)
+            used.add(key)
+            continue
+
+        # determine desired type from meals.json if possible
+        candidate = next((x for x in MEALS_DATA if str(x.get("name","")).strip().lower() == key), None)
+        desired_type = candidate.get("type","main meal").strip().lower() if candidate else None
+
+        # Try find a replacement of same type not yet used
+        replacement = None
+        if desired_type and desired_type in allowed_by_type:
+            for m in allowed_by_type[desired_type]:
+                nm = m.name.strip().lower()
+                if nm not in used:
+                    replacement = m
+                    break
+        # If not found, try any allowed of any type not used
+        if not replacement:
+            for tpool in allowed_by_type.values():
+                for m in tpool:
+                    nm = m.name.strip().lower()
+                    if nm not in used:
+                        replacement = m
+                        break
+                if replacement:
+                    break
+
+        if replacement:
+            result.append(replacement.name)
+            used.add(replacement.name.strip().lower())
+        else:
+            # As last resort, if original exists in meals.json return original (even if incompatible)
+            # This keeps schedule length consistent; it's better to log and allow fallback.
+            if key:
+                found_orig = next((x for x in MEALS_DATA if str(x.get("name","")).strip().lower() == key), None)
+                if found_orig:
+                    result.append(found_orig.get("name"))
+                else:
+                    # unknown name: keep original string to avoid breaking schedule
+                    result.append(orig)
+            else:
+                result.append(orig)
+    return result
+
+
+# --- BUSINESS / MENU generation integration ---
+def generate_menu_using_template(state: SessionState) -> List[Meal]:
+    """
+    If a session has template_id and selected_week, produce a list of Meal objects
+    in order (flattened day slots). Returns list of Meal objects or empty list on error.
+    """
+    if not state.template_id:
+        return []
+    tpl = next((t for t in TEMPLATES_DATA if t.get("id") == state.template_id), None)
+    if not tpl:
+        return []
+    week = state.selected_week or week_seed_string_from_date()
+    sch = expand_template_to_schedule(tpl, week)
+    # flatten sequence into list of meal names in day order
+    flat_names: List[str] = []
+    for day in sch["sequence"]:
+        for slot in day["slots"]:
+            if slot:
+                flat_names.append(slot)
+
+    # Sanitize names for this specific user (apply dislikes/allergies/diet)
+    safe_names = sanitize_template_names_for_user(state, flat_names)
+
+    # map safe_names to Meal objects (fallback to placeholder dict if not found)
+    menu_objs: List[Meal] = []
+    for name in safe_names:
+        m = find_meal_by_name(name)
+        if m:
+            menu_objs.append(m)
+        else:
+            # try to find something compatible from MEALS_DATA with same name substring
+            candidate = next((x for x in MEALS_DATA if name.strip().lower() in str(x.get("name","")).strip().lower()), None)
+            if candidate:
+                try:
+                    menu_objs.append(Meal(**candidate))
+                except Exception:
+                    menu_objs.append(Meal(name=name or "Unknown", type="Main Meal", ingredients=[], calories=0, price=0.0))
+            else:
+                menu_objs.append(Meal(name=name or "Unknown", type="Main Meal", ingredients=[], calories=0, price=0.0))
+    return menu_objs
+
+
 def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int]) -> List[Dict[str, Any]]:
     """
     Attach provided_protein to each meal in the returned list of dicts.
@@ -466,7 +756,11 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
     return out
 
 
+# Keep original generate_menu as fallback for non-template flows
 def generate_menu(state: SessionState) -> List[Meal]:
+    if state.template_id:
+        # if a template is set, prefer template-driven generation
+        return generate_menu_using_template(state)
     if not state.plan or not state.days:
         return []
     plan_map = {1:(1,0), 2:(2,0), 3:(1,1), 4:(2,1)}
@@ -548,7 +842,7 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     return {"question":"Unknown step. Start again.","current_step":"start"}
 
 
-# --- ENDPOINTS & FLOW HANDLER (uses new allocation) ---
+# --- ENDPOINTS & FLOW HANDLER (uses new allocation & templates) ---
 def normalize_request_payload(payload: Dict[str, Any]) -> NextStepRequest:
     session_id = payload.get("session_id") or payload.get("sessionId") or payload.get("id") or str(random.randint(1000,9999))
     step = payload.get("step") or payload.get("current_step") or payload.get("currentStep") or "start"
@@ -677,10 +971,28 @@ async def next_step(request: Request):
 
     elif step_name == "review":
         try:
+            # if user selected a template via the answers, set it and compute selected_week
+            if "template_id" in answer:
+                state.template_id = answer.get("template_id")
+                # compute selected_week based on cutoff rules (Thursday 22:00 UTC cutoff)
+                now = datetime.datetime.utcnow()
+                # find this week's Thursday
+                weekday = now.weekday()  # Monday=0
+                thursday = now + datetime.timedelta(days=(3 - weekday))
+                thursday_cutoff = datetime.datetime.combine(thursday.date(), datetime.time(hour=22, minute=0))
+                if now <= thursday_cutoff:
+                    # delivery upcoming Sunday of this week
+                    sunday = thursday + datetime.timedelta(days=(6 - thursday.weekday()))
+                else:
+                    # delivery next week's Sunday
+                    next_thursday = thursday + datetime.timedelta(days=7)
+                    sunday = next_thursday + datetime.timedelta(days=(6 - next_thursday.weekday()))
+                iso = sunday.date().isocalendar()
+                state.selected_week = f"{iso[0]}-W{iso[1]}"
             assessment = assess_menu_possibility(state)
             if not assessment["ok"]:
                 return {"question": assessment.get("message", "Could not generate menu with current settings."), "fields": [], "current_step": state.current_step, "issue": assessment.get("reason"), "details": assessment.get("details", {})}
-            # generate base menu (Meal objects)
+            # generate base menu (Meal objects) either via template or dynamic generator
             base_menu_objs = generate_menu(state)
             # compute daily macros (protein target) for allocation
             weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
@@ -735,8 +1047,143 @@ async def next_step(request: Request):
     return get_form_fields(state.current_step, state)
 
 
-# --- Additional endpoints (fixed global protein distribution) ---
+# --- Additional endpoints (templates, scheduling, feedback, orders) ---
 
+
+@app.get("/weekly-templates")
+async def weekly_templates():
+    """
+    Return available weekly templates (menus_weekly.json).
+    """
+    return {"templates": TEMPLATES_DATA or [], "count": len(TEMPLATES_DATA or [])}
+
+
+@app.get("/generated-schedule")
+async def generated_schedule(template_id: str, week: Optional[str] = None):
+    """
+    Expand a template into a schedule for the requested week.
+    Example: /generated-schedule?template_id=plan4-omnivore-week-a&week=2025-W45
+    If week not provided, uses the computed week seed based on current date.
+    """
+    tpl = next((t for t in TEMPLATES_DATA if t.get("id") == template_id), None)
+    if not tpl:
+        raise HTTPException(status_code=404, detail="Template not found.")
+    sch = expand_template_to_schedule(tpl, week)
+    return sch
+
+
+@app.post("/select-template")
+async def select_template(request: Request):
+    """
+    Request body:
+      { "session_id": "...", "template_id": "plan4-omnivore-week-a" }
+    This attaches a template to the session and computes selected_week according to cutoff rules.
+    """
+    payload = await request.json()
+    sid = payload.get("session_id")
+    tid = payload.get("template_id")
+    if not sid:
+        raise HTTPException(status_code=422, detail="session_id required.")
+    if sid not in sessions:
+        sessions[sid] = SessionState().model_dump()
+    state = SessionState(**sessions[sid])
+    tpl = next((t for t in TEMPLATES_DATA if t.get("id") == tid), None)
+    if not tpl:
+        raise HTTPException(status_code=404, detail="Template not found.")
+    state.template_id = tid
+    # compute selected_week based on cutoff (Thursday 22:00 UTC)
+    now = datetime.datetime.utcnow()
+    weekday = now.weekday()  # Monday=0
+    thursday = now + datetime.timedelta(days=(3 - weekday))
+    thursday_cutoff = datetime.datetime.combine(thursday.date(), datetime.time(hour=22, minute=0))
+    if now <= thursday_cutoff:
+        sunday = thursday + datetime.timedelta(days=(6 - thursday.weekday()))
+    else:
+        next_thursday = thursday + datetime.timedelta(days=7)
+        sunday = next_thursday + datetime.timedelta(days=(6 - next_thursday.weekday()))
+    iso = sunday.date().isocalendar()
+    state.selected_week = f"{iso[0]}-W{iso[1]}"
+    sessions[sid] = state.model_dump()
+    sch = expand_template_to_schedule(tpl, state.selected_week)
+    return {"ok": True, "selected_week": state.selected_week, "schedule": sch}
+
+
+@app.post("/place-order")
+async def place_order(request: Request):
+    """
+    Place/confirm the order for the session (saves order time and keeps template & week).
+    Body: { "session_id": "..."}
+    Returns current session menu & schedule.
+    """
+    payload = await request.json()
+    sid = payload.get("session_id")
+    if not sid or sid not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    state = SessionState(**sessions[sid])
+    # record order timestamp
+    state.order_placed_at = datetime.datetime.utcnow().isoformat()
+    sessions[sid] = state.model_dump()
+    # return schedule or menu summary
+    if state.template_id:
+        tpl = next((t for t in TEMPLATES_DATA if t.get("id") == state.template_id), None)
+        sch = expand_template_to_schedule(tpl, state.selected_week) if tpl else {}
+        return {"ok": True, "message": "Order placed", "selected_week": state.selected_week, "schedule": sch, "session": state.model_dump()}
+    else:
+        return {"ok": True, "message": "Order placed", "session": state.model_dump()}
+
+
+@app.get("/production-list")
+async def production_list(week: Optional[str] = None):
+    """
+    Aggregate orders for a week across sessions (in-memory).
+    If week not provided uses current week seed.
+    """
+    week_seed = week or week_seed_string_from_date()
+    aggregate: Dict[str, int] = {}
+    clients = 0
+    for sid, sdata in sessions.items():
+        st = SessionState(**sdata)
+        if not st.template_id:
+            continue
+        if st.selected_week != week_seed:
+            continue
+        clients += 1
+        tpl = next((t for t in TEMPLATES_DATA if t.get("id") == st.template_id), None)
+        if not tpl:
+            continue
+        sch = expand_template_to_schedule(tpl, st.selected_week)
+        # flatten schedule and count occurences
+        for day in sch["sequence"]:
+            for slot in day["slots"]:
+                if not slot:
+                    continue
+                aggregate[slot] = aggregate.get(slot, 0) + 1
+    return {"week": week_seed, "clients": clients, "aggregate": aggregate}
+
+
+@app.post("/feedback")
+async def post_feedback(request: Request):
+    """
+    Save feedback (rating 1-5 and optional comment) associated with a session/template/week/day.
+    Body: { session_id, template_id(optional), week(optional), rating, comment(optional), day_index(optional), slot_index(optional) }
+    """
+    payload = await request.json()
+    fb = {
+        "id": f"fb-{len(FEEDBACKS)+1}",
+        "session_id": payload.get("session_id"),
+        "template_id": payload.get("template_id"),
+        "week": payload.get("week"),
+        "rating": int(payload.get("rating")) if payload.get("rating") else None,
+        "comment": payload.get("comment"),
+        "day_index": payload.get("day_index"),
+        "slot_index": payload.get("slot_index"),
+        "created_at": datetime.datetime.utcnow().isoformat()
+    }
+    FEEDBACKS.append(fb)
+    return {"ok": True, "feedback_id": fb["id"]}
+
+
+# --- Existing endpoints: add-protein, swap-meal, redo-menu (full implementations) ---
 @app.post("/add-protein")
 async def add_protein(request: Request):
     """
@@ -915,3 +1362,11 @@ def calculate_price(menu: List[Meal], extra_protein: int) -> float:
             base += float(m.price)
     prot_cost = (extra_protein or 0) * 1.0
     return round(base + prot_cost, 2)
+
+
+# Note: At startup we already loaded meals and templates.
+# If you add or edit menus_weekly.json, call load_templates() or restart the server.
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,10 +1,10 @@
 [
   {
-    "name": "Overnight Oats with Berries",
+    "name": "Overnight Protein Oats with Berries",
     "type": "Breakfast",
     "ingredients": ["oats", "almond milk", "berries", "chia seeds", "honey"],
     "calories": 360,
-    "price": 6.5,
+    "price": 11,
     "image_url": "https://placehold.co/150x150/ffe7a9/333333?text=Overnight+Oats",
     "tags": ["vegetarian", "nut"]
   },
@@ -13,7 +13,7 @@
     "type": "Breakfast",
     "ingredients": ["greek yogurt", "granola", "honey", "berries"],
     "calories": 320,
-    "price": 6.0,
+    "price": 11,
     "image_url": "https://placehold.co/150x150/ffd1f5/333333?text=Yogurt+Parfait",
     "tags": ["vegetarian", "dairy"]
   },
@@ -22,7 +22,7 @@
     "type": "Breakfast",
     "ingredients": ["bread", "avocado", "egg", "lemon", "salt", "pepper"],
     "calories": 420,
-    "price": 7.5,
+    "price": 11,
     "image_url": "https://placehold.co/150x150/ccffdd/333333?text=Avocado+Toast",
     "tags": ["vegetarian"]
   },
@@ -31,7 +31,7 @@
     "type": "Breakfast",
     "ingredients": ["banana", "peanut butter", "oats", "almond milk", "chia seeds"],
     "calories": 480,
-    "price": 7.0,
+    "price": 11,
     "image_url": "https://placehold.co/150x150/ffd4a9/333333?text=Smoothie+Bowl",
     "tags": ["vegetarian", "nut"]
   },
@@ -40,7 +40,7 @@
     "type": "Breakfast",
     "ingredients": ["eggs", "spinach", "feta", "olive oil", "salt"],
     "calories": 350,
-    "price": 6.8,
+    "price": 11,
     "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Omelette",
     "tags": ["vegetarian", "dairy"]
   },

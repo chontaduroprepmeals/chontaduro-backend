@@ -1,0 +1,60 @@
+[
+  {
+    "id": "plan4-omnivore-week-a",
+    "diet": "Omnivore",
+    "name": "Plan4 - Omnivore Week A",
+    "description": "Pool de 7 mains y 3 breakfasts. Cada main se repetirá para completar 14 mains; breakfasts distribuidos para total 7.",
+    "pool": {
+      "mains": [
+        "Grilled Lemon Chicken with Rice",
+        "Beef Stew with Root Vegetables",
+        "Chicken Alfredo with Fettuccine",
+        "BBQ Pulled Pork Sandwich",
+        "Teriyaki Chicken and Rice",
+        "Beef and Cheese Quesadilla",
+        "Chicken Tikka Masala with Rice"
+      ],
+      "breakfasts": [
+        "Overnight Protein Oats with Berries",
+        "Greek Yogurt Parfait",
+        "Ham & Cheese Omelette with Roasted Potatoes"
+      ]
+    },
+    "rules": {
+      "plan": 4,
+      "days": 7,
+      "mains": { "unique_count": 7, "repeat_each": 2 },
+      "breakfasts": { "unique_count": 3, "total_needed": 7 },
+      "deterministic_seed_template": "plan4-omnivore-week-a"
+    }
+  },
+  {
+    "id": "plan4-vegetarian-week-a",
+    "diet": "Vegetarian",
+    "name": "Plan4 - Vegetarian Week A",
+    "description": "Pool vegetariano/vegano con 7 mains y 3 breakfasts. Diseñado para repetir platos y facilitar cocina.",
+    "pool": {
+      "mains": [
+        "Vegan Chickpea Curry",
+        "Lentil & Vegetable Shepherd's Pie",
+        "Thai Green Curry with Tofu",
+        "Black Bean & Sweet Potato Tacos",
+        "Quinoa & Roasted Vegetable Bowl",
+        "Eggplant Parmesan with Spaghetti",
+        "Mushroom Risotto"
+      ],
+      "breakfasts": [
+        "Tofu Scramble with Veggies",
+        "Chia Seed Pudding with Mango",
+        "Smashed Chickpea & Avocado Toast"
+      ]
+    },
+    "rules": {
+      "plan": 4,
+      "days": 7,
+      "mains": { "unique_count": 7, "repeat_each": 2 },
+      "breakfasts": { "unique_count": 3, "total_needed": 7 },
+      "deterministic_seed_template": "plan4-vegetarian-week-a"
+    }
+  }
+]
