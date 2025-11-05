@@ -86,14 +86,15 @@ sessions: Dict[str, Dict[str, Any]] = {}
 
 
 # --- FLOW STEPS ---
+
 STEPS = {
     "start": "pick_plan",
-    "pick_plan": "pick_plan",
-    "objective": "objective",
-    "personal_info": "personal_info",
-    "restrictions": "restrictions",
-    "duration": "duration",
-    "dislikes": "dislikes",
+    "pick_plan": "objective",
+    "objective": "personal_info",
+    "personal_info": "restrictions",
+    "restrictions": "duration",
+    "duration": "dislikes",
+    "dislikes": "review",
     "review": "review"
 }
 
