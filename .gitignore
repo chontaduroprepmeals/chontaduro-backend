@@ -1,0 +1,26 @@
+# virtual environments
+.venv/
+venv/
+env/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# environment files
+.env
+.env.*
+.env.bak
+
+# macOS
+.DS_Store
+
+# local sqlite DB and backups
+app.db
+app.db.bak
+
+# logs and temp
+*.log
+tmp_geonames/
+.DS_Store

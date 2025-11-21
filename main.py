@@ -3,10 +3,14 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import BaseModel, Field
+from upload_image import register_upload_routes
+from fastapi.staticfiles import StaticFiles
 import random, json, traceback, datetime, math, hashlib
 from typing import List, Dict, Any, Optional
+from delivery_allowed_api import register_delivery_routes
 
 app = FastAPI()
+
 
 # --- CORS ---
 app.add_middleware(
@@ -16,6 +20,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Registrar rutas de subida (llama a la función que trae upload_image.py)
+register_upload_routes(app)
+# montar carpeta ./uploads para servir archivos locales (fallback)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Serve frontend
 @app.get("/", response_class=HTMLResponse)
