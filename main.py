@@ -1,3 +1,6 @@
+import os
+os.makedirs(, exist_ok=True)
+
 # main.py
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
