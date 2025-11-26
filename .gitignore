@@ -26,4 +26,6 @@ tmp_geonames/
 
 # uploads directory (keep empty .gitkeep)
 uploads/*
+!uploads/.gitkeep# uploads directory (keep empty .gitkeep)
+uploads/*
 !uploads/.gitkeep
