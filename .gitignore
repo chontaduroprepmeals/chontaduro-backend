@@ -23,4 +23,7 @@ app.db.bak
 # logs and temp
 *.log
 tmp_geonames/
-.DS_Store
+
+# uploads directory (keep empty .gitkeep)
+uploads/*
+!uploads/.gitkeep
