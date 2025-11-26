@@ -1,5 +1,5 @@
 import os
-os.makedirs(, exist_ok=True)
+os.makedirs("uploads", exist_ok=True)
 
 # main.py
 from fastapi import FastAPI, HTTPException, Request
