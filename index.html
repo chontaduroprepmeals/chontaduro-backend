@@ -9,6 +9,15 @@
     body { font-family: Inter, sans-serif; background: #f7f3f0; }
     .loader { border-top-color: #ff7b00; animation: spin 1s linear infinite; border: 4px solid #e5e7eb; border-top-width:4px; border-radius:9999px; width:48px; height:48px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    /* Modal styles (inserted) */
+    #zipModalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 9999; }
+    #zipModal { background: white; padding: 20px; width: min(520px, 95%); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); text-align: left; }
+    #zipModal h2 { margin: 0 0 10px 0; }
+    #zipModal input[type="text"] { width: 100%; padding: 10px; font-size: 16px; margin: 8px 0 12px 0; box-sizing: border-box; }
+    #zipModal .actions { display:flex; gap:8px; justify-content:flex-end; }
+    #zipModal .hint { font-size: 13px; color: #666; margin-top:8px; }
+    #zipMessage { margin-top:8px; color: #b00020; }
+    #zipBanner { display:none; background:#fff4e5; border-left:4px solid #ffb74d; padding:10px 14px; margin-bottom: 12px; }
   </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
@@ -19,6 +28,24 @@
         <div class="loader mx-auto"></div>
         <p class="text-gray-600 mt-4">Loading...</p>
       </div>
+    </div>
+  </div>
+
+  <!-- Banner para mostrar estado de delivery -->
+  <div id="zipBanner" role="status"></div>
+
+  <!-- Modal de ZIP (insertado) -->
+  <div id="zipModalOverlay" aria-hidden="true">
+    <div id="zipModal" role="dialog" aria-modal="true" aria-labelledby="zipModalTitle">
+      <h2 id="zipModalTitle">¿Cuál es tu código postal?</h2>
+      <p>Para verificar si hacemos entrega en tu zona, por favor ingresa tu ZIP.</p>
+      <input id="zipInput" type="text" inputmode="numeric" maxlength="10" placeholder="Ej: 90210" aria-label="Código postal">
+      <div id="zipMessage"></div>
+      <div class="actions">
+        <button id="zipTryBtn" class="px-4 py-2 bg-orange-500 text-white rounded">Verificar</button>
+        <button id="zipContinueBtn" style="display:none;" class="px-4 py-2 bg-gray-300 rounded">Continuar (solo pickup)</button>
+      </div>
+      <div class="hint">Puedes cambiar el código más tarde en la sección de cuenta o información de envío.</div>
     </div>
   </div>
 
@@ -40,11 +67,39 @@
       return res.json();
     }
 
-    window.addEventListener('load', () => start());
-
-    async function start(){
-      await step({}, "next");
-    }
+    window.addEventListener('load', () => {
+      start();
+      // Abrir modal ZIP si no hay zip guardado
+      (async function checkZipOnLoad(){
+        const saved = localStorage.getItem('user_zip');
+        if (saved) {
+          // opcional: validar el zip guardado con el backend
+          try {
+            const resp = await fetch('/api/check-zip', {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ zipcode: saved, subtotal: 0 })
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data.can_deliver) {
+                document.getElementById('zipBanner').style.display='block';
+                document.getElementById('zipBanner').textContent = `Hacemos delivery en ${saved}.`;
+                return;
+              } else {
+                document.getElementById('zipBanner').style.display='block';
+                document.getElementById('zipBanner').textContent = `No hacemos entrega en ${saved}. Solo pickup disponible.`;
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn('No se pudo validar ZIP guardado', e);
+          }
+        }
+        // si no hay guardado o validación falló, abrir modal
+        document.getElementById('zipModalOverlay').style.display='flex';
+      })();
+    });
 
     async function step(answer = {}, action = "next"){
       document.getElementById("app").innerHTML = `<div class="py-8"><div class="loader mx-auto"></div><p class="text-gray-600 mt-4">Loading...</p></div>`;
@@ -238,6 +293,58 @@
         else alert(res.message || "Could not regenerate");
       } catch (e) { alert("Error"); console.error(e); }
     }
+
+    // ZIP modal handlers (wiring)
+    (function(){
+      const modalOverlay = document.getElementById('zipModalOverlay');
+      const zipInput = document.getElementById('zipInput');
+      const zipTryBtn = document.getElementById('zipTryBtn');
+      const zipContinueBtn = document.getElementById('zipContinueBtn');
+      const zipMessage = document.getElementById('zipMessage');
+      const zipBanner = document.getElementById('zipBanner');
+
+      function getCartSubtotal(){ return window.cartSubtotal || 0.0; }
+
+      async function callCheckZip(zip){
+        try {
+          const res = await fetch('/api/check-zip', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ zipcode: String(zip).trim(), subtotal: getCartSubtotal() })
+          });
+          if (!res.ok) throw new Error('Server error');
+          return await res.json();
+        } catch (e) { return { error:true, message: e.message }; }
+      }
+
+      zipTryBtn && zipTryBtn.addEventListener('click', async () => {
+        zipMessage.textContent = '';
+        const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
+        if (!zip || zip.length < 3) { zipMessage.textContent = 'Ingresa un código postal válido.'; return; }
+        zipTryBtn.disabled = true; zipTryBtn.textContent = 'Verificando...';
+        const resp = await callCheckZip(zip);
+        zipTryBtn.disabled = false; zipTryBtn.textContent = 'Verificar';
+        if (!resp || resp.error) { zipMessage.textContent = 'Error comunicándose con el servidor.'; return; }
+        if (resp.can_deliver) {
+          localStorage.setItem('user_zip', zip);
+          zipBanner.style.display='block'; zipBanner.textContent = `¡Excelente! Hacemos entrega en ${zip}.`;
+          modalOverlay.style.display='none';
+        } else {
+          zipMessage.textContent = resp.message || 'No hacemos entrega en este ZIP.';
+          zipContinueBtn.style.display = 'inline-block';
+          zipContinueBtn.onclick = () => {
+            localStorage.setItem('user_zip', zip);
+            zipBanner.style.display='block'; zipBanner.textContent = `Has continuado con ${zip}. Nota: solo pickup disponible.`;
+            modalOverlay.style.display='none';
+          };
+        }
+      });
+
+      // allow enter key
+      zipInput && zipInput.addEventListener && zipInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') zipTryBtn && zipTryBtn.click(); });
+
+    })();
+
   </script>
 </body>
 </html>
