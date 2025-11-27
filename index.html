@@ -327,71 +327,69 @@
     }
 
     // Promise that resolves once zip is provided/confirmed
-    function ensureZip() {
-      return new Promise(async (resolve) => {
-        const saved = localStorage.getItem('user_zip');
-        if (saved) {
-          // try validate saved zip (best-effort) then resolve
-          const ok = await validateSavedZip(saved);
-          if (ok) return resolve();
-        }
+function ensureZip() {
+  return new Promise(async (resolve) => {
+    // Si existe un ZIP guardado, lo precargamos pero AUN ASÍ mostramos el modal
+    const saved = localStorage.getItem('user_zip');
+    const zipInput = document.getElementById('zipInput');
+    const zipTryBtn = document.getElementById('zipTryBtn');
+    const zipContinueBtn = document.getElementById('zipContinueBtn');
+    const zipMessage = document.getElementById('zipMessage');
 
-        // show modal and wire handlers (one-time)
-        showModal();
-        const zipInput = document.getElementById('zipInput');
-        const zipTryBtn = document.getElementById('zipTryBtn');
-        const zipContinueBtn = document.getElementById('zipContinueBtn');
-        const zipMessage = document.getElementById('zipMessage');
+    if (saved && zipInput) zipInput.value = saved;
 
-        // Handlers
-        const tryHandler = async () => {
-          zipMessage.textContent = '';
-          const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
-          if (!zip || zip.length < 3) { zipMessage.textContent = 'Ingresa un código postal válido.'; return; }
-          zipTryBtn.disabled = true; zipTryBtn.textContent = 'Verificando...';
-          const resp = await callCheckZip(zip);
-          zipTryBtn.disabled = false; zipTryBtn.textContent = 'Verificar';
-          if (!resp || resp.error) {
-            zipMessage.textContent = 'Error comunicándose con el servidor.';
-            return;
-          }
-          if (resp.can_deliver) {
-            localStorage.setItem('user_zip', zip);
-            const banner = document.getElementById('zipBanner');
-            banner.style.display='block'; banner.textContent = `¡Excelente! Hacemos entrega en ${zip}.`;
-            cleanupAndResolve();
-          } else {
-            zipMessage.textContent = resp.message || 'No hacemos entrega en este ZIP.';
-            zipContinueBtn.style.display = 'inline-block';
-          }
-        };
+    // Mostramos el modal obligatoriamente
+    showModal();
 
-        const continueHandler = () => {
-          const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
-          if (!zip) { zipMessage.textContent = 'Ingresa un código postal para continuar.'; return; }
-          localStorage.setItem('user_zip', zip);
-          const banner = document.getElementById('zipBanner');
-          banner.style.display='block'; banner.textContent = `Has continuado con ${zip}. Nota: solo pickup disponible.`;
-          cleanupAndResolve();
-        };
+    // Handlers
+    const tryHandler = async () => {
+      zipMessage.textContent = '';
+      const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
+      if (!zip || zip.length < 3) { zipMessage.textContent = 'Ingresa un código postal válido.'; return; }
+      zipTryBtn.disabled = true; zipTryBtn.textContent = 'Verificando...';
+      const resp = await callCheckZip(zip);
+      zipTryBtn.disabled = false; zipTryBtn.textContent = 'Verificar';
+      if (!resp || resp.error) {
+        zipMessage.textContent = 'Error comunicándose con el servidor.';
+        return;
+      }
+      if (resp.can_deliver) {
+        localStorage.setItem('user_zip', zip);
+        const banner = document.getElementById('zipBanner');
+        banner.style.display='block'; banner.textContent = `¡Excelente! Hacemos entrega en ${zip}.`;
+        cleanupAndResolve();
+      } else {
+        zipMessage.textContent = resp.message || 'No hacemos entrega en este ZIP.';
+        zipContinueBtn.style.display = 'inline-block';
+      }
+    };
 
-        function cleanupAndResolve() {
-          hideModal();
-          zipTryBtn.removeEventListener('click', tryHandler);
-          zipContinueBtn.removeEventListener('click', continueHandler);
-          zipInput.removeEventListener('keydown', keyHandler);
-          resolve();
-        }
+    const continueHandler = () => {
+      const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
+      if (!zip) { zipMessage.textContent = 'Ingresa un código postal para continuar.'; return; }
+      localStorage.setItem('user_zip', zip);
+      const banner = document.getElementById('zipBanner');
+      banner.style.display='block'; banner.textContent = `Has continuado con ${zip}. Nota: solo pickup disponible.`;
+      cleanupAndResolve();
+    };
 
-        const keyHandler = (e) => { if (e.key === 'Enter') tryHandler(); };
-        zipTryBtn.addEventListener('click', tryHandler);
-        zipContinueBtn.addEventListener('click', continueHandler);
-        zipInput.addEventListener('keydown', keyHandler);
-
-        // focus
-        setTimeout(() => { zipInput && zipInput.focus(); }, 120);
-      });
+    function cleanupAndResolve() {
+      hideModal();
+      zipTryBtn.removeEventListener('click', tryHandler);
+      zipContinueBtn.removeEventListener('click', continueHandler);
+      zipInput.removeEventListener('keydown', keyHandler);
+      resolve();
     }
+
+    const keyHandler = (e) => { if (e.key === 'Enter') tryHandler(); };
+    zipTryBtn.addEventListener('click', tryHandler);
+    zipContinueBtn.addEventListener('click', continueHandler);
+    zipInput.addEventListener('keydown', keyHandler);
+
+    // focus
+    setTimeout(() => { zipInput && zipInput.focus(); }, 120);
+  });
+}
 
   </script>
 </body>
