@@ -9,7 +9,7 @@
     body { font-family: Inter, sans-serif; background: #f7f3f0; }
     .loader { border-top-color: #ff7b00; animation: spin 1s linear infinite; border: 4px solid #e5e7eb; border-top-width:4px; border-radius:9999px; width:48px; height:48px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    /* Modal styles (inserted) */
+    /* Modal styles */
     #zipModalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 9999; }
     #zipModal { background: white; padding: 20px; width: min(520px, 95%); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); text-align: left; }
     #zipModal h2 { margin: 0 0 10px 0; }
@@ -67,39 +67,22 @@
       return res.json();
     }
 
+    // --- START / STEP functions (unchanged) ---
     window.addEventListener('load', () => {
-      start();
-      // Abrir modal ZIP si no hay zip guardado
-      (async function checkZipOnLoad(){
-        const saved = localStorage.getItem('user_zip');
-        if (saved) {
-          // opcional: validar el zip guardado con el backend
-          try {
-            const resp = await fetch('/api/check-zip', {
-              method: 'POST',
-              headers: {'Content-Type':'application/json'},
-              body: JSON.stringify({ zipcode: saved, subtotal: 0 })
-            });
-            if (resp.ok) {
-              const data = await resp.json();
-              if (data.can_deliver) {
-                document.getElementById('zipBanner').style.display='block';
-                document.getElementById('zipBanner').textContent = `Hacemos delivery en ${saved}.`;
-                return;
-              } else {
-                document.getElementById('zipBanner').style.display='block';
-                document.getElementById('zipBanner').textContent = `No hacemos entrega en ${saved}. Solo pickup disponible.`;
-                return;
-              }
-            }
-          } catch (e) {
-            console.warn('No se pudo validar ZIP guardado', e);
-          }
-        }
-        // si no hay guardado o validación falló, abrir modal
-        document.getElementById('zipModalOverlay').style.display='flex';
-      })();
+      // We will call ensureZipBeforeStart() which awaits user zip, then starts app
+      ensureZipBeforeStart();
     });
+
+    async function ensureZipBeforeStart() {
+      // Wait until user has provided/confirmed ZIP (or validated saved ZIP)
+      await ensureZip();
+      // Start the app only after zip step is done
+      start();
+    }
+
+    async function start(){
+      await step({}, "next");
+    }
 
     async function step(answer = {}, action = "next"){
       document.getElementById("app").innerHTML = `<div class="py-8"><div class="loader mx-auto"></div><p class="text-gray-600 mt-4">Loading...</p></div>`;
@@ -294,56 +277,121 @@
       } catch (e) { alert("Error"); console.error(e); }
     }
 
-    // ZIP modal handlers (wiring)
-    (function(){
-      const modalOverlay = document.getElementById('zipModalOverlay');
-      const zipInput = document.getElementById('zipInput');
-      const zipTryBtn = document.getElementById('zipTryBtn');
-      const zipContinueBtn = document.getElementById('zipContinueBtn');
-      const zipMessage = document.getElementById('zipMessage');
-      const zipBanner = document.getElementById('zipBanner');
+    // --- ZIP modal helpers ---
+    function getCartSubtotal(){ return window.cartSubtotal || 0.0; }
 
-      function getCartSubtotal(){ return window.cartSubtotal || 0.0; }
-
-      async function callCheckZip(zip){
-        try {
-          const res = await fetch('/api/check-zip', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ zipcode: String(zip).trim(), subtotal: getCartSubtotal() })
-          });
-          if (!res.ok) throw new Error('Server error');
-          return await res.json();
-        } catch (e) { return { error:true, message: e.message }; }
-      }
-
-      zipTryBtn && zipTryBtn.addEventListener('click', async () => {
-        zipMessage.textContent = '';
-        const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
-        if (!zip || zip.length < 3) { zipMessage.textContent = 'Ingresa un código postal válido.'; return; }
-        zipTryBtn.disabled = true; zipTryBtn.textContent = 'Verificando...';
-        const resp = await callCheckZip(zip);
-        zipTryBtn.disabled = false; zipTryBtn.textContent = 'Verificar';
-        if (!resp || resp.error) { zipMessage.textContent = 'Error comunicándose con el servidor.'; return; }
-        if (resp.can_deliver) {
-          localStorage.setItem('user_zip', zip);
-          zipBanner.style.display='block'; zipBanner.textContent = `¡Excelente! Hacemos entrega en ${zip}.`;
-          modalOverlay.style.display='none';
+    async function validateSavedZip(savedZip) {
+      try {
+        const res = await fetch('/api/check-zip', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ zipcode: savedZip, subtotal: getCartSubtotal() })
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        if (data.can_deliver) {
+          const banner = document.getElementById('zipBanner');
+          banner.style.display='block';
+          banner.textContent = `Hacemos delivery en ${savedZip}.`;
+          return true;
         } else {
-          zipMessage.textContent = resp.message || 'No hacemos entrega en este ZIP.';
-          zipContinueBtn.style.display = 'inline-block';
-          zipContinueBtn.onclick = () => {
-            localStorage.setItem('user_zip', zip);
-            zipBanner.style.display='block'; zipBanner.textContent = `Has continuado con ${zip}. Nota: solo pickup disponible.`;
-            modalOverlay.style.display='none';
-          };
+          const banner = document.getElementById('zipBanner');
+          banner.style.display='block';
+          banner.textContent = `No hacemos entrega en ${savedZip}. Solo pickup disponible.`;
+          return true; // treat as OK (user confirmed previously)
         }
+      } catch (e) {
+        console.warn('ZIP validation failed', e);
+        return false;
+      }
+    }
+
+    function showModal(){ document.getElementById('zipModalOverlay').style.display = 'flex'; document.getElementById('zipModalOverlay').setAttribute('aria-hidden','false'); }
+    function hideModal(){ document.getElementById('zipModalOverlay').style.display = 'none'; document.getElementById('zipModalOverlay').setAttribute('aria-hidden','true'); }
+
+    async function callCheckZip(zip) {
+      try {
+        const res = await fetch('/api/check-zip', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ zipcode: String(zip).trim(), subtotal: getCartSubtotal() })
+        });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(txt || 'Server error');
+        }
+        return await res.json();
+      } catch (e) {
+        return { error:true, message: e.message || 'Error' };
+      }
+    }
+
+    // Promise that resolves once zip is provided/confirmed
+    function ensureZip() {
+      return new Promise(async (resolve) => {
+        const saved = localStorage.getItem('user_zip');
+        if (saved) {
+          // try validate saved zip (best-effort) then resolve
+          const ok = await validateSavedZip(saved);
+          if (ok) return resolve();
+        }
+
+        // show modal and wire handlers (one-time)
+        showModal();
+        const zipInput = document.getElementById('zipInput');
+        const zipTryBtn = document.getElementById('zipTryBtn');
+        const zipContinueBtn = document.getElementById('zipContinueBtn');
+        const zipMessage = document.getElementById('zipMessage');
+
+        // Handlers
+        const tryHandler = async () => {
+          zipMessage.textContent = '';
+          const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
+          if (!zip || zip.length < 3) { zipMessage.textContent = 'Ingresa un código postal válido.'; return; }
+          zipTryBtn.disabled = true; zipTryBtn.textContent = 'Verificando...';
+          const resp = await callCheckZip(zip);
+          zipTryBtn.disabled = false; zipTryBtn.textContent = 'Verificar';
+          if (!resp || resp.error) {
+            zipMessage.textContent = 'Error comunicándose con el servidor.';
+            return;
+          }
+          if (resp.can_deliver) {
+            localStorage.setItem('user_zip', zip);
+            const banner = document.getElementById('zipBanner');
+            banner.style.display='block'; banner.textContent = `¡Excelente! Hacemos entrega en ${zip}.`;
+            cleanupAndResolve();
+          } else {
+            zipMessage.textContent = resp.message || 'No hacemos entrega en este ZIP.';
+            zipContinueBtn.style.display = 'inline-block';
+          }
+        };
+
+        const continueHandler = () => {
+          const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
+          if (!zip) { zipMessage.textContent = 'Ingresa un código postal para continuar.'; return; }
+          localStorage.setItem('user_zip', zip);
+          const banner = document.getElementById('zipBanner');
+          banner.style.display='block'; banner.textContent = `Has continuado con ${zip}. Nota: solo pickup disponible.`;
+          cleanupAndResolve();
+        };
+
+        function cleanupAndResolve() {
+          hideModal();
+          zipTryBtn.removeEventListener('click', tryHandler);
+          zipContinueBtn.removeEventListener('click', continueHandler);
+          zipInput.removeEventListener('keydown', keyHandler);
+          resolve();
+        }
+
+        const keyHandler = (e) => { if (e.key === 'Enter') tryHandler(); };
+        zipTryBtn.addEventListener('click', tryHandler);
+        zipContinueBtn.addEventListener('click', continueHandler);
+        zipInput.addEventListener('keydown', keyHandler);
+
+        // focus
+        setTimeout(() => { zipInput && zipInput.focus(); }, 120);
       });
-
-      // allow enter key
-      zipInput && zipInput.addEventListener && zipInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') zipTryBtn && zipTryBtn.click(); });
-
-    })();
+    }
 
   </script>
 </body>
