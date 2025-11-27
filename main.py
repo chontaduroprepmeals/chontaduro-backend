@@ -28,6 +28,7 @@ app.add_middleware(
 register_upload_routes(app)
 # montar carpeta ./uploads para servir archivos locales (fallback)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+register_delivery_routes(app)
 
 # Serve frontend
 @app.get("/", response_class=HTMLResponse)
