@@ -6,45 +6,114 @@
   <title>Chontaduro Menu Generator</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: Inter, sans-serif; background: #f7f3f0; }
+    /* Base + full-screen layout */
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #f7f3f0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      font-family: Inter, sans-serif;
+    }
+
+    /* App shell that always fills the viewport */
+    .app-shell {
+      min-height: 100vh;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 24px;
+    }
+
+    /* Card that grows responsively */
+    .app-card {
+      width: 100%;
+      max-width: 980px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+      padding: 28px;
+      box-sizing: border-box;
+    }
+
+    /* Loader */
     .loader { border-top-color: #ff7b00; animation: spin 1s linear infinite; border: 4px solid #e5e7eb; border-top-width:4px; border-radius:9999px; width:48px; height:48px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    /* Modal styles */
-    #zipModalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 9999; }
-    #zipModal { background: white; padding: 20px; width: min(520px, 95%); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); text-align: left; }
+
+    /* Modal styles (covers full viewport and is mobile-friendly) */
+    #zipModalOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 20px; /* so modal never touches edges on small screens */
+    }
+    #zipModal {
+      width: 100%;
+      max-width: 520px;
+      background: white;
+      padding: 18px;
+      border-radius: 8px;
+      box-shadow: 0 14px 40px rgba(0,0,0,0.25);
+      text-align:left;
+    }
     #zipModal h2 { margin: 0 0 10px 0; }
     #zipModal input[type="text"] { width: 100%; padding: 10px; font-size: 16px; margin: 8px 0 12px 0; box-sizing: border-box; }
-    #zipModal .actions { display:flex; gap:8px; justify-content:flex-end; }
+    #zipModal .actions { display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
     #zipModal .hint { font-size: 13px; color: #666; margin-top:8px; }
+
+    /* Banner and messages */
+    #zipBanner { display:none; background:#fff4e5; border-left:4px solid #ffb74d; padding:10px 14px; margin-bottom: 12px; border-radius:6px; }
     #zipMessage { margin-top:8px; color: #b00020; }
-    #zipBanner { display:none; background:#fff4e5; border-left:4px solid #ffb74d; padding:10px 14px; margin-bottom: 12px; }
+
+    /* Make inputs and buttons more touch-friendly */
+    button, input, select, textarea { -webkit-tap-highlight-color: rgba(0,0,0,0); }
+
+    /* Responsive tweaks */
+    @media (max-width: 480px) {
+      .app-card { padding: 18px; border-radius: 10px; }
+      #zipModal { padding: 14px; }
+      #zipModal .actions { flex-direction: column-reverse; align-items: stretch; }
+      #zipModal .actions button { width: 100%; }
+    }
   </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
-  <div class="w-full max-w-lg bg-white p-8 rounded-xl shadow">
-    <h1 class="text-2xl font-bold text-center mb-6" style="color:#ff7b00;">🍽️ Chontaduro Menu Generator</h1>
-    <div id="app" class="text-center">
-      <div id="loading" class="py-10">
-        <div class="loader mx-auto"></div>
-        <p class="text-gray-600 mt-4">Loading...</p>
+<body>
+  <div class="app-shell">
+    <div class="app-card" id="app-root">
+      <h1 class="text-2xl font-bold text-center mb-6" style="color:#ff7b00;">🍽️ Chontaduro Menu Generator</h1>
+
+      <!-- Banner para mostrar estado de delivery -->
+      <div id="zipBanner" role="status" aria-live="polite"></div>
+
+      <div id="app" class="text-center">
+        <div id="loading" class="py-10">
+          <div class="loader mx-auto"></div>
+          <p class="text-gray-600 mt-4">Loading...</p>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Banner para mostrar estado de delivery -->
-  <div id="zipBanner" role="status"></div>
-
-  <!-- Modal de ZIP (insertado) -->
+  <!-- Modal de ZIP (overlay) -->
   <div id="zipModalOverlay" aria-hidden="true">
     <div id="zipModal" role="dialog" aria-modal="true" aria-labelledby="zipModalTitle">
       <h2 id="zipModalTitle">What is your postal code?</h2>
       <p>To verify if we deliver to your area, please enter your postal code.</p>
       <input id="zipInput" type="text" inputmode="numeric" maxlength="10" placeholder="Ej: 90210" aria-label="Zip code">
       <div id="zipMessage"></div>
+
       <div class="actions">
-        <button id="zipTryBtn" class="px-4 py-2 bg-orange-500 text-white rounded">Verificar</button>
         <button id="zipContinueBtn" style="display:none;" class="px-4 py-2 bg-gray-300 rounded">Continue (Just pickup)</button>
+        <button id="zipTryBtn" class="px-4 py-2 bg-orange-500 text-white rounded">Verificar</button>
       </div>
+
       <div class="hint">Puedes cambiar el código más tarde en la sección de cuenta o información de envío.</div>
     </div>
   </div>
@@ -54,6 +123,51 @@
     let sessionId = Math.random().toString(36).substring(2);
     let currentStep = "start";
 
+    // --- Utility: fetch with timeout to handle cold starts gracefully ---
+    function fetchWithTimeout(resource, options = {}, timeout = 9000) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('timeout')), timeout);
+        fetch(resource, options)
+          .then((res) => {
+            clearTimeout(timer);
+            resolve(res);
+          })
+          .catch((err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      });
+    }
+
+    // Small helper to display a friendly "server waking up" UI with retry
+    function showServerWakeMessage(msg) {
+      const zipMessage = document.getElementById('zipMessage');
+      zipMessage.innerHTML = '';
+
+      const p = document.createElement('div');
+      p.style.color = '#b00020';
+      p.style.marginBottom = '8px';
+      p.textContent = msg || 'Error comunicándose con el servidor.';
+      zipMessage.appendChild(p);
+
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'px-3 py-1 bg-blue-600 text-white rounded';
+      retryBtn.textContent = 'Reintentar';
+      retryBtn.onclick = () => {
+        // trigger the verify flow again
+        document.getElementById('zipTryBtn').click();
+      };
+      zipMessage.appendChild(retryBtn);
+
+      const tip = document.createElement('div');
+      tip.style.fontSize = '12px';
+      tip.style.color = '#666';
+      tip.style.marginTop = '8px';
+      tip.textContent = 'Si el servidor está durmiendo, tardará unos segundos en despertar. Pulsa Reintentar si no responde.';
+      zipMessage.appendChild(tip);
+    }
+
+    // Generic API POST wrapper
     async function api(path, payload){
       const res = await fetch(BASE + path, {
         method: "POST",
@@ -67,16 +181,12 @@
       return res.json();
     }
 
-    // --- START / STEP functions (unchanged) ---
     window.addEventListener('load', () => {
-      // We will call ensureZipBeforeStart() which awaits user zip, then starts app
       ensureZipBeforeStart();
     });
 
     async function ensureZipBeforeStart() {
-      // Wait until user has provided/confirmed ZIP (or validated saved ZIP)
       await ensureZip();
-      // Start the app only after zip step is done
       start();
     }
 
@@ -277,29 +387,26 @@
       } catch (e) { alert("Error"); console.error(e); }
     }
 
-    // --- ZIP modal helpers ---
+    // --- ZIP modal helpers and cold-start handling ---
     function getCartSubtotal(){ return window.cartSubtotal || 0.0; }
 
     async function validateSavedZip(savedZip) {
       try {
-        const res = await fetch('/api/check-zip', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ zipcode: savedZip, subtotal: getCartSubtotal() })
-        });
-        if (!res.ok) return false;
-        const data = await res.json();
-        if (data.can_deliver) {
-          const banner = document.getElementById('zipBanner');
-          banner.style.display='block';
-          banner.textContent = `Hacemos delivery en ${savedZip}.`;
-          return true;
-        } else {
-          const banner = document.getElementById('zipBanner');
-          banner.style.display='block';
-          banner.textContent = `No hacemos entrega en ${savedZip}. Solo pickup disponible.`;
-          return true; // treat as OK (user confirmed previously)
+        const resp = await callCheckZip(savedZip);
+        if (resp && !resp.error) {
+          if (resp.can_deliver) {
+            const banner = document.getElementById('zipBanner');
+            banner.style.display='block';
+            banner.textContent = `Hacemos delivery en ${savedZip}.`;
+            return true;
+          } else {
+            const banner = document.getElementById('zipBanner');
+            banner.style.display='block';
+            banner.textContent = `No hacemos entrega en ${savedZip}. Solo pickup disponible.`;
+            return true; // treat as OK (user confirmed previously)
+          }
         }
+        return false;
       } catch (e) {
         console.warn('ZIP validation failed', e);
         return false;
@@ -311,86 +418,96 @@
 
     async function callCheckZip(zip) {
       try {
-        const res = await fetch('/api/check-zip', {
+        const res = await fetchWithTimeout('/api/check-zip', {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
           body: JSON.stringify({ zipcode: String(zip).trim(), subtotal: getCartSubtotal() })
-        });
+        }, 9000); // 9s timeout
         if (!res.ok) {
           const txt = await res.text();
-          throw new Error(txt || 'Server error');
+          return { error: true, message: txt || res.statusText, status: res.status };
         }
         return await res.json();
       } catch (e) {
-        return { error:true, message: e.message || 'Error' };
+        // return a standardized error shape for the caller
+        return { error:true, message: e.message === 'timeout' ? 'El servidor está tardando en responder (timeout).' : 'Error de red o el servidor está durmiendo.', status: 0 };
       }
     }
 
     // Promise that resolves once zip is provided/confirmed
-function ensureZip() {
-  return new Promise(async (resolve) => {
-    // Si existe un ZIP guardado, lo precargamos pero AUN ASÍ mostramos el modal
-    const saved = localStorage.getItem('user_zip');
-    const zipInput = document.getElementById('zipInput');
-    const zipTryBtn = document.getElementById('zipTryBtn');
-    const zipContinueBtn = document.getElementById('zipContinueBtn');
-    const zipMessage = document.getElementById('zipMessage');
+    function ensureZip() {
+      return new Promise(async (resolve) => {
+        const saved = localStorage.getItem('user_zip');
+        const zipInput = document.getElementById('zipInput');
+        const zipTryBtn = document.getElementById('zipTryBtn');
+        const zipContinueBtn = document.getElementById('zipContinueBtn');
+        const zipMessage = document.getElementById('zipMessage');
 
-    if (saved && zipInput) zipInput.value = saved;
+        if (saved && zipInput) zipInput.value = saved;
 
-    // Mostramos el modal obligatoriamente
-    showModal();
+        // Show modal
+        showModal();
 
-    // Handlers
-    const tryHandler = async () => {
-      zipMessage.textContent = '';
-      const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
-      if (!zip || zip.length < 3) { zipMessage.textContent = 'Ingresa un código postal válido.'; return; }
-      zipTryBtn.disabled = true; zipTryBtn.textContent = 'Verificando...';
-      const resp = await callCheckZip(zip);
-      zipTryBtn.disabled = false; zipTryBtn.textContent = 'Verificar';
-      if (!resp || resp.error) {
-        zipMessage.textContent = 'Error comunicándose con el servidor.';
-        return;
-      }
-      if (resp.can_deliver) {
-        localStorage.setItem('user_zip', zip);
-        const banner = document.getElementById('zipBanner');
-        banner.style.display='block'; banner.textContent = `¡Excelente! Hacemos entrega en ${zip}.`;
-        cleanupAndResolve();
-      } else {
-        zipMessage.textContent = resp.message || 'No hacemos entrega en este ZIP.';
-        zipContinueBtn.style.display = 'inline-block';
-      }
-    };
+        // If there's a saved ZIP, try validating it quickly (non-blocking for user)
+        if (saved) {
+          zipMessage.textContent = 'Validando ZIP guardado...';
+          const ok = await validateSavedZip(saved);
+          zipMessage.textContent = '';
+          if (ok) {
+            // let user still confirm/change: prefilled field is there
+          }
+        }
 
-    const continueHandler = () => {
-      const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
-      if (!zip) { zipMessage.textContent = 'Ingresa un código postal para continuar.'; return; }
-      localStorage.setItem('user_zip', zip);
-      const banner = document.getElementById('zipBanner');
-      banner.style.display='block'; banner.textContent = `Has continuado con ${zip}. Nota: solo pickup disponible.`;
-      cleanupAndResolve();
-    };
+        // Handlers
+        const tryHandler = async () => {
+          zipMessage.textContent = '';
+          const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
+          if (!zip || zip.length < 3) { zipMessage.textContent = 'Ingresa un código postal válido.'; return; }
+          zipTryBtn.disabled = true; zipTryBtn.textContent = 'Verificando...';
+          const resp = await callCheckZip(zip);
+          zipTryBtn.disabled = false; zipTryBtn.textContent = 'Verificar';
+          if (!resp || resp.error) {
+            // Friendly retry UI for cold start / server errors
+            showServerWakeMessage(resp && resp.message ? resp.message : 'Error comunicándose con el servidor.');
+            return;
+          }
+          if (resp.can_deliver) {
+            localStorage.setItem('user_zip', zip);
+            const banner = document.getElementById('zipBanner');
+            banner.style.display='block'; banner.textContent = `¡Excelente! Hacemos entrega en ${zip}.`;
+            cleanupAndResolve();
+          } else {
+            zipMessage.textContent = resp.message || 'No hacemos entrega en este ZIP.';
+            zipContinueBtn.style.display = 'inline-block';
+          }
+        };
 
-    function cleanupAndResolve() {
-      hideModal();
-      zipTryBtn.removeEventListener('click', tryHandler);
-      zipContinueBtn.removeEventListener('click', continueHandler);
-      zipInput.removeEventListener('keydown', keyHandler);
-      resolve();
+        const continueHandler = () => {
+          const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
+          if (!zip) { zipMessage.textContent = 'Ingresa un código postal para continuar.'; return; }
+          localStorage.setItem('user_zip', zip);
+          const banner = document.getElementById('zipBanner');
+          banner.style.display='block'; banner.textContent = `Has continuado con ${zip}. Nota: solo pickup disponible.`;
+          cleanupAndResolve();
+        };
+
+        function cleanupAndResolve() {
+          hideModal();
+          zipTryBtn.removeEventListener('click', tryHandler);
+          zipContinueBtn.removeEventListener('click', continueHandler);
+          zipInput.removeEventListener('keydown', keyHandler);
+          resolve();
+        }
+
+        const keyHandler = (e) => { if (e.key === 'Enter') tryHandler(); };
+        zipTryBtn.addEventListener('click', tryHandler);
+        zipContinueBtn.addEventListener('click', continueHandler);
+        zipInput.addEventListener('keydown', keyHandler);
+
+        // focus
+        setTimeout(() => { zipInput && zipInput.focus(); }, 120);
+      });
     }
-
-    const keyHandler = (e) => { if (e.key === 'Enter') tryHandler(); };
-    zipTryBtn.addEventListener('click', tryHandler);
-    zipContinueBtn.addEventListener('click', continueHandler);
-    zipInput.addEventListener('keydown', keyHandler);
-
-    // focus
-    setTimeout(() => { zipInput && zipInput.focus(); }, 120);
-  });
-}
-
   </script>
 </body>
 </html>
