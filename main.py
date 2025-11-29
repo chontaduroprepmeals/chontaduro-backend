@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 import random, json, traceback, datetime, math, hashlib
 from typing import List, Dict, Any, Optional
 from delivery_allowed_api import register_delivery_routes
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
@@ -1063,6 +1064,12 @@ async def next_step(request: Request):
 
 # --- Additional endpoints (templates, scheduling, feedback, orders) ---
 
+@app.get("/health")
+async def health():
+    """
+    Healthcheck simple (200) para pings externos / warmup.
+    """
+    return JSONResponse({"status": "ok"})
 
 @app.get("/weekly-templates")
 async def weekly_templates():
