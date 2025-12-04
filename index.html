@@ -258,6 +258,9 @@
       }
     }
 
+    /* === The rest of your JS (renderForm, renderMenu, zip modal handlers etc.)
+       is unchanged from your original file. Keep the existing functions below as-is. === */
+
     function renderForm(question, fields){
       let html = `<form id="f"><h2 class="text-lg font-semibold mb-4">${question}</h2>`;
       const enhanced = (fields || []).map(f => {
