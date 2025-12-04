@@ -29,3 +29,6 @@ uploads/*
 !uploads/.gitkeep# uploads directory (keep empty .gitkeep)
 uploads/*
 !uploads/.gitkeep
+__pycache__/
+__pycache__/
+*.pyc
