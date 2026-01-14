@@ -19,8 +19,8 @@ html, body {
   padding: 0;
   background: #f7f3f0;
   font-family: Inter, sans-serif;
-  overflow-y: auto; /* Mantén solo el scroll vertical */
-  /*overflow-x: hidden; /* Evitar desplazamiento horizontal */
+  overflow-y: auto; /* Mantén solo el scroll vertical */  
+  overflow-x: hidden; /* Evitar desplazamiento horizontal */
   -webkit-overflow-scrolling: touch; /* Suaviza el desplazamiento en dispositivos iOS */
   transform: scale(1); /* Zoom al 100% */
   transform-origin: top left;
@@ -208,10 +208,10 @@ html.in-iframe .app-card {
         document.documentElement.style.width = "100%";
         document.documentElement.style.height = "100%";
         document.body.style.width = "100%";
-        document.body.style.height = "100%";
+        document.body.style.height = "100vh";
         document.body.style.margin = "0";
         document.body.style.padding = "0";
-        document.body.style.overflow = "auto"; // Prevent scrolling inside iframe
+        document.body.style.overflowY = "auto"; // Prevent scrolling inside iframe
       }
 
     } catch (e) {
