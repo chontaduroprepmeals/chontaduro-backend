@@ -12,6 +12,7 @@
       font-size: clamp(15px, 1.0vw + 1.0px, 18px);
     }
 
+/* Tamaño global de fuentes */
 html, body {
   height: 100%;
   margin: 0;
@@ -23,35 +24,42 @@ html, body {
   overflow-x: hidden; /* prevent horizontal scroll */
   box-sizing: border-box;
 
-  /* Tamaño de fuente incrementado */
-  font-size: 20px; /* Ajusta según lo que prefieras */
-  line-height: 1.6; /* Espaciado entre líneas para mayor legibilidad */
+  /* Incremento importante en tamaño de fuente */
+  font-size: 22px; /* Este es más grande que antes */
+  line-height: 1.8; /* Espaciado entre líneas agradable */
 }
     *, *::before, *::after { box-sizing: inherit; }
 
     /* App shell that always fills the viewport and centers content */
+/* Elementos principales */
 .app-shell {
   min-height: 100vh;
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px; /* Reducido para pequeños viewports */
+  padding: 20px; /* Ajusta espacio interno del contenedor */
   transition: padding .15s ease;
 
-  /* Tamaño de letra ampliado dentro del app */
-  font-size: 1.5em; /* Proporcionalmente más grande */
+  /* Ajuste proporcional de tamaño de fuente dentro de la aplicación */
+  font-size: 1.6em;
 }
 
-/* Link */
-a {
-  font-size: 1.2em; /* Aumenta el tamaño del texto de los enlaces */
+/* Inputs y selects (formularios) */
+input, select {
+  font-size: 1.3em;
+  padding: 10px;
 }
 
 /* Botones */
 button {
-  font-size: 1.3em;
+  font-size: 1.4em;
   padding: 10px 20px;
+}
+
+a {
+  font-size: 1.3em; /* Links más visibles */
+  text-decoration: underline;
 }
 
     /* Card that grows responsively and keeps readable line-length */
