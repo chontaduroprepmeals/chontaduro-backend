@@ -105,7 +105,13 @@
     }
 
     /* --- Iframe / embed specific rules --- */
-    html.in-iframe body { overflow: hidden; }
+    html.in-iframe body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
  /*   html.in-iframe .app-shell { min-height: 100vh; padding: 0; }*/
     
   html.in-iframe .app-shell {
@@ -162,14 +168,23 @@ html.in-iframe .app-card {
     </div>
   </div>
 
-  <script>
+<script>
     // If the page is inside an iframe, add a class so CSS can adapt
     try {
       if (window.self !== window.top) {
         document.documentElement.classList.add('in-iframe');
         // Slightly bump base font-size for readability inside small iframes
         document.documentElement.style.fontSize = '17px';
+        // Ensure the iframe fills the parent's dimensions fully
+        document.documentElement.style.width = "100%";
+        document.documentElement.style.height = "100%";
+        document.body.style.width = "100%";
+        document.body.style.height = "100%";
+        document.body.style.margin = "0";
+        document.body.style.padding = "0";
+        document.body.style.overflow = "hidden"; // Prevent scrolling inside iframe
       }
+
     } catch (e) {
       // cross-origin frame access can fail; ignore safely
     }
