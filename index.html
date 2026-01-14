@@ -18,17 +18,13 @@ html, body {
   margin: 0;
   padding: 0;
   background: #f7f3f0;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   font-family: Inter, sans-serif;
-  overflow-x: hidden; /* prevent horizontal scroll */
-  transform: scale(1); /* Simula zoom al 100% */
+  overflow: auto; /* Permitir scroll en toda la página */
+  transform: scale(1); /* Zoom al 100% */
   transform-origin: top left;
   box-sizing: border-box;
-
-  /* Incremento importante en tamaño de fuente */
-  font-size: 22px; /* Este es más grande que antes */
-  line-height: 1.8; /* Espaciado entre líneas agradable */
+  font-size: 22px;
+  line-height: 1.8;
 }
     *, *::before, *::after { box-sizing: inherit; }
 
