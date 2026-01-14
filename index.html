@@ -22,8 +22,9 @@ html, body {
   font-family: Inter, sans-serif;
   overflow-y: auto; /* Mantén solo el scroll vertical */  
   overflow-x: hidden; /* Evitar desplazamiento horizontal */
+  -webkit-text-size-adjust: 100%; /* Desactiva el ajuste automático de texto */
   -webkit-overflow-scrolling: touch; /* Suaviza el desplazamiento en dispositivos iOS */
-  transform: scale(1); /* Zoom al 100% */
+  transform: scale(1)!important; /* Zoom al 100% */
   transform-origin: top left;
   box-sizing: border-box;
   font-size: 22px;
@@ -35,7 +36,6 @@ html, body {
 @media only screen and (max-width: 480px) {
   html, body {
     font-size: 18px; /* Asegura que sea legible en pantallas pequeñas */
-    transform: scale(1); /* Mantener zoom al 100% */
   }
 }
 
