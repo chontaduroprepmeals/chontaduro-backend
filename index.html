@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Chontaduro Menu Generator</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -14,14 +14,14 @@
 
 /* Tamaño global de fuentes */
 html, body {
-  height: 100%;
+  height: auto; /* Permitir tamaño dinámico */
   margin: 0;
   padding: 0;
   background: #f7f3f0;
   font-family: Inter, sans-serif;
-  overflow: auto; /* Permitir scroll en toda la página */
-  overflow-x: hidden; /* Evita scroll horizontal innecesario */
-  -webkit-overflow-scrolling: touch; /* Suaviza el desplazamiento en iOS */
+  overflow-y: scroll; /* Mantén solo el scroll vertical */
+  overflow-x: hidden; /* Evitar desplazamiento horizontal */
+  -webkit-overflow-scrolling: touch; /* Suaviza el desplazamiento en dispositivos iOS */
   transform: scale(1); /* Zoom al 100% */
   transform-origin: top left;
   box-sizing: border-box;
@@ -40,7 +40,7 @@ html, body {
   justify-content: center;
   padding: 20px; /* Ajusta espacio interno del contenedor */
   transition: padding .15s ease;
-  overflow-y: auto; /* Permitir scroll interno en móviles */
+  overflow-y: scroll; /* Habilitar el desplazamiento interno */
   -webkit-overflow-scrolling: touch; /* Suaviza scroll en iOS */
   display: flex;
   flex-direction: column; /* Asegura que el contenido pueda expandirse */
