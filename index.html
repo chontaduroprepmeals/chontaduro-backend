@@ -1,6 +1,3 @@
-html 
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,8 +19,8 @@ html, body {
   padding: 0;
   background: #f7f3f0;
   font-family: Inter, sans-serif;
-  overflow-y: scroll; /* Mantén solo el scroll vertical */
-  overflow-x: hidden; /* Evitar desplazamiento horizontal */
+  overflow-y: auto; /* Mantén solo el scroll vertical */
+  /*overflow-x: hidden; /* Evitar desplazamiento horizontal */
   -webkit-overflow-scrolling: touch; /* Suaviza el desplazamiento en dispositivos iOS */
   transform: scale(1); /* Zoom al 100% */
   transform-origin: top left;
@@ -43,7 +40,7 @@ html, body {
   justify-content: center;
   padding: 20px; /* Ajusta espacio interno del contenedor */
   transition: padding .15s ease;
-  overflow-y: scroll; /* Habilitar el desplazamiento interno */
+  overflow-y: auto; /* Habilitar el desplazamiento interno */
   -webkit-overflow-scrolling: touch; /* Suaviza scroll en iOS */
   display: flex;
   flex-direction: column; /* Asegura que el contenido pueda expandirse */
@@ -214,7 +211,7 @@ html.in-iframe .app-card {
         document.body.style.height = "100%";
         document.body.style.margin = "0";
         document.body.style.padding = "0";
-        document.body.style.overflow = "hidden"; // Prevent scrolling inside iframe
+        document.body.style.overflow = "auto"; // Prevent scrolling inside iframe
       }
 
     } catch (e) {
