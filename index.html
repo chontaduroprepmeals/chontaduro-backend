@@ -38,7 +38,8 @@ html, body {
   justify-content: center;
   padding: 20px; /* Ajusta espacio interno del contenedor */
   transition: padding .15s ease;
-
+  overflow-y: auto; /* Permitir scroll interno en móviles */
+  -webkit-overflow-scrolling: touch; /* Suavizar scroll en iOS */
   /* Ajuste proporcional de tamaño de fuente dentro de la aplicación */
   font-size: 1.6em;
 }
