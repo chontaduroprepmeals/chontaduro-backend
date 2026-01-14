@@ -14,7 +14,8 @@
 
 /* Tamaño global de fuentes */
 html, body {
-  height: auto; /* Permitir tamaño dinámico */
+  width: 100%;
+  height: 100%; /* Permitir tamaño dinámico */
   margin: 0;
   padding: 0;
   background: #f7f3f0;
@@ -29,6 +30,14 @@ html, body {
   line-height: 1.8;
 }
     *, *::before, *::after { box-sizing: inherit; }
+
+    /* Consulta de medios para pantallas pequeñas (ancho máximo: 480px) */
+@media only screen and (max-width: 480px) {
+  html, body {
+    font-size: 18px; /* Asegura que sea legible en pantallas pequeñas */
+    transform: scale(1); /* Mantener zoom al 100% */
+  }
+}
 
     /* App shell that always fills the viewport and centers content */
 /* Elementos principales */
