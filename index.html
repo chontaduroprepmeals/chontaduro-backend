@@ -106,16 +106,25 @@
 
     /* --- Iframe / embed specific rules --- */
     html.in-iframe body { overflow: hidden; }
-    html.in-iframe .app-shell { min-height: 100vh; padding: 0; }
-    html.in-iframe .app-card {
-      max-width: 100%;
-      width: 100%;
-      border-radius: 0;
-      box-shadow: none;
-      padding: 20px;
-      height: 100vh;           /* make the card fill the iframe vertically */
-      overflow: auto;          /* allow internal scrolling */
-    }
+ /*   html.in-iframe .app-shell { min-height: 100vh; padding: 0; }*/
+    
+  html.in-iframe .app-shell {
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  padding: 0;
+  margin: 0;
+}
+
+html.in-iframe .app-card {
+  max-width: 100vw;
+  width: 100vw;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  height: 100vh;
+  overflow: hidden;
+}
     html.in-iframe #zipModal { max-height: 88vh; overflow: auto; }
   </style>
 </head>
