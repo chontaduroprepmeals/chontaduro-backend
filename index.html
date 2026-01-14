@@ -20,6 +20,8 @@ html, body {
   background: #f7f3f0;
   font-family: Inter, sans-serif;
   overflow: auto; /* Permitir scroll en toda la página */
+  overflow-x: hidden; /* Evita scroll horizontal innecesario */
+  -webkit-overflow-scrolling: touch; /* Suaviza el desplazamiento en iOS */
   transform: scale(1); /* Zoom al 100% */
   transform-origin: top left;
   box-sizing: border-box;
@@ -39,7 +41,9 @@ html, body {
   padding: 20px; /* Ajusta espacio interno del contenedor */
   transition: padding .15s ease;
   overflow-y: auto; /* Permitir scroll interno en móviles */
-  -webkit-overflow-scrolling: touch; /* Suavizar scroll en iOS */
+  -webkit-overflow-scrolling: touch; /* Suaviza scroll en iOS */
+  display: flex;
+  flex-direction: column; /* Asegura que el contenido pueda expandirse */
   /* Ajuste proporcional de tamaño de fuente dentro de la aplicación */
   font-size: 1.6em;
 }
