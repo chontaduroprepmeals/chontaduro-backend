@@ -12,29 +12,47 @@
       font-size: clamp(15px, 1.0vw + 1.0px, 18px);
     }
 
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      background: #f7f3f0;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      font-family: Inter, sans-serif;
-      overflow-x: hidden; /* prevent horizontal scroll */
-      box-sizing: border-box;
-    }
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #f7f3f0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: Inter, sans-serif;
+  overflow-x: hidden; /* prevent horizontal scroll */
+  box-sizing: border-box;
+
+  /* Tamaño de fuente incrementado */
+  font-size: 20px; /* Ajusta según lo que prefieras */
+  line-height: 1.6; /* Espaciado entre líneas para mayor legibilidad */
+}
     *, *::before, *::after { box-sizing: inherit; }
 
     /* App shell that always fills the viewport and centers content */
-    .app-shell {
-      min-height: 100vh;
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 12px; /* Reducido para pequeños viewports */
-      transition: padding .15s ease;
-    }
+.app-shell {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px; /* Reducido para pequeños viewports */
+  transition: padding .15s ease;
+
+  /* Tamaño de letra ampliado dentro del app */
+  font-size: 1.5em; /* Proporcionalmente más grande */
+}
+
+/* Link */
+a {
+  font-size: 1.2em; /* Aumenta el tamaño del texto de los enlaces */
+}
+
+/* Botones */
+button {
+  font-size: 1.3em;
+  padding: 10px 20px;
+}
 
     /* Card that grows responsively and keeps readable line-length */
     .app-card {

@@ -31,6 +31,10 @@ register_upload_routes(app)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 register_delivery_routes(app)
 
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
 # Serve frontend
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
