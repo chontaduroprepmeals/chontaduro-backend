@@ -40,6 +40,15 @@ def healthz():
 async def serve_frontend():
     return FileResponse("index.html")
 
+# Manejo de solicitudes HEAD en la raíz
+@app.head("/")
+async def handle_head_request():
+    return HTMLResponse(content="", status_code=200)
+
+# Manejo de solicitudes GET explícito en la raíz
+@app.get("/")
+async def handle_get_request_override():
+    return FileResponse("index.html")
 
 # --- LOAD MEALS (expects English keys; tolerant with Spanish keys) ---
 MEALS_DATA: List[Dict[str, Any]] = []
