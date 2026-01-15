@@ -1594,7 +1594,7 @@ async def next_step(request: Request):
 
                 # Ajusta proteína y calorías dinámicamente por comida
                 daily_protein_target = macros.get("protein_grams", 0)
-                menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
+                menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target, calorie_target)
 
                 if not menu_with_protein:  # Validación adicional de seguridad
                     print("[ERROR] Menu with protein is empty, validation failed!")
