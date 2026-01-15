@@ -1024,74 +1024,97 @@ async def next_step(request: Request):
         step_to_render_name = "review"
 
     elif step_name == "review":
-        try:
-            # if user selected a template via the answers, set it and compute selected_week
-            if "template_id" in answer:
-                state.template_id = answer.get("template_id")
-                # compute selected_week based on cutoff rules (Thursday 22:00 UTC cutoff)
-                now = datetime.datetime.utcnow()
-                # find this week's Thursday
-                weekday = now.weekday()  # Monday=0
-                thursday = now + datetime.timedelta(days=(3 - weekday))
-                thursday_cutoff = datetime.datetime.combine(thursday.date(), datetime.time(hour=22, minute=0))
-                if now <= thursday_cutoff:
-                    # delivery upcoming Sunday of this week
-                    sunday = thursday + datetime.timedelta(days=(6 - thursday.weekday()))
-                else:
-                    # delivery next week's Sunday
-                    next_thursday = thursday + datetime.timedelta(days=7)
-                    sunday = next_thursday + datetime.timedelta(days=(6 - next_thursday.weekday()))
-                iso = sunday.date().isocalendar()
-                state.selected_week = f"{iso[0]}-W{iso[1]}"
-            assessment = assess_menu_possibility(state)
-            if not assessment["ok"]:
-                return {"question": assessment.get("message", "Could not generate menu with current settings."), "fields": [], "current_step": state.current_step, "issue": assessment.get("reason"), "details": assessment.get("details", {})}
-            # generate base menu (Meal objects) either via template or dynamic generator
-            base_menu_objs = generate_menu(state)
-            # compute daily macros (protein target) for allocation
-            weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
-            height_cm = to_cm(state.height, state.height_unit) if state.height else None
-            tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
-            tdee = None
-            if tmb is not None:
-                tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
-            calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
-            macros = calc_macros(calorie_target, state.objective, weight_kg)
-            daily_protein_target = macros.get("protein_grams", 0)
-            # allocate per-meal protein and attach provided_protein (this will include global extras)
-            menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
-            # store in session
-            state.menu = menu_with_protein
-            sessions[session_id] = state.model_dump()
-            # prepare response fields according to plan:
-            response_menu = []
-            for m in menu_with_protein:
-                meal_entry = dict(m)
-                meal_entry["extra_protein_added"] = int(state.extra_protein_map.get(m.get("meal_index"), 0) if isinstance(state.extra_protein_map, dict) else 0)
-                if state.plan == 4:
-                    day_meals = [x for x in menu_with_protein if x.get("day_index") == m.get("day_index")]
-                    total_cal_day = sum((mm.get("calories",0) or 0) for mm in day_meals) or 1
-                    frac = (m.get("calories",0) or 0) / total_cal_day
-                    meal_entry["calories_assigned"] = int(round((calorie_target or 0) * frac)) if calorie_target else m.get("calories")
-                    meal_entry["protein_assigned"] = int(m.get("provided_protein",0))
-                    meal_entry["fat_assigned"] = int(round((macros.get("fat_grams",0) * frac))) if macros else 0
-                    meal_entry["carbs_assigned"] = int(round((macros.get("carbs_grams",0) * frac))) if macros else 0
-                elif state.plan in (2,3):
-                    day_meals = [x for x in menu_with_protein if x.get("day_index") == m.get("day_index")]
-                    total_cal_day = sum((mm.get("calories",0) or 0) for mm in day_meals) or 1
-                    frac = (m.get("calories",0) or 0) / total_cal_day
-                    meal_entry["protein_assigned"] = int(m.get("provided_protein",0))
-                    meal_entry["carbs_assigned"] = int(round((macros.get("carbs_grams",0) * frac))) if macros else 0
-                else:
-                    meal_entry["protein_assigned"] = int(m.get("provided_protein",0))
-                response_menu.append(meal_entry)
-            total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in response_menu], 0)
-            sessions[session_id] = state.model_dump()
-            return {"menu": response_menu, "price": total_price, "message": "Your menu is ready!", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}, "current_step": state.current_step}
-        except Exception as e:
-            tb = traceback.format_exc()
-            print(f"[ERROR] menu generation failed for session {session_id}:\n{tb}")
-            return JSONResponse(status_code=500, content={"error":"internal_server_error","detail":str(e),"trace":tb})
+            try:
+                # Si el usuario seleccionó un template, configúralo y calcula el target
+                if "template_id" in answer:
+                    state.template_id = answer.get("template_id")
+                    # Calcula la semana seleccionada basada en la lógica de corte los jueves a las 22:00
+                    now = datetime.datetime.utcnow()
+                    weekday = now.weekday()  # Monday=0
+                    thursday_cutoff = datetime.datetime.combine(
+                        now + datetime.timedelta(days=(3 - weekday)).date(),
+                        datetime.time(hour=22, minute=0)
+                    )
+                    if now <= thursday_cutoff:
+                        sunday = now + datetime.timedelta(days=(6 - weekday))
+                    else:
+                        sunday = now + datetime.timedelta(days=(6 - weekday + 7))
+                    iso = sunday.date().isocalendar()
+                    state.selected_week = f"{iso[0]}-W{iso[1]}"
+                
+                # Valida que sea posible generar un menú
+                assessment = assess_menu_possibility(state)
+                if not assessment["ok"]:
+                    return {
+                        "question": assessment.get("message", "Could not generate menu with current settings."),
+                        "fields": [],
+                        "current_step": state.current_step,
+                        "issue": assessment.get("reason"),
+                        "details": assessment.get("details", {})
+                    }
+                
+                # Genera el menú base (objetos Meal) vía template o generador dinámico
+                base_menu_objs = generate_menu(state)
+                
+                # Calcula calorías objetivo y macros
+                weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
+                height_cm = to_cm(state.height, state.height_unit) if state.height else None
+                tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+                tdee = round(
+                    tmb * compute_activity_factor(
+                        state.activity_days_bucket or "0",
+                        state.activity_duration_bucket or "<30",
+                        state.activity_intensity or "Low",
+                    ), 1
+                ) if tmb else None
+                calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+                macros = calc_macros(calorie_target, state.objective, weight_kg)
+
+                # Ajusta la proteína y las calorías dinámicamente en cada comida
+                daily_protein_target = macros.get("protein_grams", 0)
+                menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
+
+                # Almacena el menú ajustado en la sesión
+                state.menu = menu_with_protein
+                sessions[session_id] = state.model_dump()
+
+                # Prepara la respuesta final con el menú ajustado
+                response_menu = []
+                for m in menu_with_protein:
+                    meal_entry = dict(m)
+                    meal_entry["extra_protein_added"] = int(state.extra_protein_map.get(m.get("meal_index"), 0) if isinstance(state.extra_protein_map, dict) else 0)
+                    if state.plan == 4:
+                        day_meals = [x for x in menu_with_protein if x.get("day_index") == m.get("day_index")]
+                        total_cal_day = sum((mm.get("calories", 0) or 0) for mm in day_meals) or 1
+                        frac = (m.get("calories", 0) or 0) / total_cal_day
+                        meal_entry["calories_assigned"] = int(round((calorie_target or 0) * frac)) if calorie_target else m.get("calories")
+                        meal_entry["protein_assigned"] = int(m.get("provided_protein", 0))
+                        meal_entry["fat_assigned"] = int(round((macros.get("fat_grams", 0) * frac))) if macros else 0
+                        meal_entry["carbs_assigned"] = int(round((macros.get("carbs_grams", 0) * frac))) if macros else 0
+                    elif state.plan in (2, 3):
+                        day_meals = [x for x in menu_with_protein if x.get("day_index") == m.get("day_index")]
+                        total_cal_day = sum((mm.get("calories", 0) or 0) for mm in day_meals) or 1
+                        frac = (m.get("calories", 0) or 0) / total_cal_day
+                        meal_entry["protein_assigned"] = int(m.get("provided_protein", 0))
+                        meal_entry["carbs_assigned"] = int(round((macros.get("carbs_grams", 0) * frac))) if macros else 0
+                    else:
+                        meal_entry["protein_assigned"] = int(m.get("provided_protein", 0))
+                    response_menu.append(meal_entry)
+
+                # Calcula el precio total del menú
+                total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in response_menu], 0)
+                sessions[session_id] = state.model_dump()
+                return {
+                    "menu": response_menu,
+                    "price": total_price,
+                    "message": "Your menu is ready!",
+                    "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros},
+                    "current_step": state.current_step
+                }
+            except Exception as e:
+                tb = traceback.format_exc()
+                print(f"[ERROR] menu generation failed for session {session_id}:\n{tb}")
+                return JSONResponse(status_code=500, content={"error": "internal_server_error", "detail": str(e), "trace": tb})
 
     else:
         step_to_render_name = "start"
