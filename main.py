@@ -493,27 +493,26 @@ def find_meal_by_name(name: str) -> Optional[Meal]:
             return Meal(name=found.get("name",""), type=found.get("type","Main Meal"), ingredients=found.get("ingredients",[]), calories=int(found.get("calories",0)), price=float(found.get("price",0.0)), image_url=found.get("image_url"))
     return None
 
-def generate_daily_menu(meals: list, target_calories: float) -> dict:
-    daily_menu = {"breakfast": None, "main_meal_1": None, "main_meal_2": None}
+def generate_daily_menu(meals: List[dict], calorie_target: int) -> List[dict]:
+    """
+    Select meals for the day that stay within the calorie target.
+    """
+    daily_menu = []
     total_calories = 0
 
-    # Filtra desayuno dentro del rango calórico ideal
-    breakfast_options = [meal for meal in meals if meal["type"] == "Breakfast" and 350 <= meal["calories"] <= 400]
-    daily_menu["breakfast"] = next((meal for meal in breakfast_options if total_calories + meal["calories"] <= target_calories), None)
-    if daily_menu["breakfast"]:
-        total_calories += daily_menu["breakfast"]["calories"]
+    for meal in meals:
+        if total_calories + meal["calories"] <= calorie_target:
+            daily_menu.append(meal)
+            total_calories += meal["calories"]
 
-    # Filtra comidas principales para mantener al día cerca del objetivo calórico
-    main_meal_options = [meal for meal in meals if meal["type"] == "Main Meal"]
-    selected_meals = [meal for meal in main_meal_options if total_calories + meal["calories"] <= target_calories]
-    
-    if len(selected_meals) >= 2:
-        daily_menu["main_meal_1"] = selected_meals[0]
-        daily_menu["main_meal_2"] = selected_meals[1]
-        total_calories += selected_meals[0]["calories"] + selected_meals[1]["calories"]
+        # Stop adding meals if the calorie target is reached
+        if total_calories >= calorie_target:
+            break
 
-    # Validación final de calorías
-    return daily_menu if total_calories <= target_calories else None
+    # Debugging daily totals
+    print("[DEBUG] Daily menu generated:")
+    print(f"- Total Calories: {total_calories} kcal (Target: {calorie_target} kcal)")
+    return daily_menu if total_calories <= calorie_target else []
 
 
 def expand_template_to_schedule(template: Dict[str, Any], week: Optional[str] = None) -> Dict[str, Any]:
@@ -743,71 +742,103 @@ def generate_menu_using_template(state: SessionState) -> List[Meal]:
                 menu_objs.append(Meal(name=name or "Unknown", type="Main Meal", ingredients=[], calories=0, price=0.0))
     return menu_objs
 
-
 def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int]) -> List[Dict[str, Any]]:
     """
-    Attach provided_protein, carbs_assigned, and fat_assigned to each meal in the returned list of dicts.
-    Distributes:
-      - baseline daily_protein (macros) evenly per day & per meal
-      - plus state.extra_protein_grams (global) evenly across ALL meals
-      - plus per-meal extras from state.extra_protein_map
+    Attach proteins, carbs, fats, and calories within strict limits per meal (35-40 g protein max).
     """
-    if not menu:
-        return []
-    plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
-    num_main, num_break = plan_map.get(state.plan, (1, 0))
-    meals_per_day = num_main + num_break
-    days = state.days or max(1, len(menu) // max(1, meals_per_day))
-    total_meals = min(len(menu), days * meals_per_day) if meals_per_day > 0 else len(menu)
-    if total_meals == 0:
-        total_meals = len(menu)
-
-    # Daily protein target
-    daily_protein = int(macros_daily_protein or 0)
-    if daily_protein == 0:
-        daily_protein = 60
-
-    # Global extra protein (in grams)
-    extra_global = int(state.extra_protein_grams or 0)
-    # Split extra_global evenly across ALL meals
-    per_extra_global = extra_global // total_meals if total_meals > 0 else 0
-    rem_extra_global = extra_global - (per_extra_global * total_meals)
-
     out = []
-    idx = 0
-    for day in range(days):
-        per_base = daily_protein // meals_per_day if meals_per_day > 0 else daily_protein
-        remainder = daily_protein - (per_base * meals_per_day) if meals_per_day > 0 else 0
-        for m_idx_in_day in range(meals_per_day):
-            if idx >= len(menu):
-                break
-            provided_base = per_base + (1 if m_idx_in_day < remainder else 0)
-            # Global share for this meal (distribute remainder to first N meals)
-            extra_for_meal_from_global = per_extra_global + (1 if idx < rem_extra_global else 0)
-            # Per-meal map extras
-            extra_for_meal_specific = int(state.extra_protein_map.get(idx, 0) if isinstance(state.extra_protein_map, dict) else 0)
-            meal_obj = menu[idx]
-            meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
+    for idx, meal in enumerate(menu):
+        meal_data = meal.model_dump() if hasattr(meal, "model_dump") else dict(meal)
 
-            # Calculate protein for the meal, respecting limits (35-40 g)
-            provided_protein = int(provided_base + extra_for_meal_from_global + extra_for_meal_specific)
-            meal_dict["provided_protein"] = min(40, max(35, provided_protein))  # Limit to 35-40 g
+        # Limit protein to 35-40 g per meal
+        protein_base = min(40, max(35, int(macros_daily_protein / len(menu))))
+        meal_data["provided_protein"] = protein_base
 
-            # Calculate macronutrients for the meal
-            protein_calories = meal_dict["provided_protein"] * 4
-            total_calories = meal_dict.get("calories", 0)
-            remaining_calories = max(total_calories - protein_calories, 0)
-            fat_calories = remaining_calories * 0.25  # 25% of remaining goes to fats
-            carbs_calories = remaining_calories - fat_calories
+        # Calculate remaining macronutrients based on calories
+        protein_calories = meal_data["provided_protein"] * 4
+        remaining_calories = max(meal_data["calories"] - protein_calories, 0)
+        fat_calories = remaining_calories * 0.25
+        carb_calories = remaining_calories - fat_calories
 
-            # Assign back macronutrients
-            meal_dict["fat_assigned"] = round(fat_calories / 9, 2)  # Grams of fat
-            meal_dict["carbs_assigned"] = round(carbs_calories / 4, 2)  # Grams of carbs
+        # Assign calculated values
+        meal_data["fat_assigned"] = round(fat_calories / 9, 2)
+        meal_data["carbs_assigned"] = round(carb_calories / 4, 2)
 
-            out.append(meal_dict)
-            idx += 1
+        # Debugging meal adjustments
+        print(f"[DEBUG] Adjusted Meal {idx + 1}: {meal_data.get('name', 'Unnamed Meal')}")
+        print(f"  - Protein: {meal_data['provided_protein']} g (Max Limit: 35-40 g)")
+        print(f"  - Fat Assigned: {meal_data['fat_assigned']} g")
+        print(f"  - Carbs Assigned: {meal_data['carbs_assigned']} g")
+        print(f"  - Total Calories: {meal_data['calories']} kcal")
+
+        out.append(meal_data)
 
     return out
+
+# def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int]) -> List[Dict[str, Any]]:
+#     """
+#     Attach provided_protein, carbs_assigned, and fat_assigned to each meal in the returned list of dicts.
+#     Distributes:
+#       - baseline daily_protein (macros) evenly per day & per meal
+#       - plus state.extra_protein_grams (global) evenly across ALL meals
+#       - plus per-meal extras from state.extra_protein_map
+#     """
+#     if not menu:
+#         return []
+#     plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
+#     num_main, num_break = plan_map.get(state.plan, (1, 0))
+#     meals_per_day = num_main + num_break
+#     days = state.days or max(1, len(menu) // max(1, meals_per_day))
+#     total_meals = min(len(menu), days * meals_per_day) if meals_per_day > 0 else len(menu)
+#     if total_meals == 0:
+#         total_meals = len(menu)
+
+#     # Daily protein target
+#     daily_protein = int(macros_daily_protein or 0)
+#     if daily_protein == 0:
+#         daily_protein = 60
+
+#     # Global extra protein (in grams)
+#     extra_global = int(state.extra_protein_grams or 0)
+#     # Split extra_global evenly across ALL meals
+#     per_extra_global = extra_global // total_meals if total_meals > 0 else 0
+#     rem_extra_global = extra_global - (per_extra_global * total_meals)
+
+#     out = []
+#     idx = 0
+#     for day in range(days):
+#         per_base = daily_protein // meals_per_day if meals_per_day > 0 else daily_protein
+#         remainder = daily_protein - (per_base * meals_per_day) if meals_per_day > 0 else 0
+#         for m_idx_in_day in range(meals_per_day):
+#             if idx >= len(menu):
+#                 break
+#             provided_base = per_base + (1 if m_idx_in_day < remainder else 0)
+#             # Global share for this meal (distribute remainder to first N meals)
+#             extra_for_meal_from_global = per_extra_global + (1 if idx < rem_extra_global else 0)
+#             # Per-meal map extras
+#             extra_for_meal_specific = int(state.extra_protein_map.get(idx, 0) if isinstance(state.extra_protein_map, dict) else 0)
+#             meal_obj = menu[idx]
+#             meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
+
+#             # Calculate protein for the meal, respecting limits (35-40 g)
+#             provided_protein = int(provided_base + extra_for_meal_from_global + extra_for_meal_specific)
+#             meal_dict["provided_protein"] = min(40, max(35, provided_protein))  # Limit to 35-40 g
+
+#             # Calculate macronutrients for the meal
+#             protein_calories = meal_dict["provided_protein"] * 4
+#             total_calories = meal_dict.get("calories", 0)
+#             remaining_calories = max(total_calories - protein_calories, 0)
+#             fat_calories = remaining_calories * 0.25  # 25% of remaining goes to fats
+#             carbs_calories = remaining_calories - fat_calories
+
+#             # Assign back macronutrients
+#             meal_dict["fat_assigned"] = round(fat_calories / 9, 2)  # Grams of fat
+#             meal_dict["carbs_assigned"] = round(carbs_calories / 4, 2)  # Grams of carbs
+
+#             out.append(meal_dict)
+#             idx += 1
+
+#     return out
 
 
 # Keep original generate_menu as fallback for non-template flows
@@ -1165,41 +1196,160 @@ async def next_step(request: Request):
     #                 content={"error": "internal_server_error", "detail": str(e), "trace": tb},
     #             )
 
+#este es el borrador del review 2 el original esta comentado arriba
+
+    # elif step_name == "review":
+    #         try:
+    #             # Si el usuario seleccionó un template, configúralo y calcula el target
+    #             if "template_id" in answer:
+    #                 state.template_id = answer.get("template_id")
+
+    #                 # Calcula la semana seleccionada basada en la lógica de corte jueves 22:00
+    #                 now = datetime.datetime.utcnow()
+    #                 weekday = now.weekday()  # Monday=0
+    #                 thursday_cutoff = datetime.datetime.combine(
+    #                     now + datetime.timedelta(days=(3 - weekday)).date(),
+    #                     datetime.time(hour=22, minute=0)
+    #                 )
+    #                 if now <= thursday_cutoff:
+    #                     sunday = now + datetime.timedelta(days=(6 - weekday))
+    #                 else:
+    #                     sunday = now + datetime.timedelta(days=(6 - weekday + 7))
+    #                 iso = sunday.date().isocalendar()
+    #                 state.selected_week = f"{iso[0]}-W{iso[1]}"
+
+    #             # Valida que sea posible generar un menú
+    #             assessment = assess_menu_possibility(state)
+    #             if not assessment["ok"]:
+    #                 return {
+    #                     "question": assessment.get("message", "Could not generate menu with current settings."),
+    #                     "fields": [],
+    #                     "current_step": state.current_step,
+    #                     "issue": assessment.get("reason"),
+    #                     "details": assessment.get("details", {}),
+    #                 }
+
+    #             # Genera el menú base (Objetos Meal)
+    #             base_menu_objs = generate_menu(state)
+
+    #             # Calcula calorías objetivo y macros
+    #             weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
+    #             height_cm = to_cm(state.height, state.height_unit) if state.height else None
+    #             tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    #             tdee = (
+    #                 round(
+    #                     tmb
+    #                     * compute_activity_factor(
+    #                         state.activity_days_bucket or "0",
+    #                         state.activity_duration_bucket or "<30",
+    #                         state.activity_intensity or "Low",
+    #                     ),
+    #                     1,
+    #                 )
+    #                 if tmb
+    #                 else None
+    #             )
+    #             calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+    #             macros = calc_macros(calorie_target, state.objective, weight_kg)
+
+    #             # Ajusta proteína y calorías dinámicamente por comida
+    #             daily_protein_target = macros.get("protein_grams", 0)
+    #             menu_with_protein = allocate_protein_to_menu(
+    #                 state, base_menu_objs, daily_protein_target
+    #             )
+
+    #             # **Calcula totales del día**
+    #             total_protein = sum((meal.get("provided_protein", 0) for meal in menu_with_protein))
+    #             total_carbs = sum((meal.get("carbs_assigned", 0) for meal in menu_with_protein))
+    #             total_fat = sum((meal.get("fat_assigned", 0) for meal in menu_with_protein))
+    #             total_calories = sum((meal.get("calories", 0) for meal in menu_with_protein))
+
+    #             # Print debug information about daily totals
+    #             print("[DEBUG] Daily macronutrient totals:")
+    #             print(f"- Total Protein: {total_protein} g")
+    #             print(f"- Total Carbohydrates: {total_carbs} g")
+    #             print(f"- Total Fats: {total_fat} g")
+    #             print(f"- Total Calories: {total_calories} kcal")
+
+    #             # Modifica la respuesta según el plan
+    #             response_menu = []
+    #             for meal in menu_with_protein:
+    #                 meal_entry = dict(meal)
+    #                 if state.plan == 4:  # Plan 4: Desglose completo de macronutrientes
+    #                     day_meals = [
+    #                         x
+    #                         for x in menu_with_protein
+    #                         if x.get("day_index") == meal.get("day_index")
+    #                     ]
+    #                     total_cal_day = sum((mm.get("calories", 0) or 0) for mm in day_meals) or 1
+    #                     frac = (meal.get("calories", 0) or 0) / total_cal_day
+    #                     meal_entry["calories_assigned"] = int(
+    #                         round((calorie_target or 0) * frac)
+    #                     ) if calorie_target else meal.get("calories")
+    #                     meal_entry["protein_assigned"] = int(meal.get("provided_protein", 0))
+    #                     meal_entry["fat_assigned"] = int(
+    #                         round((macros.get("fat_grams", 0) * frac))
+    #                     ) if macros else 0
+    #                     meal_entry["carbs_assigned"] = int(
+    #                         round((macros.get("carbs_grams", 0) * frac))
+    #                     ) if macros else 0
+    #                 else:  # Otros planes: Solo mostrar proteína asignada
+    #                     meal_entry["protein_assigned"] = int(meal.get("provided_protein", 0))
+
+    #                 response_menu.append(meal_entry)
+
+    #             # Calcula el precio total
+    #             total_price = calculate_price(
+    #                 [Meal(**m) if isinstance(m, dict) else m for m in response_menu], 0
+    #             )
+
+    #             # Respuesta basada en el plan seleccionado
+    #             if state.plan == 4:
+    #                 return {
+    #                     "menu": response_menu,
+    #                     "price": total_price,
+    #                     "message": "Your full menu is ready!",
+    #                     "nutrition": {
+    #                         "tmb": tmb,
+    #                         "tdee": tdee,
+    #                         "calorie_target": calorie_target,
+    #                         "protein_needed": daily_protein_target,  # Proteína total necesaria
+    #                         "macros": macros,
+    #                         "totals": {  # Totales de todo el día
+    #                             "protein_total": total_protein,
+    #                             "carbs_total": total_carbs,
+    #                             "fat_total": total_fat,
+    #                             "calories_total": total_calories,
+    #                         },
+    #                     },
+    #                     "current_step": state.current_step,
+    #                 }
+    #             else:
+    #                 return {
+    #                     "menu": response_menu,
+    #                     "price": total_price,
+    #                     "message": "Your menu is ready!",
+    #                     "protein_needed": daily_protein_target,  # Solo mostrar proteína necesaria
+    #                     "current_step": state.current_step,
+    #                 }
+    #         except Exception as e:
+    #             tb = traceback.format_exc()
+    #             print(f"[ERROR] menu generation failed for session {session_id}:\n{tb}")
+    #             return JSONResponse(
+    #                 status_code=500,
+    #                 content={"error": "internal_server_error", "detail": str(e), "trace": tb},
+    #             )
+
+    # else:
+    #     step_to_render_name = "start"
+
+    # state.current_step = step_to_render_name
+    # sessions[session_id] = state.model_dump()
+    # return get_form_fields(state.current_step, state)
+
     elif step_name == "review":
             try:
-                # Si el usuario seleccionó un template, configúralo y calcula el target
-                if "template_id" in answer:
-                    state.template_id = answer.get("template_id")
-
-                    # Calcula la semana seleccionada basada en la lógica de corte jueves 22:00
-                    now = datetime.datetime.utcnow()
-                    weekday = now.weekday()  # Monday=0
-                    thursday_cutoff = datetime.datetime.combine(
-                        now + datetime.timedelta(days=(3 - weekday)).date(),
-                        datetime.time(hour=22, minute=0)
-                    )
-                    if now <= thursday_cutoff:
-                        sunday = now + datetime.timedelta(days=(6 - weekday))
-                    else:
-                        sunday = now + datetime.timedelta(days=(6 - weekday + 7))
-                    iso = sunday.date().isocalendar()
-                    state.selected_week = f"{iso[0]}-W{iso[1]}"
-
-                # Valida que sea posible generar un menú
-                assessment = assess_menu_possibility(state)
-                if not assessment["ok"]:
-                    return {
-                        "question": assessment.get("message", "Could not generate menu with current settings."),
-                        "fields": [],
-                        "current_step": state.current_step,
-                        "issue": assessment.get("reason"),
-                        "details": assessment.get("details", {}),
-                    }
-
-                # Genera el menú base (Objetos Meal)
-                base_menu_objs = generate_menu(state)
-
-                # Calcula calorías objetivo y macros
+                # Calculations for TMB, TDEE, and target macros
                 weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
                 height_cm = to_cm(state.height, state.height_unit) if state.height else None
                 tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
@@ -1218,102 +1368,56 @@ async def next_step(request: Request):
                 )
                 calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
                 macros = calc_macros(calorie_target, state.objective, weight_kg)
-
-                # Ajusta proteína y calorías dinámicamente por comida
                 daily_protein_target = macros.get("protein_grams", 0)
-                menu_with_protein = allocate_protein_to_menu(
-                    state, base_menu_objs, daily_protein_target
-                )
+                menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
 
-                # **Calcula totales del día**
+                # Calculate totals for the day
                 total_protein = sum((meal.get("provided_protein", 0) for meal in menu_with_protein))
                 total_carbs = sum((meal.get("carbs_assigned", 0) for meal in menu_with_protein))
                 total_fat = sum((meal.get("fat_assigned", 0) for meal in menu_with_protein))
                 total_calories = sum((meal.get("calories", 0) for meal in menu_with_protein))
 
-                # Print debug information about daily totals
-                print("[DEBUG] Daily macronutrient totals:")
+                # Debugging totals
+                print("[DEBUG] Daily Totals:")
                 print(f"- Total Protein: {total_protein} g")
-                print(f"- Total Carbohydrates: {total_carbs} g")
+                print(f"- Total Carbs: {total_carbs} g")
                 print(f"- Total Fats: {total_fat} g")
-                print(f"- Total Calories: {total_calories} kcal")
+                print(f"- Total Calories: {total_calories} kcal (Target: {calorie_target} kcal)")
 
-                # Modifica la respuesta según el plan
-                response_menu = []
-                for meal in menu_with_protein:
-                    meal_entry = dict(meal)
-                    if state.plan == 4:  # Plan 4: Desglose completo de macronutrientes
-                        day_meals = [
-                            x
-                            for x in menu_with_protein
-                            if x.get("day_index") == meal.get("day_index")
-                        ]
-                        total_cal_day = sum((mm.get("calories", 0) or 0) for mm in day_meals) or 1
-                        frac = (meal.get("calories", 0) or 0) / total_cal_day
-                        meal_entry["calories_assigned"] = int(
-                            round((calorie_target or 0) * frac)
-                        ) if calorie_target else meal.get("calories")
-                        meal_entry["protein_assigned"] = int(meal.get("provided_protein", 0))
-                        meal_entry["fat_assigned"] = int(
-                            round((macros.get("fat_grams", 0) * frac))
-                        ) if macros else 0
-                        meal_entry["carbs_assigned"] = int(
-                            round((macros.get("carbs_grams", 0) * frac))
-                        ) if macros else 0
-                    else:  # Otros planes: Solo mostrar proteína asignada
-                        meal_entry["protein_assigned"] = int(meal.get("provided_protein", 0))
-
-                    response_menu.append(meal_entry)
-
-                # Calcula el precio total
-                total_price = calculate_price(
-                    [Meal(**m) if isinstance(m, dict) else m for m in response_menu], 0
-                )
-
-                # Respuesta basada en el plan seleccionado
+                # Response for the plan
                 if state.plan == 4:
                     return {
-                        "menu": response_menu,
-                        "price": total_price,
-                        "message": "Your full menu is ready!",
+                        "menu": menu_with_protein,
                         "nutrition": {
                             "tmb": tmb,
                             "tdee": tdee,
                             "calorie_target": calorie_target,
-                            "protein_needed": daily_protein_target,  # Proteína total necesaria
-                            "macros": macros,
-                            "totals": {  # Totales de todo el día
+                            "protein_needed": daily_protein_target,
+                            "totals": {
                                 "protein_total": total_protein,
                                 "carbs_total": total_carbs,
                                 "fat_total": total_fat,
                                 "calories_total": total_calories,
                             },
                         },
-                        "current_step": state.current_step,
                     }
                 else:
                     return {
-                        "menu": response_menu,
-                        "price": total_price,
-                        "message": "Your menu is ready!",
-                        "protein_needed": daily_protein_target,  # Solo mostrar proteína necesaria
-                        "current_step": state.current_step,
+                        "menu": menu_with_protein,
+                        "nutrition": {
+                            "tmb": tmb,
+                            "tdee": tdee,
+                            "calorie_target": calorie_target,
+                            "protein_needed": daily_protein_target,
+                        },
                     }
             except Exception as e:
                 tb = traceback.format_exc()
-                print(f"[ERROR] menu generation failed for session {session_id}:\n{tb}")
+                print(f"[ERROR] Failed to generate menu: {tb}")
                 return JSONResponse(
                     status_code=500,
                     content={"error": "internal_server_error", "detail": str(e), "trace": tb},
                 )
-
-    else:
-        step_to_render_name = "start"
-
-    state.current_step = step_to_render_name
-    sessions[session_id] = state.model_dump()
-    return get_form_fields(state.current_step, state)
-
 
 # --- Additional endpoints (templates, scheduling, feedback, orders) ---
 
