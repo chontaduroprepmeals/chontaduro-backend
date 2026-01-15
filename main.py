@@ -1029,7 +1029,7 @@ async def next_step(request: Request):
                 if "template_id" in answer:
                     state.template_id = answer.get("template_id")
 
-                    # Calcula la semana seleccionada basada en la lógica de corte los jueves a las 22:00
+                    # Calcula la semana seleccionada basada en la lógica de corte jueves 22:00
                     now = datetime.datetime.utcnow()
                     weekday = now.weekday()  # Monday=0
                     thursday_cutoff = datetime.datetime.combine(
@@ -1083,11 +1083,17 @@ async def next_step(request: Request):
                     state, base_menu_objs, daily_protein_target
                 )
 
-                # Modifica el menú según el plan seleccionado
+                # **Calcula totales del día**
+                total_protein = sum((meal.get("provided_protein", 0) for meal in menu_with_protein))
+                total_carbs = sum((meal.get("carbs_assigned", 0) for meal in menu_with_protein))
+                total_fat = sum((meal.get("fat_assigned", 0) for meal in menu_with_protein))
+                total_calories = sum((meal.get("calories", 0) for meal in menu_with_protein))
+
+                # Modifica la respuesta según el plan
                 response_menu = []
                 for meal in menu_with_protein:
-                    meal_entry = dict(meal)  # Convierte el objeto Meal en un dict
-                    if state.plan == 4:  # Plan 4: Desglose completo
+                    meal_entry = dict(meal)
+                    if state.plan == 4:  # Plan 4: Desglose completo de macronutrientes
                         day_meals = [
                             x
                             for x in menu_with_protein
@@ -1115,7 +1121,7 @@ async def next_step(request: Request):
                     [Meal(**m) if isinstance(m, dict) else m for m in response_menu], 0
                 )
 
-                # Respuesta basada en el tipo de plan seleccionado
+                # Respuesta basada en el plan seleccionado
                 if state.plan == 4:
                     return {
                         "menu": response_menu,
@@ -1127,6 +1133,12 @@ async def next_step(request: Request):
                             "calorie_target": calorie_target,
                             "protein_needed": daily_protein_target,  # Proteína total necesaria
                             "macros": macros,
+                            "totals": {  # Totales de todo el día
+                                "protein_total": total_protein,
+                                "carbs_total": total_carbs,
+                                "fat_total": total_fat,
+                                "calories_total": total_calories,
+                            },
                         },
                         "current_step": state.current_step,
                     }
