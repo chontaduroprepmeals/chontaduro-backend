@@ -744,12 +744,11 @@ def generate_menu_using_template(state: SessionState) -> List[Meal]:
 
 def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int]) -> List[Dict[str, Any]]:
     """
-    Dynamically adjust protein distribution across meals, respecting the daily protein target and meal limits (35-40g per meal).
+    Dynamically distribute protein across meals, respecting daily protein needs and limits (maximum 35-40g per meal).
     """
     if not menu:
         return []
 
-    # Define the number of meals per day based on the plan
     plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
     num_main, num_break = plan_map.get(state.plan, (1, 0))
     meals_per_day = num_main + num_break
@@ -757,21 +756,12 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
     total_meals = min(len(menu), days * meals_per_day) if meals_per_day > 0 else len(menu)
 
     # Total daily protein target
-    daily_protein = int(macros_daily_protein or 0)
-    if daily_protein == 0:
-        daily_protein = 60  # Default fallback
+    daily_protein_target = int(macros_daily_protein or 0)
+    if daily_protein_target == 0:
+        daily_protein_target = 40  # Default fallback for safety
 
-    # Debug logging for daily protein target
-    print("[DEBUG] Daily protein target:", daily_protein, "g")
-
-    # Protein distribution per meal
-    per_meal_protein = daily_protein // total_meals if total_meals > 0 else daily_protein
-
-    # Ensure at least a valid range
-    per_meal_protein = min(40, max(35, per_meal_protein))
-
-    # Track leftover protein (for fine-tuning distribution)
-    leftover_protein = daily_protein - (per_meal_protein * total_meals)
+    # Log target for debugging
+    print("[DEBUG] Daily protein target:", daily_protein_target, "g")
 
     out = []
     idx = 0
@@ -779,19 +769,25 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
         for m_idx_in_day in range(meals_per_day):
             if idx >= len(menu):
                 break
-
             meal_obj = menu[idx]
             meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
 
-            # Adjust protein dynamically
-            meal_dict["provided_protein"] = per_meal_protein + (1 if leftover_protein > 0 and idx < leftover_protein else 0)
+            # Dynamically allocate protein based on daily needs
+            dynamic_protein = daily_protein_target // total_meals
+            leftover_protein = daily_protein_target % total_meals
+            meal_dict["provided_protein"] = dynamic_protein + (
+                1 if idx < leftover_protein else 0
+            )
 
-            # Validate limits (35-40g per meal)
-            meal_dict["provided_protein"] = min(40, max(35, meal_dict["provided_protein"]))
+            # Respect the upper limit of 35-40 g, adjust only if higher
+            if meal_dict["provided_protein"] > 40:  # Cap maximum
+                meal_dict["provided_protein"] = 40
+            elif meal_dict["provided_protein"] < 20:  # Allow small adjustments for low needs
+                meal_dict["provided_protein"] = 20  
 
             # Debug adjusted protein allocation
             print(f"[DEBUG] Day {day + 1}, Meal {idx + 1}: {meal_dict.get('name', 'Unnamed Meal')}")
-            print(f"  - Adjusted Protein: {meal_dict['provided_protein']} g")
+            print(f"  - Dynamic Protein: {meal_dict['provided_protein']} g")
 
             # Add meal to output
             meal_dict["day_index"] = day
