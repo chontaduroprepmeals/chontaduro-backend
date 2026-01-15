@@ -1369,7 +1369,24 @@ async def next_step(request: Request):
                 calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
                 macros = calc_macros(calorie_target, state.objective, weight_kg)
                 daily_protein_target = macros.get("protein_grams", 0)
+
+                # Generate the base menu objects
+                base_menu_objs = generate_menu(state)
+                if not base_menu_objs:
+                    print("[ERROR] No menu generated: base_menu_objs is empty.")
+                    return {
+                        "error": "No menu generated due to invalid input or empty base_menu_objs.",
+                        "current_step": state.current_step,
+                    }
+
+                # Adjust protein and validate meals
                 menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
+                if not menu_with_protein:
+                    print("[ERROR] Menu with protein is empty. Validation failed.")
+                    return {
+                        "error": "Menu failed to allocate protein or meals are not valid.",
+                        "current_step": state.current_step,
+                    }
 
                 # Calculate totals for the day
                 total_protein = sum((meal.get("provided_protein", 0) for meal in menu_with_protein))
@@ -1384,10 +1401,17 @@ async def next_step(request: Request):
                 print(f"- Total Fats: {total_fat} g")
                 print(f"- Total Calories: {total_calories} kcal (Target: {calorie_target} kcal)")
 
-                # Response for the plan
+                # Generate response for the plan
+                response_menu = []
+                for meal in menu_with_protein:
+                    meal_entry = dict(meal)
+                    meal_entry["protein_assigned"] = meal.get("provided_protein", 0)
+                    response_menu.append(meal_entry)
+
                 if state.plan == 4:
                     return {
-                        "menu": menu_with_protein,
+                        "menu": response_menu,
+                        "message": "Your full menu is ready!",
                         "nutrition": {
                             "tmb": tmb,
                             "tdee": tdee,
@@ -1403,7 +1427,8 @@ async def next_step(request: Request):
                     }
                 else:
                     return {
-                        "menu": menu_with_protein,
+                        "menu": response_menu,
+                        "message": "Your menu is ready!",
                         "nutrition": {
                             "tmb": tmb,
                             "tdee": tdee,
