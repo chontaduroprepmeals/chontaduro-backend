@@ -271,9 +271,12 @@ def calc_calorie_target(tdee: float, objective: str) -> Optional[float]:
         return None
     obj = (objective or "").lower()
     if obj in ["lose fat", "lose", "fat"]:
-        return round(tdee - 400)
+        # Reduce por un 20% del TDEE (pérdida de grasa más sostenible)
+        return round(tdee * 0.80)
     if obj in ["gain muscle", "gain", "muscle"]:
-        return round(tdee + 350)
+        # Incrementa un 15% para ganancia muscular
+        return round(tdee * 1.15)
+    # Default: mantener el peso
     return round(tdee)
 
 def calc_macros(calories: int, objective: str, weight_kg: Optional[float]) -> Dict[str, Any]:
@@ -489,6 +492,29 @@ def find_meal_by_name(name: str) -> Optional[Meal]:
             # fallback minimal
             return Meal(name=found.get("name",""), type=found.get("type","Main Meal"), ingredients=found.get("ingredients",[]), calories=int(found.get("calories",0)), price=float(found.get("price",0.0)), image_url=found.get("image_url"))
     return None
+
+def generate_daily_menu(meals: list, target_calories: float) -> dict:
+    daily_menu = {"breakfast": None, "main_meal_1": None, "main_meal_2": None}
+    total_calories = 0
+
+    # Filtra desayuno dentro del rango calórico ideal
+    breakfast_options = [meal for meal in meals if meal["type"] == "Breakfast" and 350 <= meal["calories"] <= 400]
+    daily_menu["breakfast"] = next((meal for meal in breakfast_options if total_calories + meal["calories"] <= target_calories), None)
+    if daily_menu["breakfast"]:
+        total_calories += daily_menu["breakfast"]["calories"]
+
+    # Filtra comidas principales para mantener al día cerca del objetivo calórico
+    main_meal_options = [meal for meal in meals if meal["type"] == "Main Meal"]
+    selected_meals = [meal for meal in main_meal_options if total_calories + meal["calories"] <= target_calories]
+    
+    if len(selected_meals) >= 2:
+        daily_menu["main_meal_1"] = selected_meals[0]
+        daily_menu["main_meal_2"] = selected_meals[1]
+        total_calories += selected_meals[0]["calories"] + selected_meals[1]["calories"]
+
+    # Validación final de calorías
+    return daily_menu if total_calories <= target_calories else None
+
 
 def expand_template_to_schedule(template: Dict[str, Any], week: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -1269,7 +1295,41 @@ async def add_protein(request: Request):
                 }
                 base_menu_objs.append(Meal(**partial))
     else:
-        base_menu_objs = generate_menu(state)
+            # Generamos base menú (Meal objects) usando validación calórica diaria y semanal
+            weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
+            height_cm = to_cm(state.height, state.height_unit) if state.height else None
+            tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+            tdee = round(
+                tmb * compute_activity_factor(
+                    state.activity_days_bucket or "0",
+                    state.activity_duration_bucket or "<30",
+                    state.activity_intensity or "Low",
+                ),
+                1,
+            ) if tmb else None
+            calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+
+            # Generamos el menú semanal verificando que cada día cumpla las calorías objetivo
+            weekly_menu = generate_weekly_menu(MEALS_DATA, calorie_target)
+            if not weekly_menu:
+                return {
+                    "message": "No se pudo generar un menú con las calorías objetivo. Intenta ajustes en tus preferencias.",
+                }
+
+            # Asigna el menú generado a la sesión actual
+            state.menu = weekly_menu
+            sessions[session_id] = state.model_dump()
+
+            return {
+                "menu": weekly_menu,
+                "nutrition": {
+                    "tmb": tmb,
+                    "tdee": tdee,
+                    "calorie_target": calorie_target,
+                },
+                "current_step": state.current_step,
+                "message": "Tu menú se generó correctamente.",
+            }
 
     # recompute macros/daily protein
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
@@ -1358,6 +1418,21 @@ async def swap_meal(request: Request):
     sessions[sid] = state.model_dump()
     total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0))
     return {"menu": state.menu, "price": total_price, "message": f"Swapped '{meal_to_swap}' -> '{new_meal.name}'.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
+
+@app.post("/validate-menu")
+async def validate_menu(request: Request):
+    payload = await request.json()
+    session_id = payload.get("session_id")
+    if not session_id or session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    state = SessionState(**sessions[session_id])
+    weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
+    height_cm = to_cm(state.height, state.height_unit) if state.height else None
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tdee = round(tmb * compute_activity_factor(state.activity_days_bucket, state.activity_duration_bucket, state.activity_intensity), 2) if tmb else None
+    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+    weekly_menu = generate_weekly_menu(MEALS_DATA, calorie_target)
+    return {"menu": weekly_menu, "calorie_target": calorie_target, "details": {"tmb": tmb, "tdee": tdee}}
 
 
 @app.post("/redo-menu")
