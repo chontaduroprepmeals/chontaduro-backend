@@ -746,7 +746,7 @@ def generate_menu_using_template(state: SessionState) -> List[Meal]:
 
 def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int]) -> List[Dict[str, Any]]:
     """
-    Attach provided_protein to each meal in the returned list of dicts.
+    Attach provided_protein, carbs_assigned, and fat_assigned to each meal in the returned list of dicts.
     Distributes:
       - baseline daily_protein (macros) evenly per day & per meal
       - plus state.extra_protein_grams (global) evenly across ALL meals
@@ -754,22 +754,22 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
     """
     if not menu:
         return []
-    plan_map = {1:(1,0), 2:(2,0), 3:(1,1), 4:(2,1)}
-    num_main, num_break = plan_map.get(state.plan, (1,0))
+    plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
+    num_main, num_break = plan_map.get(state.plan, (1, 0))
     meals_per_day = num_main + num_break
     days = state.days or max(1, len(menu) // max(1, meals_per_day))
     total_meals = min(len(menu), days * meals_per_day) if meals_per_day > 0 else len(menu)
     if total_meals == 0:
         total_meals = len(menu)
 
-    # baseline daily protein target
+    # Baseline daily protein target
     daily_protein = int(macros_daily_protein or 0)
     if daily_protein == 0:
         daily_protein = 60
 
-    # global extra protein (in grams)
+    # Global extra protein (in grams)
     extra_global = int(state.extra_protein_grams or 0)
-    # split extra_global evenly across ALL meals
+    # Split extra_global evenly across ALL meals
     per_extra_global = extra_global // total_meals if total_meals > 0 else 0
     rem_extra_global = extra_global - (per_extra_global * total_meals)
 
@@ -782,19 +782,41 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
             if idx >= len(menu):
                 break
             provided_base = per_base + (1 if m_idx_in_day < remainder else 0)
-            # global share for this meal (distribute remainder to first N meals)
+            # Global share for this meal (distribute remainder to first N meals)
             extra_for_meal_from_global = per_extra_global + (1 if idx < rem_extra_global else 0)
-            # per-meal map extras
+            # Per-meal map extras
             extra_for_meal_specific = int(state.extra_protein_map.get(idx, 0) if isinstance(state.extra_protein_map, dict) else 0)
             meal_obj = menu[idx]
             meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
+
+            # Calculate protein for the meal
             meal_dict["provided_protein"] = int(provided_base + extra_for_meal_from_global + extra_for_meal_specific)
+            
+            # Calculate other macronutrients for the meal (based on remaining calories)
+            protein_calories = meal_dict["provided_protein"] * 4
+            total_calories = meal_dict.get("calories", 0)
+            remaining_calories = max(total_calories - protein_calories, 0)
+            fat_calories = remaining_calories * 0.25  # 25% of remaining goes to fats
+            carbs_calories = remaining_calories - fat_calories
+            
+            # Assign macronutrients back to the meal
+            meal_dict["fat_assigned"] = round(fat_calories / 9, 2)  # Grams of fat
+            meal_dict["carbs_assigned"] = round(carbs_calories / 4, 2)  # Grams of carbs
+            
+            # Debugging print statements
+            print(f"[DEBUG] Day {day + 1}, Meal {idx + 1}: {meal_dict.get('name', 'Unnamed Meal')}")
+            print(f"  - Provided Protein: {meal_dict['provided_protein']} g")
+            print(f"  - Fat Assigned: {meal_dict['fat_assigned']} g")
+            print(f"  - Carbs Assigned: {meal_dict['carbs_assigned']} g")
+            print(f"  - Total Calories: {total_calories} kcal")
+
+            # Add meal to output list
             meal_dict["day_index"] = day
             meal_dict["meal_index"] = idx
             out.append(meal_dict)
             idx += 1
 
-    # leftover meals (if any)
+    # Leftover meals (if any)
     while idx < len(menu):
         meal_obj = menu[idx]
         per_base = daily_protein // max(1, meals_per_day)
@@ -802,6 +824,24 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
         extra_for_meal_specific = int(state.extra_protein_map.get(idx, 0) if isinstance(state.extra_protein_map, dict) else 0)
         meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
         meal_dict["provided_protein"] = int(per_base + extra_for_meal_from_global + extra_for_meal_specific)
+        
+        # Calculate other macronutrients
+        protein_calories = meal_dict["provided_protein"] * 4
+        total_calories = meal_dict.get("calories", 0)
+        remaining_calories = max(total_calories - protein_calories, 0)
+        fat_calories = remaining_calories * 0.25
+        carbs_calories = remaining_calories - fat_calories
+
+        meal_dict["fat_assigned"] = round(fat_calories / 9, 2)
+        meal_dict["carbs_assigned"] = round(carbs_calories / 4, 2)
+
+        # Debugging leftover meal
+        print(f"[DEBUG] Leftover Meal {idx + 1}: {meal_dict.get('name', 'Unnamed Meal')}")
+        print(f"  - Provided Protein: {meal_dict['provided_protein']} g")
+        print(f"  - Fat Assigned: {meal_dict['fat_assigned']} g")
+        print(f"  - Carbs Assigned: {meal_dict['carbs_assigned']} g")
+        print(f"  - Total Calories: {total_calories} kcal")
+        
         meal_dict["day_index"] = idx // max(1, meals_per_day)
         meal_dict["meal_index"] = idx
         out.append(meal_dict)
@@ -1088,6 +1128,13 @@ async def next_step(request: Request):
                 total_carbs = sum((meal.get("carbs_assigned", 0) for meal in menu_with_protein))
                 total_fat = sum((meal.get("fat_assigned", 0) for meal in menu_with_protein))
                 total_calories = sum((meal.get("calories", 0) for meal in menu_with_protein))
+
+                # Print debug information about daily totals
+                print("[DEBUG] Daily macronutrient totals:")
+                print(f"- Total Protein: {total_protein} g")
+                print(f"- Total Carbohydrates: {total_carbs} g")
+                print(f"- Total Fats: {total_fat} g")
+                print(f"- Total Calories: {total_calories} kcal")
 
                 # Modifica la respuesta según el plan
                 response_menu = []
