@@ -787,6 +787,7 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
 
             # Adjust calories dynamically
             original_calories = meal_dict.get("calories", 0)
+            target_calories_per_meal = calorie_target // total_meals if total_meals > 0 else calorie_target
             frac_calories = target_calories_per_meal / calorie_target if calorie_target > 0 else 1
             adjusted_calories = int(original_calories * frac_calories)
             meal_dict["calories"] = adjusted_calories    
