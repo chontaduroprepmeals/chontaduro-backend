@@ -1992,6 +1992,13 @@ async def swap_meal(request: Request):
 
     new_meal = random.choice(potential)
 
+    # Ajustar precio según categoría (replaced_type)
+    if replaced_type == "breakfast":
+        new_meal.price = 10.0  # Precio fijo para desayunos
+    elif replaced_type in ["lunch", "dinner", "main meal"]:
+        new_meal.price = 15.0  # Precio fijo para almuerzos/cenas
+    
+
     # Build base_menu_objs from current state.menu
     base_menu_objs: List[Meal] = []
     for m in state.menu:
@@ -2028,7 +2035,11 @@ async def swap_meal(request: Request):
     menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
     state.menu = menu_with_protein
     sessions[sid] = state.model_dump()
-    total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0))
+
+    # Cálculo de precio total con lógica de envío gratis
+    precio_menu = sum(m.get("price", 0.0) for m in state.menu)
+    envio = 0.0 if precio_menu >= 100.0 else 10.0  # Envío gratis si precio total supera $100
+    total_price = precio_menu + envio
     return {"menu": state.menu, "price": total_price, "message": f"Swapped '{meal_to_swap}' -> '{new_meal.name}'.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
 
 @app.post("/validate-menu")
