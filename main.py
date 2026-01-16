@@ -787,10 +787,13 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
 
             # Adjust calories dynamically
             original_calories = meal_dict.get("calories", 0)
-            target_calories_per_meal = calorie_target // total_meals if total_meals > 0 else calorie_target
-            frac_calories = target_calories_per_meal / calorie_target if calorie_target > 0 else 1
+            target_calories_per_meal = max(calorie_target // total_meals, 1) if total_meals > 0 else calorie_target
+            frac_calories = target_calories_per_meal / total_calories if total_calories > 0 else 1
             adjusted_calories = int(original_calories * frac_calories)
-            meal_dict["calories"] = adjusted_calories    
+
+            # Ensure adjusted calories stay within a reasonable range (50% to 150% of original)
+            adjusted_calories = max(int(original_calories * 0.5), min(int(original_calories * 1.5), adjusted_calories))
+            meal_dict["calories"] = adjusted_calories
 
             # Debug adjusted protein allocation
             print(f"[DEBUG] Day {day + 1}, Meal {idx + 1}: {meal_dict.get('name', 'Unnamed Meal')}")
