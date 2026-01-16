@@ -755,7 +755,7 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
     days = state.days or max(1, len(menu) // max(1, meals_per_day))
     total_meals = min(len(menu), days * meals_per_day) if meals_per_day > 0 else len(menu)
     # Calcular las calorías totales de los platos disponibles
-    total_calories = sum(m.get("calories", 0) for m in menu)  # Sumar las calorías originales
+    total_calories = sum(m.calories for m in menu if hasattr(m, "calories")) # Sumar las calorías originales
 
     # Total daily protein target
     daily_protein_target = int(macros_daily_protein or 0)
