@@ -742,7 +742,7 @@ def generate_menu_using_template(state: SessionState) -> List[Meal]:
                 menu_objs.append(Meal(name=name or "Unknown", type="Main Meal", ingredients=[], calories=0, price=0.0))
     return menu_objs
 
-def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int]) -> List[Dict[str, Any]]:
+def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int], calorie_target: int) -> List[Dict[str, Any]]:
     """
     Dynamically distribute protein across meals, respecting daily protein needs and limits (maximum 35-40g per meal).
     """
