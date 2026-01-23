@@ -1689,29 +1689,32 @@ def calculate_total(order: Order):
 @app.post("/create-checkout-session")
 def create_checkout_session(order: Order):
     try:
-        # Calcular el total del carrito
-        total_data = calculate_total(order)
-        total_amount = total_data["total"] * 100  # Stripe trabaja en centavos
+        # Inicializar la lista de productos
+        line_items = []
+
+        # Agregar cada producto del pedido a la lista de productos
+        for item in order.items:
+            line_items.append({
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {
+                        "name": item.item_type,  # Nombre del producto enviado en el pedido
+                    },
+                    "unit_amount": calculate_price([item], 0) * 100,  # Precio en centavos
+                },
+                "quantity": item.quantity,  # Cantidad del producto
+            })
 
         # Crear la sesión de pago en Stripe
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
-            line_items=[
-                {
-                    "price_data": {
-                        "currency": "usd",
-                        "product_data": {
-                            "name": "Pedido Chontaduro Prep Meals",
-                        },
-                        "unit_amount": int(total_amount),
-                    },
-                    "quantity": 1,
-                }
-            ],
+            line_items=line_items,  # Usar la lista creada
             mode="payment",
             success_url="https://chontaduro-backend.onrender.com/success",
             cancel_url="https://chontaduro-backend.onrender.com/cancel",
         )
+
+        # Devolver la URL de checkout
         return {"checkout_url": session.url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
