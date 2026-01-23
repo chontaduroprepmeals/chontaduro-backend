@@ -21,6 +21,9 @@ load_dotenv()
 # Configurar la clave de Stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
+# Prueba temporal para asegurar que Stripe API Key esté configurada
+print("Stripe API Key:", os.getenv("STRIPE_SECRET_KEY"))
+
 app = FastAPI()
 
 
