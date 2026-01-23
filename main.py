@@ -12,6 +12,14 @@ import random, json, traceback, datetime, math, hashlib
 from typing import List, Dict, Any, Optional
 from delivery_allowed_api import register_delivery_routes
 from fastapi.responses import JSONResponse
+import stripe
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
+
+# Configurar la clave de Stripe
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 app = FastAPI()
 
@@ -111,9 +119,7 @@ load_templates()
 # --- SESSIONS (in-memory) ---
 sessions: Dict[str, Dict[str, Any]] = {}
 
-
 # --- FLOW STEPS ---
-
 STEPS = {
     "start": "pick_plan",
     "pick_plan": "objective",
@@ -177,6 +183,14 @@ class NextStepRequest(BaseModel):
     answer: Dict[str, Any] = Field(default_factory=dict)
     model_config = {"extra": "allow"}
 
+# Modelo para definir un ítem del pedido
+class OrderItem(BaseModel):
+    item_type: str  # "main_menu" o "breakfast"
+    quantity: int
+    less_protein: bool = False  # Opcional, indica si el menú tiene menos proteína
+
+class Order(BaseModel):
+    items: list[OrderItem]
 
 # --- HELPERS: normalization for incoming requests (tolerant) ---
 def normalize_step_name(step: str) -> str:
@@ -787,18 +801,50 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
             meal_obj = menu[idx]
             meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
 
-            # Dynamically allocate protein based on daily needs
-            dynamic_protein = daily_protein_target // total_meals
-            leftover_protein = daily_protein_target % total_meals
-            meal_dict["provided_protein"] = dynamic_protein + (
-                1 if idx < leftover_protein else 0
+            protein_per_meal = total_daily_protein // total_meals
+            calories_per_meal = calorie_target // total_meals
+
+            # Generar dinámica
+            meal_with_macros = process_meal_data(
+                meal=menu[idx],
+                protein=protein_per_meal,
+                calories=calories_per_meal
             )
+
+            meal_dict["provided_protein"] = meal_with_macros.protein
+            meal_dict["calories"] = meal_with_macros.calories
+
+            # Dynamically allocate protein based on daily needs
+            # dynamic_protein = daily_protein_target // total_meals
+            # leftover_protein = daily_protein_target % total_meals
+            # meal_dict["provided_protein"] = dynamic_protein + (
+            #     1 if idx < leftover_protein else 0
+            # )
+
+            protein_per_meal = daily_protein_target // total_meals
+            calories_per_meal = target_calories_per_meal
+
+            # Generar dinámica: proteínas, calorías, grasas, carbohidratos
+            meal_with_macros = process_meal_data(
+                meal=meal_obj,
+                protein=protein_per_meal,
+                calories=calories_per_meal,
+                fat_ratio=0.25,  # 25% del objetivo calórico para grasas
+                carb_ratio=0.50  # 50% del objetivo calórico para carbohidratos
+            )
+
+            # Asignar dinámicamente los valores generados
+            meal_dict["provided_protein"] = meal_with_macros.protein
+            meal_dict["calories"] = meal_with_macros.calories
+            meal_dict["fat_assigned"] = meal_with_macros.fat
+            meal_dict["carbs_assigned"] = meal_with_macros.carbs
 
             # Respect the upper limit of 35-40 g, adjust only if higher
             if meal_dict["provided_protein"] > 40:  # Cap maximum
                 meal_dict["provided_protein"] = 40
             elif meal_dict["provided_protein"] < 20:  # Allow small adjustments for low needs
                 meal_dict["provided_protein"] = 20  
+
 
             # Adjust calories dynamically
             original_calories = getattr(meal_obj, "calories", 0)  # Acceso seguro a calorías
@@ -808,8 +854,6 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
             frac_calories = target_calories_per_meal / max(total_calories, 1)  # Evitar división por cero
             adjusted_calories = int(original_calories * frac_calories)
 
-
-            # Validar extremos de calorías ajustadas
             # Validar extremos de calorías ajustadas (máximo y mínimo)
             adjusted_calories = max(
                 100,  # Asignar mínimo de 100 calorías
@@ -824,6 +868,8 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
             print(f"[DEBUG] Day {day + 1}, Meal {idx + 1}: {meal_dict.get('name', 'Unnamed Meal')}")
             print(f"  - Dynamic Protein: {meal_dict['provided_protein']} g")
             print(f"  - Adjusted Calories: {meal_dict['calories']} kcal")
+            print(f"  - Grasas asignadas: {meal_dict['fat_assigned']} g")
+            print(f"  - Carbohidratos asignados: {meal_dict['carbs_assigned']} g")
 
             # Add meal to output
             meal_dict["day_index"] = day
@@ -880,6 +926,39 @@ def assess_menu_possibility(state: SessionState) -> Dict[str, Any]:
         return {"ok": False, "reason":"not_enough_breakfasts", "message":"Not enough Breakfast options.", "details": details}
     return {"ok": True, "details": details}
 
+def process_meal_data(meal: Meal, protein: int, calories: int, fat_ratio: float = 0.25, carb_ratio: float = 0.50) -> Meal:
+    """
+    Procesar dinámicamente las macros (calorías, proteínas, grasas y carbohidratos) para cada comida.
+    Args:
+        meal (Meal): La comida original.
+        protein (int): Gramos de proteína asignados dinámicamente.
+        calories (int): Calorías totales asignadas dinámicamente.
+        fat_ratio (float): Porcentaje de calorías asignadas a grasas. Default 25%.
+        carb_ratio (float): Porcentaje de calorías asignadas a carbohidratos. Default 50%.
+    Returns:
+        Meal: La comida dinámica con macros calculadas.
+    """
+    # Calcular calorías de proteína
+    protein_calories = protein * 4  # 1 g de proteína = 4 kcal
+
+    # Calcular calorías y gramos de grasa
+    fat_calories = calories * fat_ratio
+    fat_grams = fat_calories / 9  # 1 g de grasa = 9 kcal
+
+    # Calcular calorías y gramos de carbohidratos
+    carb_calories = calories - (protein_calories + fat_calories)
+    carb_grams = carb_calories / 4  # 1 g de carb = 4 kcal
+
+    # Asegurar que no haya valores negativos
+    fat_grams = max(0, round(fat_grams))
+    carb_grams = max(0, round(carb_grams))
+
+    # Regresar el objeto Meal con valores dinámicos
+    meal.calories = calories
+    meal.protein = protein
+    meal.fat = fat_grams
+    meal.carbs = carb_grams
+    return meal
 
 # --- UI form definitions (unchanged) ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
@@ -1589,7 +1668,50 @@ async def redo_menu(request: Request):
     sessions[sid] = state.model_dump()
     total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], 0)
     return {"menu": state.menu, "price": total_price, "message":"Full menu regenerated.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
+# --- RUTAS RELACIONADAS CON STRIPE ---
 
+@app.post("/calculate-total")
+def calculate_total(order: Order):
+    total = 0
+    for item in order.items:
+        if item.item_type == "main_menu":
+            price = 13 if item.less_protein else 15
+        elif item.item_type == "breakfast":
+            price = 10
+        else:
+            raise HTTPException(status_code=400, detail="Invalid item type")
+        total += item.quantity * price
+    return {"total": total}
+
+@app.post("/create-checkout-session")
+def create_checkout_session(order: Order):
+    try:
+        # Calcular el total del carrito
+        total_data = calculate_total(order)
+        total_amount = total_data["total"] * 100  # Stripe trabaja en centavos
+
+        # Crear la sesión de pago en Stripe
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": {
+                            "name": "Pedido Chontaduro Prep Meals",
+                        },
+                        "unit_amount": int(total_amount),
+                    },
+                    "quantity": 1,
+                }
+            ],
+            mode="payment",
+            success_url="https://chontaduro-backend.onrender.com/success",
+            cancel_url="https://chontaduro-backend.onrender.com/cancel",
+        )
+        return {"checkout_url": session.url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 def calculate_price(menu: List[Meal], extra_protein: int) -> float:
     base = 0.0

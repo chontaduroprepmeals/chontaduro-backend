@@ -9,6 +9,17 @@
     "tags": ["vegetarian", "nut"]
   },
   {
+    "name": "Pollo con Champiñones y Vegetales",
+    "type": "main meal",
+    "ingredients": ["pollo", "champiñones", "pimientos rojos", "arroz integral", "ensalada mixta"],
+    "calories_per_100g": 120,
+    "protein_per_100g": 22,
+    "carbs_per_100g": 10,
+    "fat_per_100g": 3,
+    "image_url": "uploads/chicken_mushrooms.jpg",
+    "tags": ["high protein", "low carb"]
+  }, 
+  {
     "name": "Greek Yogurt Parfait",
     "type": "Breakfast",
     "ingredients": ["greek yogurt", "granola", "honey", "berries"],
