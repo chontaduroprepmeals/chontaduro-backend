@@ -1700,7 +1700,7 @@ def create_checkout_session(order: Order):
                     "product_data": {
                         "name": item.item_type,  # Nombre del producto enviado en el pedido
                     },
-                    "unit_amount": calculate_price([item], 0) * 100,  # Precio en centavos
+                    "unit_amount": int(calculate_price([item], 0) * 100),  # Convertir a entero
                 },
                 "quantity": item.quantity,  # Cantidad del producto
             })
