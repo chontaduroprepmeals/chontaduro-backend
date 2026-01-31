@@ -804,7 +804,7 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
             meal_obj = menu[idx]
             meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
 
-            protein_per_meal = total_daily_protein // total_meals
+            protein_per_meal = macros_daily_protein // total_meals
             calories_per_meal = calorie_target // total_meals
 
             # Generar dinámica
