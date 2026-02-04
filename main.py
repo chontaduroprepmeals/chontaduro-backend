@@ -5,7 +5,7 @@ os.makedirs("uploads", exist_ok=True)
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from upload_image import register_upload_routes
 from fastapi.staticfiles import StaticFiles
 import random, json, traceback, datetime, math, hashlib
@@ -15,17 +15,51 @@ from fastapi.responses import JSONResponse
 import stripe
 from dotenv import load_dotenv
 
+# SQLAlchemy imports (updated for modern syntax)
+from sqlalchemy import create_engine, Column, Integer, String, DateTime
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
 # Cargar variables de entorno
 load_dotenv()
 
 # Configurar la clave de Stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
-# Prueba temporal para asegurar que Stripe API Key esté configurada
-print("Stripe API Key:", os.getenv("STRIPE_SECRET_KEY"))
+# --- SQLite Database Configuration ---
+SQLITE_DATABASE_URL = "sqlite:///./app.db"
+
+# Define Base class for ORM models (PUT THIS HERE)
+class Base(DeclarativeBase):
+    pass
+
+# Create database engine
+engine = create_engine(SQLITE_DATABASE_URL, connect_args={"check_same_thread": False})
+
+# Create session maker
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Initialize database tables
+def init_db():
+    Base.metadata.create_all(bind=engine)
+
+init_db()
+
+# --- Database Models (User table) ---
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    creation_date = Column(DateTime, default=datetime.datetime.utcnow)
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        salt = "secret_salt_here"  # Use a secure salt
+        return hashlib.sha256((password + salt).encode()).hexdigest()
 
 app = FastAPI()
-
 
 # --- CORS ---
 app.add_middleware(
@@ -142,6 +176,9 @@ class Meal(BaseModel):
     ingredients: List[str] = Field(default_factory=list)
     calories: int = 0
     price: float = 0.0
+    protein: Optional[int] = None  # Agregar el campo
+    fat: Optional[int] = None  # Agrega "grasas" si es usado
+    carbs: Optional[int] = None  # Agrega "carbohidratos" si es usado
     image_url: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     model_config = {"extra": "ignore"}
@@ -941,26 +978,23 @@ def process_meal_data(meal: Meal, protein: int, calories: int, fat_ratio: float 
     Returns:
         Meal: La comida dinámica con macros calculadas.
     """
-    # Calcular calorías de proteína
-    protein_calories = protein * 4  # 1 g de proteína = 4 kcal
-
-    # Calcular calorías y gramos de grasa
-    fat_calories = calories * fat_ratio
-    fat_grams = fat_calories / 9  # 1 g de grasa = 9 kcal
-
-    # Calcular calorías y gramos de carbohidratos
-    carb_calories = calories - (protein_calories + fat_calories)
-    carb_grams = carb_calories / 4  # 1 g de carb = 4 kcal
+    protein_calories = max(0, protein * 4)
+    fat_calories = max(0, calories * fat_ratio)
+    fat_grams = fat_calories / 9  # 1 g grasa = 9 kcal
+    carb_calories = max(0, calories - (protein_calories + fat_calories))
+    carb_grams = carb_calories / 4  # 1 g carbohidrato = 4 kcal
 
     # Asegurar que no haya valores negativos
     fat_grams = max(0, round(fat_grams))
     carb_grams = max(0, round(carb_grams))
 
     # Regresar el objeto Meal con valores dinámicos
-    meal.calories = calories
-    meal.protein = protein
-    meal.fat = fat_grams
-    meal.carbs = carb_grams
+        # Normalizar a valores enteros y evitar negativos
+    meal.calories = max(0, calories)
+    meal.protein = max(0, protein)
+    meal.fat = max(0, int(fat_grams))
+    meal.carbs = max(0, int(carb_grams))
+
     return meal
 
 # --- UI form definitions (unchanged) ---
@@ -1687,37 +1721,86 @@ def calculate_total(order: Order):
     return {"total": total}
 
 @app.post("/create-checkout-session")
-def create_checkout_session(order: Order):
+def create_checkout_session(order: Order, email: str, name: Optional[str] = None, password: Optional[str] = None):
+    """
+    Create a checkout session via Stripe. If the user is not registered, prompt for registration.
+    """
+    # Check if the user already exists
+    user = next((u for u in sessions.values() if u.get("email") == email), None)
+
+    if not user:  # If user is not registered
+        if not name or not password:  # Ensure name and password are provided
+            raise HTTPException(
+                status_code=400,
+                detail="Please provide your name and a password to register before proceeding."
+            )
+        # Register the user
+        hashed_password = User.hash_password(password)
+        user = User(
+            name=name,
+            email=email,
+            hashed_password=hashed_password,
+            creation_date=datetime.datetime.utcnow(),
+        )
+        session_id = f"session_{len(sessions) + 1}"  # Generate a new session ID
+        sessions[session_id] = user.dict()  # Simulate saving to the database
+
     try:
-        # Inicializar la lista de productos
+        # Initialize the product list for Stripe
         line_items = []
 
-        # Agregar cada producto del pedido a la lista de productos
+        # Add each product in the order to the Stripe line items
         for item in order.items:
             line_items.append({
                 "price_data": {
                     "currency": "usd",
                     "product_data": {
-                        "name": item.item_type,  # Nombre del producto enviado en el pedido
+                        "name": item.item_type,  # Name of the product from the order
                     },
-                    "unit_amount": int(calculate_price([item], 0) * 100),  # Convertir a entero
+                    # Calculate price dynamically and convert to cents
+                    "unit_amount": int(calculate_price([item], 0) * 100),
                 },
-                "quantity": item.quantity,  # Cantidad del producto
+                "quantity": item.quantity,  # Quantity of the product
             })
 
-        # Crear la sesión de pago en Stripe
+        # Create the checkout session in Stripe
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
-            line_items=line_items,  # Usar la lista creada
+            line_items=line_items,  # Use the generated list
             mode="payment",
             success_url="https://chontaduro-backend.onrender.com/success",
             cancel_url="https://chontaduro-backend.onrender.com/cancel",
         )
 
-        # Devolver la URL de checkout
+        # Return the checkout URL to the client
         return {"checkout_url": session.url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/register")
+async def register_user(name: str, email: str, password: str):
+    """
+    Register a new user upon finalizing the order with their name, email, and password.
+    """
+    # Check if the email already exists
+    existing_user = next((u for u in sessions.values() if u.get("email") == email), None)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="A user with this email already exists.")
+
+    # Create a new user and hash their password
+    hashed_password = User.hash_password(password)
+    new_user = User(
+        name=name,
+        email=email,
+        hashed_password=hashed_password,
+        creation_date=datetime.datetime.utcnow(),
+    )
+    
+    # Simulate saving the user in the "database" of sessions
+    session_id = f"session_{len(sessions) + 1}"
+    sessions[session_id] = new_user.dict()
+
+    return {"message": "User registered successfully", "user": new_user}   
 
 def calculate_price(menu: List[Meal], extra_protein: int) -> float:
     base = 0.0
