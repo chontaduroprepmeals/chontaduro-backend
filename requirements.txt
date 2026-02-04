@@ -1,5 +1,7 @@
 fastapi
 uvicorn
-python-multipart
 stripe
 python-dotenv
+sqlalchemy
+pydantic[email]
+python-multipart
