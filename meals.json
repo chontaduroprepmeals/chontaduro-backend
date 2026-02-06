@@ -2,534 +2,911 @@
   {
     "name": "Scrambled Eggs with Whole Wheat Toast",
     "type": "breakfast",
-    "ingredients": ["eggs", "whole wheat bread", "olive oil", "salt"],
+    "ingredients": [
+      "eggs",
+      "whole wheat bread",
+      "olive oil",
+      "salt"
+    ],
     "serving_size_g": 250,
-    "protein_g": 18,
+    "protein_g": 35,
     "carbs_g": 30,
     "fat_g": 14,
-    "calories": 318,
-    "price": 8.0,
-    "tags": ["high protein", "budget friendly"],
+    "calories": 386,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Oatmeal with Banana and Peanut Butter",
     "type": "breakfast",
-    "ingredients": ["oats", "banana", "peanut butter", "regular milk"],
+    "ingredients": [
+      "oats",
+      "banana",
+      "peanut butter",
+      "regular milk"
+    ],
     "serving_size_g": 350,
-    "protein_g": 12,
+    "protein_g": 35,
     "carbs_g": 52,
     "fat_g": 10,
-    "calories": 346,
-    "price": 7.5,
-    "tags": ["vegetarian", "budget friendly"],
+    "calories": 438,
+    "price": 11.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Greek Yogurt with Apple and Granola",
     "type": "breakfast",
-    "ingredients": ["greek yogurt", "apple", "simple cereal", "honey"],
+    "ingredients": [
+      "greek yogurt",
+      "apple",
+      "simple cereal",
+      "honey"
+    ],
     "serving_size_g": 300,
-    "protein_g": 15,
+    "protein_g": 35,
     "carbs_g": 45,
     "fat_g": 5,
-    "calories": 285,
-    "price": 9.0,
-    "tags": ["vegetarian", "high protein"],
+    "calories": 365,
+    "price": 11.0,
+    "tags": [
+      "vegetarian",
+      "high protein"
+    ],
     "image_url": ""
   },
   {
     "name": "Egg and Cheese Arepa",
     "type": "breakfast",
-    "ingredients": ["arepa", "eggs", "fresh cheese", "olive oil"],
+    "ingredients": [
+      "arepa",
+      "eggs",
+      "fresh cheese",
+      "olive oil"
+    ],
     "serving_size_g": 280,
-    "protein_g": 20,
+    "protein_g": 35,
     "carbs_g": 35,
     "fat_g": 16,
-    "calories": 364,
-    "price": 8.5,
-    "tags": ["high protein", "budget friendly"],
+    "calories": 424,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Corn Tortilla Breakfast Wrap",
     "type": "breakfast",
-    "ingredients": ["corn tortillas", "scrambled eggs", "black beans", "fresh cheese"],
+    "ingredients": [
+      "corn tortillas",
+      "scrambled eggs",
+      "black beans",
+      "fresh cheese"
+    ],
     "serving_size_g": 300,
-    "protein_g": 22,
+    "protein_g": 35,
     "carbs_g": 40,
     "fat_g": 12,
-    "calories": 356,
-    "price": 8.0,
-    "tags": ["high protein", "budget friendly"],
+    "calories": 408,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Cottage Cheese with Papaya",
     "type": "breakfast",
-    "ingredients": ["cottage cheese", "papaya", "banana"],
+    "ingredients": [
+      "cottage cheese",
+      "papaya",
+      "banana"
+    ],
     "serving_size_g": 350,
-    "protein_g": 18,
+    "protein_g": 35,
     "carbs_g": 35,
     "fat_g": 4,
-    "calories": 248,
-    "price": 9.0,
-    "tags": ["high protein", "vegetarian"],
+    "calories": 316,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "vegetarian"
+    ],
     "image_url": ""
   },
   {
     "name": "Rice Cereal with Milk and Banana",
     "type": "breakfast",
-    "ingredients": ["rice cereal", "regular milk", "banana"],
+    "ingredients": [
+      "rice cereal",
+      "regular milk",
+      "banana"
+    ],
     "serving_size_g": 300,
-    "protein_g": 10,
+    "protein_g": 35,
     "carbs_g": 55,
     "fat_g": 5,
-    "calories": 305,
-    "price": 6.5,
-    "tags": ["budget friendly"],
+    "calories": 405,
+    "price": 11.0,
+    "tags": [
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Protein Pancakes",
     "type": "breakfast",
-    "ingredients": ["oats", "eggs", "banana", "protein powder", "regular milk"],
+    "ingredients": [
+      "oats",
+      "eggs",
+      "banana",
+      "protein powder",
+      "regular milk"
+    ],
     "serving_size_g": 350,
-    "protein_g": 28,
+    "protein_g": 35,
     "carbs_g": 48,
     "fat_g": 8,
-    "calories": 376,
-    "price": 10.0,
-    "tags": ["high protein"],
+    "calories": 404,
+    "price": 11.0,
+    "tags": [
+      "high protein"
+    ],
     "image_url": ""
   },
   {
     "name": "Grilled Chicken Breast with White Rice and Broccoli",
     "type": "main meal",
-    "ingredients": ["chicken breast", "white rice", "broccoli", "olive oil", "garlic"],
+    "ingredients": [
+      "chicken breast",
+      "white rice",
+      "broccoli",
+      "olive oil",
+      "garlic"
+    ],
     "serving_size_g": 450,
-    "protein_g": 42,
+    "protein_g": 40,
     "carbs_g": 48,
     "fat_g": 10,
-    "calories": 458,
-    "price": 13.0,
-    "tags": ["high protein", "budget friendly"],
+    "calories": 442,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Ground Beef with Pasta and Tomato Sauce",
     "type": "main meal",
-    "ingredients": ["lean ground beef", "white pasta", "tomato", "onion", "garlic", "olive oil"],
+    "ingredients": [
+      "lean ground beef",
+      "white pasta",
+      "tomato",
+      "onion",
+      "garlic",
+      "olive oil"
+    ],
     "serving_size_g": 500,
     "protein_g": 35,
     "carbs_g": 55,
     "fat_g": 18,
-    "calories": 542,
-    "price": 12.0,
-    "tags": ["high protein"],
+    "calories": 522,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
     "image_url": ""
   },
   {
     "name": "Lentil Stew with Rice",
     "type": "main meal",
-    "ingredients": ["lentils", "white rice", "carrots", "onion", "celery", "olive oil"],
+    "ingredients": [
+      "lentils",
+      "white rice",
+      "carrots",
+      "onion",
+      "celery",
+      "olive oil"
+    ],
     "serving_size_g": 500,
-    "protein_g": 18,
+    "protein_g": 35,
     "carbs_g": 68,
     "fat_g": 8,
-    "calories": 408,
-    "price": 8.0,
-    "tags": ["vegetarian", "budget friendly", "high fiber"],
+    "calories": 484,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly",
+      "high fiber"
+    ],
     "image_url": ""
   },
   {
     "name": "Black Bean Rice Bowl",
     "type": "main meal",
-    "ingredients": ["black beans", "white rice", "red bell pepper", "onion", "corn", "lime"],
+    "ingredients": [
+      "black beans",
+      "white rice",
+      "red bell pepper",
+      "onion",
+      "corn",
+      "lime"
+    ],
     "serving_size_g": 450,
-    "protein_g": 15,
+    "protein_g": 35,
     "carbs_g": 75,
     "fat_g": 5,
-    "calories": 405,
-    "price": 7.5,
-    "tags": ["vegetarian", "budget friendly", "high fiber"],
+    "calories": 485,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly",
+      "high fiber"
+    ],
     "image_url": ""
   },
   {
     "name": "Chicken Meatballs with Mashed Potatoes",
     "type": "main meal",
-    "ingredients": ["chicken meatballs", "white potatoes", "butter", "regular milk", "mixed frozen vegetables"],
+    "ingredients": [
+      "chicken meatballs",
+      "white potatoes",
+      "butter",
+      "regular milk",
+      "mixed frozen vegetables"
+    ],
     "serving_size_g": 480,
-    "protein_g": 32,
+    "protein_g": 35,
     "carbs_g": 45,
     "fat_g": 14,
-    "calories": 450,
-    "price": 11.0,
-    "tags": ["high protein"],
+    "calories": 446,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
     "image_url": ""
   },
   {
     "name": "Tuna Pasta Salad",
     "type": "main meal",
-    "ingredients": ["canned tuna", "white pasta", "cucumber", "tomato", "corn", "olive oil"],
+    "ingredients": [
+      "canned tuna",
+      "white pasta",
+      "cucumber",
+      "tomato",
+      "corn",
+      "olive oil"
+    ],
     "serving_size_g": 400,
-    "protein_g": 28,
+    "protein_g": 35,
     "carbs_g": 48,
     "fat_g": 12,
-    "calories": 420,
-    "price": 9.0,
-    "tags": ["high protein", "budget friendly"],
+    "calories": 440,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Egg Fried Rice with Mixed Vegetables",
     "type": "main meal",
-    "ingredients": ["white rice", "eggs", "mixed frozen vegetables", "soy sauce", "garlic", "olive oil"],
+    "ingredients": [
+      "white rice",
+      "eggs",
+      "mixed frozen vegetables",
+      "soy sauce",
+      "garlic",
+      "olive oil"
+    ],
     "serving_size_g": 450,
-    "protein_g": 18,
+    "protein_g": 35,
     "carbs_g": 62,
     "fat_g": 14,
-    "calories": 454,
-    "price": 7.0,
-    "tags": ["budget friendly", "vegetarian"],
+    "calories": 514,
+    "price": 15.0,
+    "tags": [
+      "budget friendly",
+      "vegetarian"
+    ],
     "image_url": ""
   },
   {
     "name": "Ground Turkey with Sweet Plantains and Rice",
     "type": "main meal",
-    "ingredients": ["ground turkey", "ripe plantain", "white rice", "onion", "bell pepper"],
+    "ingredients": [
+      "ground turkey",
+      "ripe plantain",
+      "white rice",
+      "onion",
+      "bell pepper"
+    ],
     "serving_size_g": 500,
-    "protein_g": 32,
+    "protein_g": 35,
     "carbs_g": 70,
     "fat_g": 10,
-    "calories": 506,
-    "price": 11.5,
-    "tags": ["high protein"],
+    "calories": 510,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
     "image_url": ""
   },
   {
     "name": "Chickpea Curry with Brown Rice",
     "type": "main meal",
-    "ingredients": ["chickpeas", "brown rice", "tomato", "onion", "spinach", "olive oil", "spices"],
+    "ingredients": [
+      "chickpeas",
+      "brown rice",
+      "tomato",
+      "onion",
+      "spinach",
+      "olive oil",
+      "spices"
+    ],
     "serving_size_g": 480,
-    "protein_g": 16,
+    "protein_g": 35,
     "carbs_g": 72,
     "fat_g": 10,
-    "calories": 442,
-    "price": 8.5,
-    "tags": ["vegetarian", "budget friendly", "high fiber"],
+    "calories": 518,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly",
+      "high fiber"
+    ],
     "image_url": ""
   },
   {
     "name": "Grilled Chicken with Roasted Potatoes and Green Beans",
     "type": "main meal",
-    "ingredients": ["chicken breast", "yellow potatoes", "green beans", "olive oil", "garlic"],
+    "ingredients": [
+      "chicken breast",
+      "yellow potatoes",
+      "green beans",
+      "olive oil",
+      "garlic"
+    ],
     "serving_size_g": 480,
     "protein_g": 40,
     "carbs_g": 42,
     "fat_g": 12,
-    "calories": 444,
-    "price": 12.5,
-    "tags": ["high protein", "budget friendly"],
+    "calories": 436,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Red Beans and Rice",
     "type": "main meal",
-    "ingredients": ["red beans", "white rice", "onion", "bell pepper", "celery", "olive oil"],
+    "ingredients": [
+      "red beans",
+      "white rice",
+      "onion",
+      "bell pepper",
+      "celery",
+      "olive oil"
+    ],
     "serving_size_g": 450,
-    "protein_g": 14,
+    "protein_g": 35,
     "carbs_g": 70,
     "fat_g": 6,
-    "calories": 390,
-    "price": 7.0,
-    "tags": ["vegetarian", "budget friendly", "high fiber"],
+    "calories": 474,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly",
+      "high fiber"
+    ],
     "image_url": ""
   },
   {
     "name": "Pasta with Ground Chicken and Spinach",
     "type": "main meal",
-    "ingredients": ["ground chicken", "whole wheat pasta", "spinach", "garlic", "tomato", "olive oil"],
+    "ingredients": [
+      "ground chicken",
+      "whole wheat pasta",
+      "spinach",
+      "garlic",
+      "tomato",
+      "olive oil"
+    ],
     "serving_size_g": 480,
     "protein_g": 36,
     "carbs_g": 52,
     "fat_g": 12,
     "calories": 460,
-    "price": 11.0,
-    "tags": ["high protein"],
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
     "image_url": ""
   },
   {
     "name": "Baked Chicken Thighs with Cauliflower Rice",
     "type": "main meal",
-    "ingredients": ["whole chicken", "cauliflower", "olive oil", "garlic", "lemon"],
+    "ingredients": [
+      "whole chicken",
+      "cauliflower",
+      "olive oil",
+      "garlic",
+      "lemon"
+    ],
     "serving_size_g": 450,
     "protein_g": 35,
     "carbs_g": 12,
     "fat_g": 20,
-    "calories": 380,
-    "price": 10.0,
-    "tags": ["high protein", "low carb"],
+    "calories": 368,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "low carb"
+    ],
     "image_url": ""
   },
   {
     "name": "Turkey Meatballs with Spaghetti",
     "type": "main meal",
-    "ingredients": ["ground turkey", "white pasta", "tomato", "onion", "garlic", "olive oil"],
+    "ingredients": [
+      "ground turkey",
+      "white pasta",
+      "tomato",
+      "onion",
+      "garlic",
+      "olive oil"
+    ],
     "serving_size_g": 500,
-    "protein_g": 34,
+    "protein_g": 35,
     "carbs_g": 58,
     "fat_g": 14,
-    "calories": 494,
-    "price": 11.5,
-    "tags": ["high protein"],
+    "calories": 498,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
     "image_url": ""
   },
   {
     "name": "Sardine Rice Bowl with Vegetables",
     "type": "main meal",
-    "ingredients": ["canned sardines", "white rice", "broccoli", "carrots", "olive oil", "lemon"],
+    "ingredients": [
+      "canned sardines",
+      "white rice",
+      "broccoli",
+      "carrots",
+      "olive oil",
+      "lemon"
+    ],
     "serving_size_g": 420,
-    "protein_g": 26,
+    "protein_g": 35,
     "carbs_g": 48,
     "fat_g": 15,
-    "calories": 447,
-    "price": 8.0,
-    "tags": ["high protein", "omega-3", "budget friendly"],
+    "calories": 467,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "omega-3",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Chicken and Vegetable Stir-Fry with Rice",
     "type": "main meal",
-    "ingredients": ["chicken breast", "mixed frozen vegetables", "white rice", "soy sauce", "garlic", "olive oil"],
+    "ingredients": [
+      "chicken breast",
+      "mixed frozen vegetables",
+      "white rice",
+      "soy sauce",
+      "garlic",
+      "olive oil"
+    ],
     "serving_size_g": 480,
     "protein_g": 38,
     "carbs_g": 55,
     "fat_g": 10,
     "calories": 462,
-    "price": 12.0,
-    "tags": ["high protein", "budget friendly"],
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Lentil and Vegetable Soup with Bread",
     "type": "main meal",
-    "ingredients": ["lentils", "carrots", "celery", "onion", "tomato", "whole wheat bread"],
+    "ingredients": [
+      "lentils",
+      "carrots",
+      "celery",
+      "onion",
+      "tomato",
+      "whole wheat bread"
+    ],
     "serving_size_g": 500,
-    "protein_g": 16,
+    "protein_g": 35,
     "carbs_g": 62,
     "fat_g": 6,
-    "calories": 358,
-    "price": 7.5,
-    "tags": ["vegetarian", "budget friendly", "high fiber"],
+    "calories": 442,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly",
+      "high fiber"
+    ],
     "image_url": ""
   },
   {
     "name": "Ground Beef Tacos with Corn Tortillas",
     "type": "main meal",
-    "ingredients": ["lean ground beef", "corn tortillas", "lettuce", "tomato", "onion", "fresh cheese"],
+    "ingredients": [
+      "lean ground beef",
+      "corn tortillas",
+      "lettuce",
+      "tomato",
+      "onion",
+      "fresh cheese"
+    ],
     "serving_size_g": 400,
-    "protein_g": 32,
+    "protein_g": 35,
     "carbs_g": 42,
     "fat_g": 16,
-    "calories": 448,
-    "price": 10.0,
-    "tags": ["high protein"],
+    "calories": 452,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
     "image_url": ""
   },
   {
     "name": "Chicken Breast with Quinoa and Zucchini",
     "type": "main meal",
-    "ingredients": ["chicken breast", "white rice", "zucchini", "onion", "olive oil"],
+    "ingredients": [
+      "chicken breast",
+      "white rice",
+      "zucchini",
+      "onion",
+      "olive oil"
+    ],
     "serving_size_g": 450,
     "protein_g": 40,
     "carbs_g": 45,
     "fat_g": 11,
-    "calories": 443,
-    "price": 12.5,
-    "tags": ["high protein"],
+    "calories": 439,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
     "image_url": ""
   },
   {
     "name": "Egg and Potato Hash",
     "type": "main meal",
-    "ingredients": ["eggs", "white potatoes", "onion", "bell pepper", "olive oil"],
+    "ingredients": [
+      "eggs",
+      "white potatoes",
+      "onion",
+      "bell pepper",
+      "olive oil"
+    ],
     "serving_size_g": 420,
-    "protein_g": 20,
+    "protein_g": 35,
     "carbs_g": 45,
     "fat_g": 18,
-    "calories": 442,
-    "price": 8.0,
-    "tags": ["vegetarian", "budget friendly"],
+    "calories": 482,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Tuna Salad with Mixed Greens and Whole Wheat Bread",
     "type": "main meal",
-    "ingredients": ["canned tuna", "romaine lettuce", "tomato", "cucumber", "whole wheat bread", "olive oil"],
+    "ingredients": [
+      "canned tuna",
+      "romaine lettuce",
+      "tomato",
+      "cucumber",
+      "whole wheat bread",
+      "olive oil"
+    ],
     "serving_size_g": 400,
-    "protein_g": 30,
+    "protein_g": 35,
     "carbs_g": 35,
     "fat_g": 12,
-    "calories": 372,
-    "price": 9.5,
-    "tags": ["high protein", "budget friendly"],
+    "calories": 388,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Black Bean and Sweet Plantain Bowl",
     "type": "main meal",
-    "ingredients": ["black beans", "ripe plantain", "white rice", "onion", "avocado"],
+    "ingredients": [
+      "black beans",
+      "ripe plantain",
+      "white rice",
+      "onion",
+      "avocado"
+    ],
     "serving_size_g": 480,
-    "protein_g": 16,
+    "protein_g": 35,
     "carbs_g": 78,
     "fat_g": 12,
-    "calories": 484,
-    "price": 8.5,
-    "tags": ["vegetarian", "budget friendly"],
+    "calories": 560,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Ground Chicken Stuffed Bell Peppers with Rice",
     "type": "main meal",
-    "ingredients": ["ground chicken", "red bell peppers", "white rice", "tomato", "onion", "mozzarella cheese"],
+    "ingredients": [
+      "ground chicken",
+      "red bell peppers",
+      "white rice",
+      "tomato",
+      "onion",
+      "mozzarella cheese"
+    ],
     "serving_size_g": 450,
     "protein_g": 35,
     "carbs_g": 42,
     "fat_g": 14,
-    "calories": 450,
-    "price": 11.5,
-    "tags": ["high protein"],
+    "calories": 434,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
     "image_url": ""
   },
   {
     "name": "Pasta with White Beans and Spinach",
     "type": "main meal",
-    "ingredients": ["white pasta", "chickpeas", "spinach", "garlic", "olive oil", "lemon"],
+    "ingredients": [
+      "white pasta",
+      "chickpeas",
+      "spinach",
+      "garlic",
+      "olive oil",
+      "lemon"
+    ],
     "serving_size_g": 450,
-    "protein_g": 18,
+    "protein_g": 35,
     "carbs_g": 68,
     "fat_g": 10,
-    "calories": 442,
-    "price": 8.0,
-    "tags": ["vegetarian", "budget friendly"],
+    "calories": 502,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Baked Chicken Breast with Mashed Cauliflower",
     "type": "main meal",
-    "ingredients": ["chicken breast", "cauliflower", "butter", "regular milk", "garlic"],
+    "ingredients": [
+      "chicken breast",
+      "cauliflower",
+      "butter",
+      "regular milk",
+      "garlic"
+    ],
     "serving_size_g": 450,
-    "protein_g": 42,
+    "protein_g": 40,
     "carbs_g": 18,
     "fat_g": 12,
-    "calories": 348,
-    "price": 12.0,
-    "tags": ["high protein", "low carb"],
+    "calories": 340,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "low carb"
+    ],
     "image_url": ""
   },
   {
     "name": "Ground Beef and Cabbage Stir-Fry",
     "type": "main meal",
-    "ingredients": ["lean ground beef", "cabbage", "carrots", "onion", "soy sauce", "olive oil"],
+    "ingredients": [
+      "lean ground beef",
+      "cabbage",
+      "carrots",
+      "onion",
+      "soy sauce",
+      "olive oil"
+    ],
     "serving_size_g": 450,
-    "protein_g": 30,
+    "protein_g": 35,
     "carbs_g": 22,
     "fat_g": 18,
-    "calories": 378,
-    "price": 10.0,
-    "tags": ["high protein", "low carb"],
+    "calories": 390,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "low carb"
+    ],
     "image_url": ""
   },
   {
     "name": "Rice and Egg White Scramble with Vegetables",
     "type": "main meal",
-    "ingredients": ["egg whites", "white rice", "broccoli", "bell pepper", "onion", "olive oil"],
+    "ingredients": [
+      "egg whites",
+      "white rice",
+      "broccoli",
+      "bell pepper",
+      "onion",
+      "olive oil"
+    ],
     "serving_size_g": 450,
-    "protein_g": 25,
+    "protein_g": 35,
     "carbs_g": 58,
     "fat_g": 8,
-    "calories": 404,
-    "price": 9.0,
-    "tags": ["high protein", "low fat"],
+    "calories": 444,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "low fat"
+    ],
     "image_url": ""
   },
   {
     "name": "Chicken Breast with Sweet Potato and Green Beans",
     "type": "main meal",
-    "ingredients": ["chicken breast", "white potato", "green beans", "olive oil"],
+    "ingredients": [
+      "chicken breast",
+      "white potato",
+      "green beans",
+      "olive oil"
+    ],
     "serving_size_g": 480,
-    "protein_g": 42,
+    "protein_g": 40,
     "carbs_g": 48,
     "fat_g": 10,
-    "calories": 458,
-    "price": 13.0,
-    "tags": ["high protein", "budget friendly"],
+    "calories": 442,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Tuna and White Bean Salad",
     "type": "main meal",
-    "ingredients": ["canned tuna", "chickpeas", "tomato", "cucumber", "red onion", "olive oil", "lemon"],
+    "ingredients": [
+      "canned tuna",
+      "chickpeas",
+      "tomato",
+      "cucumber",
+      "red onion",
+      "olive oil",
+      "lemon"
+    ],
     "serving_size_g": 400,
-    "protein_g": 32,
+    "protein_g": 35,
     "carbs_g": 38,
     "fat_g": 14,
-    "calories": 414,
-    "price": 9.0,
-    "tags": ["high protein", "budget friendly"],
+    "calories": 418,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Ground Turkey and Lentil Chili",
     "type": "main meal",
-    "ingredients": ["ground turkey", "lentils", "tomato", "onion", "bell pepper", "spices"],
+    "ingredients": [
+      "ground turkey",
+      "lentils",
+      "tomato",
+      "onion",
+      "bell pepper",
+      "spices"
+    ],
     "serving_size_g": 480,
-    "protein_g": 34,
+    "protein_g": 35,
     "carbs_g": 45,
     "fat_g": 10,
-    "calories": 406,
-    "price": 10.5,
-    "tags": ["high protein", "high fiber"],
+    "calories": 410,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "high fiber"
+    ],
     "image_url": ""
   },
   {
     "name": "Whole Chicken Leg with Rice and Corn",
     "type": "main meal",
-    "ingredients": ["whole chicken", "white rice", "corn", "olive oil", "garlic"],
+    "ingredients": [
+      "whole chicken",
+      "white rice",
+      "corn",
+      "olive oil",
+      "garlic"
+    ],
     "serving_size_g": 480,
     "protein_g": 36,
     "carbs_g": 52,
     "fat_g": 16,
-    "calories": 504,
-    "price": 10.0,
-    "tags": ["high protein", "budget friendly"],
+    "calories": 496,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
     "image_url": ""
   },
   {
     "name": "Greek Yogurt Chicken with Cucumber Salad",
     "type": "main meal",
-    "ingredients": ["chicken breast", "greek yogurt", "cucumber", "tomato", "whole wheat bread"],
+    "ingredients": [
+      "chicken breast",
+      "greek yogurt",
+      "cucumber",
+      "tomato",
+      "whole wheat bread"
+    ],
     "serving_size_g": 450,
-    "protein_g": 45,
+    "protein_g": 40,
     "carbs_g": 35,
     "fat_g": 8,
-    "calories": 396,
-    "price": 13.0,
-    "tags": ["high protein", "low fat"],
+    "calories": 372,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "low fat"
+    ],
     "image_url": ""
   },
   {
     "name": "Red Bean and Rice Burrito",
     "type": "main meal",
-    "ingredients": ["red beans", "white rice", "flour tortilla", "fresh cheese", "salsa"],
+    "ingredients": [
+      "red beans",
+      "white rice",
+      "flour tortilla",
+      "fresh cheese",
+      "salsa"
+    ],
     "serving_size_g": 450,
-    "protein_g": 18,
+    "protein_g": 35,
     "carbs_g": 72,
     "fat_g": 10,
-    "calories": 450,
-    "price": 8.0,
-    "tags": ["vegetarian", "budget friendly"],
+    "calories": 518,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly"
+    ],
     "image_url": ""
   }
 ]

@@ -802,126 +802,109 @@ def generate_menu_using_template(state: SessionState) -> List[Meal]:
 
 def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int], calorie_target: int) -> List[Dict[str, Any]]:
     """
-    Dynamically distribute protein across meals, respecting daily protein needs and limits (maximum 35-40g per meal).
+    Dynamically distribute macros (protein, carbs, fats) across meals.
+    For Plan 4: distributes daily totals EVENLY across 3 meals (1 breakfast + 2 main meals)
+    Maximum 40g protein per meal.
     """
     if not menu:
         return []
 
+    # Plan definitions: (num_main_meals, num_breakfasts)
     plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
     num_main, num_break = plan_map.get(state.plan, (1, 0))
     meals_per_day = num_main + num_break
     days = state.days or max(1, len(menu) // max(1, meals_per_day))
     total_meals = min(len(menu), days * meals_per_day) if meals_per_day > 0 else len(menu)
-    # Calcular las calorías totales de los platos disponibles
-    total_calories = sum(getattr(m, "calories", 0) for m in menu)
-    if total_calories == 0:  # Evitar división por cero
-        total_calories = 1  # Fallback seguro
-
-    # Calcular calorías objetivo por comida
-    target_calories_per_meal = calorie_target // max(total_meals, 1) if calorie_target and total_meals > 0 else calorie_target or 0
-    if target_calories_per_meal == 0:  # Asignar valor predeterminado si no se calcula objetivo
-        target_calories_per_meal = 300  # Valor genérico para estabilidad
-
-    # Debugging
-    print(f"[DEBUG] Total calories in menu: {total_calories} kcal")
-    print(f"[DEBUG] Target calories per meal: {target_calories_per_meal} kcal")
-    # Total daily protein target
-    daily_protein_target = int(macros_daily_protein or 0)
-    if daily_protein_target == 0:
-        daily_protein_target = 40  # Default fallback for safety
-
-    # Log target for debugging
-    print("[DEBUG] Daily protein target:", daily_protein_target, "g")
-    # Debugging for target calculations
-    print(f"[DEBUG] Total calories in menu: {total_calories} kcal")
-    print(f"[DEBUG] Target calories per meal: {target_calories_per_meal} kcal")
-
+    
+    # Daily nutritional targets
+    daily_protein_target = int(macros_daily_protein or 120)  # Default 120g if not provided
+    daily_calorie_target = int(calorie_target or 2000)  # Default 2000 kcal
+    
+    # Calculate daily macros
+    # Protein: from parameter
+    # Fat: 25% of calories
+    # Carbs: remaining calories
+    protein_calories = daily_protein_target * 4
+    fat_calories = daily_calorie_target * 0.25
+    daily_fat_target = int(fat_calories / 9)
+    carb_calories = daily_calorie_target - protein_calories - fat_calories
+    daily_carb_target = int(max(0, carb_calories / 4))
+    
+    print(f"\n[DEBUG] Daily Targets for Plan {state.plan}:")
+    print(f"  - Calories: {daily_calorie_target} kcal")
+    print(f"  - Protein: {daily_protein_target}g")
+    print(f"  - Fat: {daily_fat_target}g")
+    print(f"  - Carbs: {daily_carb_target}g")
+    print(f"  - Meals per day: {meals_per_day} ({num_break} breakfast + {num_main} main meals)")
+    
+    # For Plan 4: Distribute evenly across 3 meals
+    # For other plans: distribute evenly across their meals
+    protein_per_meal = daily_protein_target // meals_per_day
+    fat_per_meal = daily_fat_target // meals_per_day
+    carbs_per_meal = daily_carb_target // meals_per_day
+    calories_per_meal = daily_calorie_target // meals_per_day
+    
+    # Handle remainders (distribute to first few meals)
+    protein_remainder = daily_protein_target % meals_per_day
+    fat_remainder = daily_fat_target % meals_per_day
+    carbs_remainder = daily_carb_target % meals_per_day
+    
+    # Cap protein at 40g per meal (business constraint)
+    if protein_per_meal > 40:
+        protein_per_meal = 40
+        # Recalculate to respect cap
+        total_protein_capped = min(daily_protein_target, 40 * meals_per_day)
+        protein_per_meal = total_protein_capped // meals_per_day
+        protein_remainder = total_protein_capped % meals_per_day
+    
+    print(f"\n[DEBUG] Per Meal Distribution:")
+    print(f"  - Protein: ~{protein_per_meal}g (max 40g)")
+    print(f"  - Fat: ~{fat_per_meal}g")
+    print(f"  - Carbs: ~{carbs_per_meal}g")
+    print(f"  - Calories: ~{calories_per_meal} kcal")
+    
     out = []
     idx = 0
+    
     for day in range(days):
-        for m_idx_in_day in range(meals_per_day):
+        for meal_idx_in_day in range(meals_per_day):
             if idx >= len(menu):
                 break
+                
             meal_obj = menu[idx]
             meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
-
-            protein_per_meal = macros_daily_protein // total_meals
-            calories_per_meal = calorie_target // total_meals
-
-            # Generar dinámica
-            meal_with_macros = process_meal_data(
-                meal=menu[idx],
-                protein=protein_per_meal,
-                calories=calories_per_meal
-            )
-
-            meal_dict["provided_protein"] = meal_with_macros.protein
-            meal_dict["calories"] = meal_with_macros.calories
-
-            # Dynamically allocate protein based on daily needs
-            # dynamic_protein = daily_protein_target // total_meals
-            # leftover_protein = daily_protein_target % total_meals
-            # meal_dict["provided_protein"] = dynamic_protein + (
-            #     1 if idx < leftover_protein else 0
-            # )
-
-            protein_per_meal = daily_protein_target // total_meals
-            calories_per_meal = target_calories_per_meal
-
-            # Generar dinámica: proteínas, calorías, grasas, carbohidratos
-            meal_with_macros = process_meal_data(
-                meal=meal_obj,
-                protein=protein_per_meal,
-                calories=calories_per_meal,
-                fat_ratio=0.25,  # 25% del objetivo calórico para grasas
-                carb_ratio=0.50  # 50% del objetivo calórico para carbohidratos
-            )
-
-            # Asignar dinámicamente los valores generados
-            meal_dict["provided_protein"] = meal_with_macros.protein
-            meal_dict["calories"] = meal_with_macros.calories
-            meal_dict["fat_assigned"] = meal_with_macros.fat
-            meal_dict["carbs_assigned"] = meal_with_macros.carbs
-
-            # Respect the upper limit of 35-40 g, adjust only if higher
-            if meal_dict["provided_protein"] > 40:  # Cap maximum
-                meal_dict["provided_protein"] = 40
-            elif meal_dict["provided_protein"] < 20:  # Allow small adjustments for low needs
-                meal_dict["provided_protein"] = 20  
-
-
-            # Adjust calories dynamically
-            original_calories = getattr(meal_obj, "calories", 0)  # Acceso seguro a calorías
-
-            # Calcular calorías objetivo por comida
-            target_calories_per_meal = calorie_target // max(total_meals, 1) if calorie_target and total_meals > 0 else calorie_target or 0
-            frac_calories = target_calories_per_meal / max(total_calories, 1)  # Evitar división por cero
-            adjusted_calories = int(original_calories * frac_calories)
-
-            # Validar extremos de calorías ajustadas (máximo y mínimo)
-            adjusted_calories = max(
-                100,  # Asignar mínimo de 100 calorías
-                min(
-                    800,  # Asignar máximo de 800 calorías
-                    adjusted_calories  # Mantener el valor calculado si está dentro del rango válido
-                )
-            )
-
-            # Debugging: valores finales de calorías ajustadas
-            meal_dict["calories"] = adjusted_calories
-            print(f"[DEBUG] Day {day + 1}, Meal {idx + 1}: {meal_dict.get('name', 'Unnamed Meal')}")
-            print(f"  - Dynamic Protein: {meal_dict['provided_protein']} g")
-            print(f"  - Adjusted Calories: {meal_dict['calories']} kcal")
-            print(f"  - Grasas asignadas: {meal_dict['fat_assigned']} g")
-            print(f"  - Carbohidratos asignados: {meal_dict['carbs_assigned']} g")
-
-            # Add meal to output
+            
+            # Distribute macros evenly, with remainders going to first meals
+            assigned_protein = protein_per_meal + (1 if meal_idx_in_day < protein_remainder else 0)
+            assigned_fat = fat_per_meal + (1 if meal_idx_in_day < fat_remainder else 0)
+            assigned_carbs = carbs_per_meal + (1 if meal_idx_in_day < carbs_remainder else 0)
+            
+            # Ensure protein doesn't exceed 40g (business rule)
+            assigned_protein = min(assigned_protein, 40)
+            
+            # Calculate actual calories from macros
+            assigned_calories = (assigned_protein * 4) + (assigned_carbs * 4) + (assigned_fat * 9)
+            
+            # Update meal with calculated macros
+            meal_dict["provided_protein"] = assigned_protein
+            meal_dict["protein_assigned"] = assigned_protein
+            meal_dict["fat_assigned"] = assigned_fat
+            meal_dict["carbs_assigned"] = assigned_carbs
+            meal_dict["calories"] = int(assigned_calories)
             meal_dict["day_index"] = day
             meal_dict["meal_index"] = idx
+            
+            print(f"\n[DEBUG] Day {day + 1}, Meal {meal_idx_in_day + 1}: {meal_dict.get('name', 'Unnamed')}")
+            print(f"  - Protein: {assigned_protein}g")
+            print(f"  - Carbs: {assigned_carbs}g")
+            print(f"  - Fat: {assigned_fat}g")
+            print(f"  - Calories: {int(assigned_calories)} kcal")
+            
             out.append(meal_dict)
             idx += 1
-
+    
     return out
+
 
 
 # Keep original generate_menu as fallback for non-template flows
@@ -1618,11 +1601,11 @@ async def swap_meal(request: Request):
 
     new_meal = random.choice(potential)
 
-    # Ajustar precio según categoría (replaced_type)
+    # Standard pricing: Breakfast = $11, Main Meal = $15
     if replaced_type == "breakfast":
-        new_meal.price = 10.0  # Precio fijo para desayunos
+        new_meal.price = 11.0
     elif replaced_type in ["lunch", "dinner", "main meal"]:
-        new_meal.price = 15.0  # Precio fijo para almuerzos/cenas
+        new_meal.price = 15.0
     
 
     # Build base_menu_objs from current state.menu
@@ -1713,12 +1696,13 @@ async def redo_menu(request: Request):
 
 @app.post("/calculate-total")
 def calculate_total(order: Order):
+    """Calculate total price. Standard: Breakfast = $11, Main Meal = $15"""
     total = 0
     for item in order.items:
         if item.item_type == "main_menu":
-            price = 13 if item.less_protein else 15
+            price = 15  # Standard price for main meals
         elif item.item_type == "breakfast":
-            price = 10
+            price = 11  # Standard price for breakfast
         else:
             raise HTTPException(status_code=400, detail="Invalid item type")
         total += item.quantity * price
@@ -1758,11 +1742,11 @@ def create_checkout_session(order: Order, email: str, name: Optional[str] = None
 
         # Add each product in the order to the Stripe line items
         for item in order.items:
-            # Calculate price correctly based on item type
+            # Standard pricing: Breakfast = $11, Main Meal = $15
             if item.item_type == "main_menu":
-                price = 13 if item.less_protein else 15
+                price = 15
             elif item.item_type == "breakfast":
-                price = 10
+                price = 11
             else:
                 raise HTTPException(status_code=400, detail="Invalid item type")
             
@@ -1835,12 +1819,25 @@ async def register_user(name: str, email: str, password: str):
         db.close()   
 
 def calculate_price(menu: List[Meal], extra_protein: int) -> float:
+    """
+    Calculate total price for menu.
+    Standard prices: Breakfast = $11, Main Meal = $15
+    """
     base = 0.0
     for m in menu:
+        meal_type = ""
         if isinstance(m, dict):
-            base += float(getattr(m, "price", 0))
-        elif hasattr(m, "price"):
-            base += float(m.price)
+            meal_type = str(m.get("type", "")).lower()
+        elif hasattr(m, "type"):
+            meal_type = str(m.type).lower()
+        
+        # Standard pricing
+        if "breakfast" in meal_type:
+            base += 11.0
+        else:  # main meal, lunch, dinner
+            base += 15.0
+    
+    # Extra protein cost (if applicable)
     prot_cost = (extra_protein or 0) * 1.0
     return round(base + prot_cost, 2)
 
