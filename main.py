@@ -80,6 +80,20 @@ register_delivery_routes(app)
 def healthz():
     return {"status": "ok"}
 
+@app.get("/version")
+def version():
+    """Return current app version to verify deployment"""
+    return {
+        "version": "v2.1-checkout-enabled",
+        "deploy_date": "2026-02-06T05:25:00Z",
+        "features": {
+            "checkout_button": True,
+            "checkout_modal": True,
+            "database_persistence": True
+        },
+        "status": "deployed"
+    }
+
 # Serve frontend
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
