@@ -202,6 +202,9 @@ html.in-iframe .app-card {
   <div class="app-shell">
     <div class="app-card" id="app-root">
       <h1 class="text-center" style="color:#ff7b00;">🍽️ Chontaduro Menu Generator</h1>
+      
+      <!-- Version indicator (small, bottom right) -->
+      <div style="position: fixed; bottom: 5px; right: 5px; font-size: 9px; color: #999; z-index: 1000;">v2.1</div>
 
       <!-- Banner to show delivery state -->
       <div id="zipBanner" role="status" aria-live="polite"></div>
@@ -278,6 +281,13 @@ html.in-iframe .app-card {
       // cross-origin frame access can fail; ignore safely
     }
 
+    // VERSION INFO - To verify deployment
+    const APP_VERSION = "v2.1-checkout-enabled";
+    const DEPLOY_DATE = "2026-02-06T05:25:00Z";
+    console.log(`🚀 Chontaduro App Version: ${APP_VERSION}`);
+    console.log(`📅 Deploy Date: ${DEPLOY_DATE}`);
+    console.log(`✅ Checkout button should be visible in menu`);
+    
     const BASE = "";
     let sessionId = Math.random().toString(36).substring(2);
     let currentStep = "start";
@@ -439,6 +449,9 @@ html.in-iframe .app-card {
     }
 
     function renderMenu(data){
+      console.log('🍽️ renderMenu() called - Checkout button should appear');
+      console.log('Menu data:', data);
+      
       let html = `<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">Your Menu</h2><div><button onclick="step({}, 'back')" class="px-3 py-1 bg-gray-200 rounded">← Adjust Preferences</button></div></div>`;
       html += `<div class="mb-4">Estimated price: <strong>$${(data.price || 0).toFixed(2)}</strong></div>`;
       if (data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal — Target: ${data.nutrition.calorie_target||'N/A'} kcal</div>`;
@@ -486,8 +499,11 @@ html.in-iframe .app-card {
         <div class="mt-4 flex gap-3 justify-center flex-wrap">
           <button onclick="redoMenu()" class="px-3 py-2 bg-blue-600 text-white rounded">Regenerate Full Menu</button>
           <button onclick="proceedToCheckout()" class="px-4 py-3 bg-green-600 text-white rounded font-bold text-lg">🛒 Place Order</button>
-        </div>
-
+        </div>`;
+      
+      console.log('✅ Place Order button added to HTML');
+      
+      html += `
         <!-- Bottom Back button (explicit) -->
         <div class="mt-3 flex justify-center">
           <button onclick="step({}, 'back')" class="px-3 py-2 bg-gray-300 rounded">← Back</button>
