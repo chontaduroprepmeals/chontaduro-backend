@@ -38,12 +38,6 @@ engine = create_engine(SQLITE_DATABASE_URL, connect_args={"check_same_thread": F
 # Create session maker
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Initialize database tables
-def init_db():
-    Base.metadata.create_all(bind=engine)
-
-init_db()
-
 # --- Database Models (User table) ---
 class User(Base):
     __tablename__ = "users"
@@ -58,6 +52,12 @@ class User(Base):
     def hash_password(password: str) -> str:
         salt = "secret_salt_here"  # Use a secure salt
         return hashlib.sha256((password + salt).encode()).hexdigest()
+
+# Initialize database tables AFTER models are defined
+def init_db():
+    Base.metadata.create_all(bind=engine)
+
+init_db()
 
 app = FastAPI()
 
