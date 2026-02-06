@@ -239,23 +239,36 @@ html.in-iframe .app-card {
   <div id="checkoutModalOverlay" aria-hidden="true">
     <div id="checkoutModal" role="dialog" aria-modal="true" aria-labelledby="checkoutModalTitle">
       <h2 id="checkoutModalTitle">Complete Your Order</h2>
-      <p>Please provide your information to proceed with payment.</p>
+      <p id="checkoutModalDescription">Please sign in or create an account to proceed with payment.</p>
       
-      <label for="checkoutName">Full Name *</label>
-      <input id="checkoutName" type="text" placeholder="John Doe" required aria-label="Full name">
+      <!-- Mode toggle tabs -->
+      <div style="display: flex; gap: 10px; margin: 16px 0; border-bottom: 2px solid #e5e7eb;">
+        <button id="signInTab" class="checkout-tab active" style="flex: 1; padding: 10px; background: none; border: none; border-bottom: 3px solid #ff7b00; font-weight: 600; cursor: pointer; color: #ff7b00;">
+          Sign In
+        </button>
+        <button id="createAccountTab" class="checkout-tab" style="flex: 1; padding: 10px; background: none; border: none; border-bottom: 3px solid transparent; font-weight: 500; cursor: pointer; color: #666;">
+          Create Account
+        </button>
+      </div>
+      
+      <!-- Name field (only for Create Account mode) -->
+      <div id="nameFieldContainer" style="display: none;">
+        <label for="checkoutName">Full Name *</label>
+        <input id="checkoutName" type="text" placeholder="John Doe" aria-label="Full name">
+      </div>
       
       <label for="checkoutEmail">Email *</label>
       <input id="checkoutEmail" type="email" placeholder="john@example.com" required aria-label="Email address">
       
       <label for="checkoutPassword">Password *</label>
-      <input id="checkoutPassword" type="password" placeholder="Create a password" required aria-label="Password">
-      <small style="color: #666; font-size: 0.85rem;">Your password will be used to access your order history.</small>
+      <input id="checkoutPassword" type="password" placeholder="Enter your password" required aria-label="Password">
+      <small id="passwordHint" style="color: #666; font-size: 0.85rem; display: none;">Create a password (minimum 6 characters) to access your order history.</small>
       
       <div id="checkoutErrorMessage" class="error-message"></div>
 
       <div class="actions">
         <button id="checkoutCancelBtn" class="px-4 py-2 bg-gray-300 rounded">Cancel</button>
-        <button id="checkoutSubmitBtn" class="px-4 py-2 bg-orange-500 text-white rounded">Proceed to Payment</button>
+        <button id="checkoutSubmitBtn" class="px-4 py-2 bg-orange-500 text-white rounded">Sign In & Proceed to Payment</button>
       </div>
     </div>
   </div>
@@ -570,15 +583,69 @@ html.in-iframe .app-card {
     }
 
     // --- Checkout functionality ---
+    let checkoutMode = 'signin'; // 'signin' or 'createaccount'
+    
+    function setCheckoutMode(mode) {
+      checkoutMode = mode;
+      const nameContainer = document.getElementById('nameFieldContainer');
+      const passwordHint = document.getElementById('passwordHint');
+      const submitBtn = document.getElementById('checkoutSubmitBtn');
+      const signInTab = document.getElementById('signInTab');
+      const createAccountTab = document.getElementById('createAccountTab');
+      const passwordInput = document.getElementById('checkoutPassword');
+      
+      if (mode === 'signin') {
+        // Sign In mode
+        nameContainer.style.display = 'none';
+        passwordHint.style.display = 'none';
+        submitBtn.textContent = 'Sign In & Proceed to Payment';
+        passwordInput.placeholder = 'Enter your password';
+        
+        // Update tab styling
+        signInTab.style.borderBottom = '3px solid #ff7b00';
+        signInTab.style.color = '#ff7b00';
+        signInTab.style.fontWeight = '600';
+        createAccountTab.style.borderBottom = '3px solid transparent';
+        createAccountTab.style.color = '#666';
+        createAccountTab.style.fontWeight = '500';
+      } else {
+        // Create Account mode
+        nameContainer.style.display = 'block';
+        passwordHint.style.display = 'block';
+        submitBtn.textContent = 'Create Account & Proceed to Payment';
+        passwordInput.placeholder = 'Create a password (min 6 characters)';
+        
+        // Update tab styling
+        createAccountTab.style.borderBottom = '3px solid #ff7b00';
+        createAccountTab.style.color = '#ff7b00';
+        createAccountTab.style.fontWeight = '600';
+        signInTab.style.borderBottom = '3px solid transparent';
+        signInTab.style.color = '#666';
+        signInTab.style.fontWeight = '500';
+      }
+      
+      // Clear error message when switching modes
+      document.getElementById('checkoutErrorMessage').textContent = '';
+    }
+    
     function showCheckoutModal() {
       document.getElementById('checkoutModalOverlay').style.display = 'flex';
       document.getElementById('checkoutModalOverlay').setAttribute('aria-hidden', 'false');
+      
+      // Set up tab click handlers
+      document.getElementById('signInTab').onclick = () => setCheckoutMode('signin');
+      document.getElementById('createAccountTab').onclick = () => setCheckoutMode('createaccount');
+      
+      // Default to Sign In mode
+      setCheckoutMode('signin');
+      
       // Clear any previous error messages
       document.getElementById('checkoutErrorMessage').textContent = '';
-      // Focus on name field
+      
+      // Focus on email field (common for both modes)
       setTimeout(() => {
-        const nameInput = document.getElementById('checkoutName');
-        if (nameInput) nameInput.focus();
+        const emailInput = document.getElementById('checkoutEmail');
+        if (emailInput) emailInput.focus();
       }, 100);
     }
 
@@ -621,10 +688,19 @@ html.in-iframe .app-card {
       const password = document.getElementById('checkoutPassword').value.trim();
       const errorDiv = document.getElementById('checkoutErrorMessage');
       
-      // Validation
-      if (!name || !email || !password) {
-        errorDiv.textContent = 'Please fill in all required fields.';
-        return;
+      // Validation based on mode
+      if (checkoutMode === 'createaccount') {
+        // Create Account mode - name is required
+        if (!name || !email || !password) {
+          errorDiv.textContent = 'Please fill in all required fields.';
+          return;
+        }
+      } else {
+        // Sign In mode - only email and password required
+        if (!email || !password) {
+          errorDiv.textContent = 'Please enter your email and password.';
+          return;
+        }
       }
       
       if (!email.includes('@')) {
@@ -632,7 +708,7 @@ html.in-iframe .app-card {
         return;
       }
       
-      if (password.length < 6) {
+      if (checkoutMode === 'createaccount' && password.length < 6) {
         errorDiv.textContent = 'Password must be at least 6 characters long.';
         return;
       }
@@ -660,10 +736,7 @@ html.in-iframe .app-card {
       
       // Prepare checkout session request
       const checkoutData = {
-        items: orderItems,
-        email: email,
-        name: name,
-        password: password
+        items: orderItems
       };
       
       try {
@@ -673,8 +746,16 @@ html.in-iframe .app-card {
         submitBtn.textContent = 'Processing...';
         submitBtn.disabled = true;
         
+        // Build URL with query parameters
+        let url = `${BASE}/create-checkout-session?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
+        
+        // Only add name for Create Account mode
+        if (checkoutMode === 'createaccount' && name) {
+          url += `&name=${encodeURIComponent(name)}`;
+        }
+        
         // Call the create-checkout-session endpoint
-        const response = await fetch(`${BASE}/create-checkout-session?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}&password=${encodeURIComponent(password)}`, {
+        const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(checkoutData)
@@ -683,7 +764,21 @@ html.in-iframe .app-card {
         const result = await response.json();
         
         if (!response.ok) {
-          throw new Error(result.detail || 'Failed to create checkout session');
+          // Handle specific error for Sign In mode
+          if (checkoutMode === 'signin' && result.detail && result.detail.includes('provide your name and a password')) {
+            errorDiv.textContent = 'Account not found. Please create an account or check your email.';
+          } else if (result.detail && result.detail.includes('already exists')) {
+            errorDiv.textContent = 'An account with this email already exists. Please sign in instead.';
+            // Switch to sign in mode
+            setCheckoutMode('signin');
+          } else {
+            errorDiv.textContent = result.detail || 'Failed to create checkout session';
+          }
+          
+          // Reset button
+          submitBtn.textContent = originalText;
+          submitBtn.disabled = false;
+          return;
         }
         
         // Redirect to Stripe checkout
@@ -699,7 +794,7 @@ html.in-iframe .app-card {
         
         // Reset button
         const submitBtn = document.getElementById('checkoutSubmitBtn');
-        submitBtn.textContent = 'Proceed to Payment';
+        submitBtn.textContent = checkoutMode === 'signin' ? 'Sign In & Proceed to Payment' : 'Create Account & Proceed to Payment';
         submitBtn.disabled = false;
       }
     }
