@@ -1775,8 +1775,6 @@ def create_checkout_session(order: Order, email: str, name: Optional[str] = None
 
         # Return the checkout URL to the client
         return {"checkout_url": session.url}
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
