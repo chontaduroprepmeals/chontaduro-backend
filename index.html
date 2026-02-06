@@ -123,6 +123,32 @@ a {
     #zipBanner { display:none; background:#fff4e5; border-left:4px solid #ffb74d; padding:10px 14px; margin-bottom: 12px; border-radius:6px; }
     #zipMessage { margin-top:8px; color: #b00020; }
 
+    /* Checkout modal styles (similar to zip modal) */
+    #checkoutModalOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 20px;
+    }
+    #checkoutModal {
+      width: 100%;
+      max-width: 520px;
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 14px 40px rgba(0,0,0,0.25);
+      text-align: left;
+    }
+    #checkoutModal h2 { margin: 0 0 16px 0; font-size: 1.5rem; }
+    #checkoutModal label { display: block; margin-top: 12px; font-weight: 500; }
+    #checkoutModal input { width: 100%; padding: 10px; font-size: 1rem; margin: 6px 0 0 0; box-sizing: border-box; border: 1px solid #ddd; border-radius: 4px; }
+    #checkoutModal .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    #checkoutModal .error-message { color: #b00020; margin-top: 10px; font-size: 0.9rem; }
+
     /* Make inputs and buttons more touch-friendly */
     button, input, select, textarea { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 
@@ -203,6 +229,31 @@ html.in-iframe .app-card {
       </div>
 
       <div class="hint">You can change the postal code later in account or shipping information.</div>
+    </div>
+  </div>
+
+  <!-- Checkout modal (overlay) -->
+  <div id="checkoutModalOverlay" aria-hidden="true">
+    <div id="checkoutModal" role="dialog" aria-modal="true" aria-labelledby="checkoutModalTitle">
+      <h2 id="checkoutModalTitle">Complete Your Order</h2>
+      <p>Please provide your information to proceed with payment.</p>
+      
+      <label for="checkoutName">Full Name *</label>
+      <input id="checkoutName" type="text" placeholder="John Doe" required aria-label="Full name">
+      
+      <label for="checkoutEmail">Email *</label>
+      <input id="checkoutEmail" type="email" placeholder="john@example.com" required aria-label="Email address">
+      
+      <label for="checkoutPassword">Password *</label>
+      <input id="checkoutPassword" type="password" placeholder="Create a password" required aria-label="Password">
+      <small style="color: #666; font-size: 0.85rem;">Your password will be used to access your order history.</small>
+      
+      <div id="checkoutErrorMessage" class="error-message"></div>
+
+      <div class="actions">
+        <button id="checkoutCancelBtn" class="px-4 py-2 bg-gray-300 rounded">Cancel</button>
+        <button id="checkoutSubmitBtn" class="px-4 py-2 bg-orange-500 text-white rounded">Proceed to Payment</button>
+      </div>
     </div>
   </div>
 
@@ -432,8 +483,9 @@ html.in-iframe .app-card {
       });
 
       html += `</div>
-        <div class="mt-4 flex gap-3 justify-center">
+        <div class="mt-4 flex gap-3 justify-center flex-wrap">
           <button onclick="redoMenu()" class="px-3 py-2 bg-blue-600 text-white rounded">Regenerate Full Menu</button>
+          <button onclick="proceedToCheckout()" class="px-4 py-3 bg-green-600 text-white rounded font-bold text-lg">🛒 Place Order</button>
         </div>
 
         <!-- Bottom Back button (explicit) -->
@@ -448,6 +500,9 @@ html.in-iframe .app-card {
         </div>`;
 
       document.getElementById("app").innerHTML = html;
+
+      // Store menu data globally for checkout
+      window.currentMenuData = data;
 
       document.getElementById("addProteinBtn").onclick = async () => {
         const val = Number(document.getElementById("extraProteinInput").value) || 0;
@@ -496,6 +551,141 @@ html.in-iframe .app-card {
         if (res.menu) renderMenu(res);
         else alert(res.message || "Could not regenerate");
       } catch (e) { alert("Error"); console.error(e); }
+    }
+
+    // --- Checkout functionality ---
+    function showCheckoutModal() {
+      document.getElementById('checkoutModalOverlay').style.display = 'flex';
+      document.getElementById('checkoutModalOverlay').setAttribute('aria-hidden', 'false');
+      // Clear any previous error messages
+      document.getElementById('checkoutErrorMessage').textContent = '';
+      // Focus on name field
+      setTimeout(() => {
+        const nameInput = document.getElementById('checkoutName');
+        if (nameInput) nameInput.focus();
+      }, 100);
+    }
+
+    function hideCheckoutModal() {
+      document.getElementById('checkoutModalOverlay').style.display = 'none';
+      document.getElementById('checkoutModalOverlay').setAttribute('aria-hidden', 'true');
+    }
+
+    async function proceedToCheckout() {
+      // Show the checkout modal to collect user info
+      showCheckoutModal();
+      
+      // Set up event listeners for modal buttons
+      const submitBtn = document.getElementById('checkoutSubmitBtn');
+      const cancelBtn = document.getElementById('checkoutCancelBtn');
+      
+      const submitHandler = async () => {
+        await handleCheckoutSubmit();
+      };
+      
+      const cancelHandler = () => {
+        hideCheckoutModal();
+        // Clear form
+        document.getElementById('checkoutName').value = '';
+        document.getElementById('checkoutEmail').value = '';
+        document.getElementById('checkoutPassword').value = '';
+      };
+      
+      // Remove old listeners and add new ones
+      submitBtn.replaceWith(submitBtn.cloneNode(true));
+      cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+      
+      document.getElementById('checkoutSubmitBtn').addEventListener('click', submitHandler);
+      document.getElementById('checkoutCancelBtn').addEventListener('click', cancelHandler);
+    }
+
+    async function handleCheckoutSubmit() {
+      const name = document.getElementById('checkoutName').value.trim();
+      const email = document.getElementById('checkoutEmail').value.trim();
+      const password = document.getElementById('checkoutPassword').value.trim();
+      const errorDiv = document.getElementById('checkoutErrorMessage');
+      
+      // Validation
+      if (!name || !email || !password) {
+        errorDiv.textContent = 'Please fill in all required fields.';
+        return;
+      }
+      
+      if (!email.includes('@')) {
+        errorDiv.textContent = 'Please enter a valid email address.';
+        return;
+      }
+      
+      if (password.length < 6) {
+        errorDiv.textContent = 'Password must be at least 6 characters long.';
+        return;
+      }
+      
+      // Get the current menu data
+      const menuData = window.currentMenuData;
+      if (!menuData || !menuData.menu) {
+        errorDiv.textContent = 'No menu data found. Please regenerate your menu.';
+        return;
+      }
+      
+      // Build order items from menu
+      const orderItems = [];
+      menuData.menu.forEach(meal => {
+        // Determine item type and less_protein flag
+        const itemType = meal.type === 'breakfast' ? 'breakfast' : 'main_menu';
+        const lessProtein = meal.less_protein || false;
+        
+        orderItems.push({
+          item_type: itemType,
+          quantity: 1, // Each meal in the menu is quantity 1
+          less_protein: lessProtein
+        });
+      });
+      
+      // Prepare checkout session request
+      const checkoutData = {
+        items: orderItems,
+        email: email,
+        name: name,
+        password: password
+      };
+      
+      try {
+        // Show loading state
+        const submitBtn = document.getElementById('checkoutSubmitBtn');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Processing...';
+        submitBtn.disabled = true;
+        
+        // Call the create-checkout-session endpoint
+        const response = await fetch(`${BASE}/create-checkout-session?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}&password=${encodeURIComponent(password)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(checkoutData)
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.detail || 'Failed to create checkout session');
+        }
+        
+        // Redirect to Stripe checkout
+        if (result.checkout_url) {
+          window.location.href = result.checkout_url;
+        } else {
+          throw new Error('No checkout URL received');
+        }
+        
+      } catch (error) {
+        console.error('Checkout error:', error);
+        errorDiv.textContent = error.message || 'An error occurred. Please try again.';
+        
+        // Reset button
+        const submitBtn = document.getElementById('checkoutSubmitBtn');
+        submitBtn.textContent = 'Proceed to Payment';
+        submitBtn.disabled = false;
+      }
     }
 
     // --- ZIP modal helpers and cold-start handling ---
