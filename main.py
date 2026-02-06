@@ -85,16 +85,6 @@ def healthz():
 async def serve_frontend():
     return FileResponse("index.html")
 
-# Manejo de solicitudes HEAD en la raíz
-@app.head("/")
-async def handle_head_request():
-    return HTMLResponse(content="", status_code=200)
-
-# Manejo de solicitudes GET explícito en la raíz
-@app.get("/")
-async def handle_get_request_override():
-    return FileResponse("index.html")
-
 # --- LOAD MEALS (expects English keys; tolerant with Spanish keys) ---
 MEALS_DATA: List[Dict[str, Any]] = []
 TEMPLATES_DATA: List[Dict[str, Any]] = []
@@ -1725,40 +1715,51 @@ def create_checkout_session(order: Order, email: str, name: Optional[str] = None
     """
     Create a checkout session via Stripe. If the user is not registered, prompt for registration.
     """
-    # Check if the user already exists
-    user = next((u for u in sessions.values() if u.get("email") == email), None)
-
-    if not user:  # If user is not registered
-        if not name or not password:  # Ensure name and password are provided
-            raise HTTPException(
-                status_code=400,
-                detail="Please provide your name and a password to register before proceeding."
-            )
-        # Register the user
-        hashed_password = User.hash_password(password)
-        user = User(
-            name=name,
-            email=email,
-            hashed_password=hashed_password,
-            creation_date=datetime.datetime.utcnow(),
-        )
-        session_id = f"session_{len(sessions) + 1}"  # Generate a new session ID
-        sessions[session_id] = user.dict()  # Simulate saving to the database
-
+    # Create a database session
+    db = SessionLocal()
     try:
+        # Check if the user already exists in the database
+        user = db.query(User).filter(User.email == email).first()
+
+        if not user:  # If user is not registered
+            if not name or not password:  # Ensure name and password are provided
+                raise HTTPException(
+                    status_code=400,
+                    detail="Please provide your name and a password to register before proceeding."
+                )
+            # Register the user in the database
+            hashed_password = User.hash_password(password)
+            user = User(
+                name=name,
+                email=email,
+                hashed_password=hashed_password,
+                creation_date=datetime.datetime.utcnow(),
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
         # Initialize the product list for Stripe
         line_items = []
 
         # Add each product in the order to the Stripe line items
         for item in order.items:
+            # Calculate price correctly based on item type
+            if item.item_type == "main_menu":
+                price = 13 if item.less_protein else 15
+            elif item.item_type == "breakfast":
+                price = 10
+            else:
+                raise HTTPException(status_code=400, detail="Invalid item type")
+            
             line_items.append({
                 "price_data": {
                     "currency": "usd",
                     "product_data": {
                         "name": item.item_type,  # Name of the product from the order
                     },
-                    # Calculate price dynamically and convert to cents
-                    "unit_amount": int(calculate_price([item], 0) * 100),
+                    # Convert price to cents
+                    "unit_amount": int(price * 100),
                 },
                 "quantity": item.quantity,  # Quantity of the product
             })
@@ -1774,33 +1775,52 @@ def create_checkout_session(order: Order, email: str, name: Optional[str] = None
 
         # Return the checkout URL to the client
         return {"checkout_url": session.url}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
     
 @app.post("/register")
 async def register_user(name: str, email: str, password: str):
     """
     Register a new user upon finalizing the order with their name, email, and password.
     """
-    # Check if the email already exists
-    existing_user = next((u for u in sessions.values() if u.get("email") == email), None)
-    if existing_user:
-        raise HTTPException(status_code=400, detail="A user with this email already exists.")
+    # Create a database session
+    db = SessionLocal()
+    try:
+        # Check if the email already exists in the database
+        existing_user = db.query(User).filter(User.email == email).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="A user with this email already exists.")
 
-    # Create a new user and hash their password
-    hashed_password = User.hash_password(password)
-    new_user = User(
-        name=name,
-        email=email,
-        hashed_password=hashed_password,
-        creation_date=datetime.datetime.utcnow(),
-    )
-    
-    # Simulate saving the user in the "database" of sessions
-    session_id = f"session_{len(sessions) + 1}"
-    sessions[session_id] = new_user.dict()
+        # Create a new user and hash their password
+        hashed_password = User.hash_password(password)
+        new_user = User(
+            name=name,
+            email=email,
+            hashed_password=hashed_password,
+            creation_date=datetime.datetime.utcnow(),
+        )
+        
+        # Save the user to the database
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
 
-    return {"message": "User registered successfully", "user": new_user}   
+        # Return JSON-serializable data
+        return {
+            "message": "User registered successfully",
+            "user": {
+                "id": new_user.id,
+                "name": new_user.name,
+                "email": new_user.email,
+                "creation_date": new_user.creation_date.isoformat() if new_user.creation_date else None
+            }
+        }
+    finally:
+        db.close()   
 
 def calculate_price(menu: List[Meal], extra_protein: int) -> float:
     base = 0.0
