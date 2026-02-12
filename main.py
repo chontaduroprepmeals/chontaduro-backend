@@ -1235,36 +1235,30 @@ async def next_step(request: Request):
                 response_menu = []
                 for meal in menu_with_protein:
                     meal_entry = dict(meal)
-                    if state.plan == 4:  # Plan 4: Desglose completo de macronutrientes
-                        day_meals = [
-                            x
-                            for x in menu_with_protein
-                            if x.get("day_index") == meal.get("day_index")
-                        ]
-                        total_cal_day = sum((mm.get("calories", 0) or 0) for mm in day_meals) or 1
-                        frac = (getattr(meal, "calories", 0) or 0) / max(total_calories, 1)
-                        meal_entry["calories_assigned"] = int(
-                            round((calorie_target or 0) * frac)
-                        ) if calorie_target else meal.get("calories")
-                        meal_entry["protein_assigned"] = int(meal.get("provided_protein", 0))
-                        meal_entry["fat_assigned"] = int(
-                            round((macros.get("fat_grams", 0) * frac))
-                        ) if macros else 0
-                        meal_entry["carbs_assigned"] = int(
-                            round((macros.get("carbs_grams", 0) * frac))
-                        ) if macros else 0
-
-                        # **Ajuste dinámico de calorías** (insertado aquí)
-                        original_calories = getattr(meal, "calories", 0)
-                        frac_calories = calorie_target / total_calories if total_calories > 0 else 1
-                        adjusted_calories = int(original_calories * frac_calories)
-                        meal_entry["calories_assigned"] = adjusted_calories
-
-                        # Depuración de calorías ajustadas
-                        print(f"[DEBUG] Meal: {meal.get('name', 'Unnamed Meal')} - Adjusted Calories: {adjusted_calories} kcal")
-
-                    else:  # Otros planes: Solo mostrar proteína asignada
-                        meal_entry["protein_assigned"] = int(meal.get("provided_protein", 0))
+                    
+                    # Use the values already calculated by allocate_protein_to_menu
+                    # These are already correct and evenly distributed
+                    meal_entry["protein_assigned"] = int(meal.get("provided_protein", 0))
+                    meal_entry["fat_assigned"] = int(meal.get("fat_assigned", 0))
+                    meal_entry["carbs_assigned"] = int(meal.get("carbs_assigned", 0))
+                    meal_entry["calories_assigned"] = int(meal.get("calories", 0))
+                    
+                    # Calculate portion multiplier to show how meal is scaled
+                    base_protein = meal.get("protein_g", 35)  # from meals.json
+                    if base_protein > 0:
+                        portion_multiplier = meal_entry["protein_assigned"] / base_protein
+                        meal_entry["portion_multiplier"] = round(portion_multiplier, 2)
+                        meal_entry["serving_size_adjusted"] = int(meal.get("serving_size_g", 300) * portion_multiplier)
+                    else:
+                        meal_entry["portion_multiplier"] = 1.0
+                        meal_entry["serving_size_adjusted"] = meal.get("serving_size_g", 300)
+                    
+                    print(f"[DEBUG] Meal: {meal.get('name', 'Unnamed')} - "
+                          f"Protein: {meal_entry['protein_assigned']}g, "
+                          f"Carbs: {meal_entry['carbs_assigned']}g, "
+                          f"Fat: {meal_entry['fat_assigned']}g, "
+                          f"Calories: {meal_entry['calories_assigned']} kcal, "
+                          f"Portion: {meal_entry['portion_multiplier']}x")
 
                     response_menu.append(meal_entry)
 
