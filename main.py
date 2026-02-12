@@ -334,6 +334,10 @@ def calc_calorie_target(tdee: float, objective: str) -> Optional[float]:
     if obj in ["gain muscle", "gain", "muscle"]:
         # Incrementa un 15% para ganancia muscular
         return round(tdee * 1.15)
+    if obj in ["body recomposition", "recomposition", "recomp", "lose fat and gain muscle"]:
+        # Body recomposition: 10-15% deficit (mild deficit for simultaneous fat loss and muscle gain)
+        # Scientific basis: 200-300 kcal deficit with high protein
+        return round(tdee * 0.85)
     # Default: mantener el peso
     return round(tdee)
 
@@ -347,6 +351,11 @@ def calc_macros(calories: int, objective: str, weight_kg: Optional[float]) -> Di
     elif obj in ["gain muscle", "gain", "muscle"]:
         pct_protein, pct_fat, pct_carb = 0.28, 0.25, 0.47
         prot_per_kg = 1.8
+    elif obj in ["body recomposition", "recomposition", "recomp", "lose fat and gain muscle"]:
+        # Body recomposition: HIGH protein (2.0-2.2g/kg), moderate fat, fill rest with carbs
+        # Scientific basis: 1.6-2.2g/kg protein for muscle growth in deficit
+        pct_protein, pct_fat, pct_carb = 0.35, 0.25, 0.40
+        prot_per_kg = 2.2  # Higher protein for body recomposition
     else:
         pct_protein, pct_fat, pct_carb = 0.25, 0.30, 0.45
         prot_per_kg = 1.6
@@ -989,7 +998,7 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "pick_plan":
         return {"question":"Which plan do you want?","fields":[{"name":"Plan","type":"select","options":["Plan 1: 1 main meal per day","Plan 2: 2 main meals per day","Plan 3: 1 main meal + 1 breakfast","Plan 4: 2 main meals + 1 breakfast (full day)"], "required": True}],"current_step":"pick_plan"}
     if step_name == "objective":
-        return {"question":"What is your main goal?","fields":[{"name":"Objective","type":"select","options":["Lose Fat","Gain Muscle","Maintain Shape"], "required": True}],"current_step":"objective"}
+        return {"question":"What is your main goal?","fields":[{"name":"Objective","type":"select","options":["Lose Fat","Gain Muscle","Maintain Shape","Body Recomposition (Lose Fat & Gain Muscle)"], "required": True}],"current_step":"objective"}
     if step_name == "personal_info":
         return {
             "question":"Tell us your personal data:",
