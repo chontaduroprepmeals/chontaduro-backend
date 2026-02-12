@@ -669,6 +669,9 @@ html.in-iframe .app-card {
       if (currentStep === "objective" && fields.length === 1 && fields[0].name === "Objective") {
         return renderObjectiveSelection(question, fields[0]);
       }
+      if (currentStep === "personal_info") {
+        return renderPersonalInfo(question, fields);
+      }
 
       // Default form rendering for other steps
       let html = `<form id="f"><h2 class="text-lg font-semibold mb-4">${question}</h2>`;
@@ -777,6 +780,273 @@ html.in-iframe .app-card {
       // Set hidden input
       document.getElementById('diet_input').value = value;
     };
+
+    // Visual Personal Data Form Renderer
+    function renderPersonalInfo(question, fields) {
+      let html = `<div class="max-w-4xl mx-auto">
+        <h2 class="text-2xl font-bold mb-6 text-center">${question}</h2>
+        <form id="personal_form" class="space-y-6">`;
+      
+      // Weight Section with Unit Toggle
+      html += `<div class="bg-white p-6 rounded-lg border-2 border-gray-200 shadow-sm">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-3xl">⚖️</span>
+          <h3 class="text-lg font-semibold">Weight</h3>
+        </div>
+        <div class="flex gap-2 mb-3">
+          <button type="button" id="unit_kg" onclick="toggleWeightUnit('kg')" class="px-4 py-2 rounded bg-orange-500 text-white font-medium">kg</button>
+          <button type="button" id="unit_lbs" onclick="toggleWeightUnit('lbs')" class="px-4 py-2 rounded bg-gray-200 text-gray-700">lbs</button>
+        </div>
+        <input type="number" id="weight_input" name="weight_value" class="w-full p-3 border-2 rounded-lg text-xl" placeholder="e.g. 70" required>
+        <div id="weight_conversion" class="text-sm text-gray-600 mt-2"></div>
+        <input type="hidden" id="weight_unit" name="weight_unit" value="kg">
+      </div>`;
+      
+      // Height Section with Unit Toggle
+      html += `<div class="bg-white p-6 rounded-lg border-2 border-gray-200 shadow-sm">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-3xl">📏</span>
+          <h3 class="text-lg font-semibold">Height</h3>
+        </div>
+        <div class="flex gap-2 mb-3">
+          <button type="button" id="unit_cm" onclick="toggleHeightUnit('cm')" class="px-4 py-2 rounded bg-orange-500 text-white font-medium">cm</button>
+          <button type="button" id="unit_in" onclick="toggleHeightUnit('in')" class="px-4 py-2 rounded bg-gray-200 text-gray-700">in</button>
+        </div>
+        <input type="number" id="height_input" name="height_value" class="w-full p-3 border-2 rounded-lg text-xl" placeholder="e.g. 175" required>
+        <div id="height_conversion" class="text-sm text-gray-600 mt-2"></div>
+        <input type="hidden" id="height_unit" name="height_unit" value="cm">
+      </div>`;
+      
+      // Age
+      html += `<div class="bg-white p-6 rounded-lg border-2 border-gray-200 shadow-sm">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-3xl">🎂</span>
+          <h3 class="text-lg font-semibold">Age</h3>
+        </div>
+        <input type="number" name="age" class="w-full p-3 border-2 rounded-lg text-xl" placeholder="e.g. 30" required>
+      </div>`;
+      
+      // Sex - Visual Cards
+      html += `<div class="bg-white p-6 rounded-lg border-2 border-gray-200 shadow-sm">
+        <h3 class="text-lg font-semibold mb-4">Sex</h3>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="sex-card cursor-pointer border-2 border-gray-300 rounded-lg p-6 text-center hover:shadow-lg transition-all hover:scale-105"
+               data-value="male" onclick="selectSex('male')">
+            <div class="text-4xl mb-2">♂️</div>
+            <div class="font-semibold">Male</div>
+          </div>
+          <div class="sex-card cursor-pointer border-2 border-gray-300 rounded-lg p-6 text-center hover:shadow-lg transition-all hover:scale-105"
+               data-value="female" onclick="selectSex('female')">
+            <div class="text-4xl mb-2">♀️</div>
+            <div class="font-semibold">Female</div>
+          </div>
+        </div>
+        <input type="hidden" id="sex_input" name="sex" required>
+      </div>`;
+      
+      // Exercise Days - Number Picker
+      html += `<div class="bg-white p-6 rounded-lg border-2 border-gray-200 shadow-sm">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-3xl">🏃‍♂️</span>
+          <h3 class="text-lg font-semibold">Exercise Days per Week</h3>
+        </div>
+        <div class="flex items-center justify-center gap-4">
+          <button type="button" onclick="adjustDays(-1)" class="px-4 py-2 bg-orange-500 text-white rounded-lg text-2xl font-bold hover:bg-orange-600">−</button>
+          <div class="text-3xl font-bold w-24 text-center" id="days_display">0</div>
+          <button type="button" onclick="adjustDays(1)" class="px-4 py-2 bg-orange-500 text-white rounded-lg text-2xl font-bold hover:bg-orange-600">+</button>
+        </div>
+        <input type="hidden" id="days_input" name="days_per_week" value="0">
+        <div class="text-sm text-gray-600 text-center mt-2">How many days do you exercise?</div>
+      </div>`;
+      
+      // Session Duration - Visual Cards
+      html += `<div class="bg-white p-6 rounded-lg border-2 border-gray-200 shadow-sm">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-3xl">⏱️</span>
+          <h3 class="text-lg font-semibold">Typical Session Duration</h3>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="duration-card cursor-pointer border-2 border-gray-300 rounded-lg p-4 text-center hover:shadow-lg transition-all hover:scale-105"
+               data-value="<30" onclick="selectDuration('<30')">
+            <div class="font-semibold">&lt;30</div>
+            <div class="text-sm text-gray-600">min</div>
+          </div>
+          <div class="duration-card cursor-pointer border-2 border-gray-300 rounded-lg p-4 text-center hover:shadow-lg transition-all hover:scale-105"
+               data-value="30-60" onclick="selectDuration('30-60')">
+            <div class="font-semibold">30-60</div>
+            <div class="text-sm text-gray-600">min</div>
+          </div>
+          <div class="duration-card cursor-pointer border-2 border-gray-300 rounded-lg p-4 text-center hover:shadow-lg transition-all hover:scale-105"
+               data-value="60-120" onclick="selectDuration('60-120')">
+            <div class="font-semibold">60-120</div>
+            <div class="text-sm text-gray-600">min</div>
+          </div>
+          <div class="duration-card cursor-pointer border-2 border-gray-300 rounded-lg p-4 text-center hover:shadow-lg transition-all hover:scale-105"
+               data-value="120+" onclick="selectDuration('120+')">
+            <div class="font-semibold">120+</div>
+            <div class="text-sm text-gray-600">min</div>
+          </div>
+        </div>
+        <input type="hidden" id="duration_input" name="avg_session_duration" required>
+      </div>`;
+      
+      // Intensity - Color-Coded Cards
+      html += `<div class="bg-white p-6 rounded-lg border-2 border-gray-200 shadow-sm">
+        <h3 class="text-lg font-semibold mb-4">Exercise Intensity</h3>
+        <div class="grid grid-cols-3 gap-4">
+          <div class="intensity-card cursor-pointer border-2 border-green-300 rounded-lg p-6 text-center hover:shadow-lg transition-all hover:scale-105 bg-green-50"
+               data-value="low" onclick="selectIntensity('low')">
+            <div class="text-3xl mb-2">🟢</div>
+            <div class="font-semibold">Low</div>
+            <div class="text-xs text-gray-600">Light activity</div>
+          </div>
+          <div class="intensity-card cursor-pointer border-2 border-yellow-300 rounded-lg p-6 text-center hover:shadow-lg transition-all hover:scale-105 bg-yellow-50"
+               data-value="moderate" onclick="selectIntensity('moderate')">
+            <div class="text-3xl mb-2">🟡</div>
+            <div class="font-semibold">Moderate</div>
+            <div class="text-xs text-gray-600">Some sweat</div>
+          </div>
+          <div class="intensity-card cursor-pointer border-2 border-red-300 rounded-lg p-6 text-center hover:shadow-lg transition-all hover:scale-105 bg-red-50"
+               data-value="high" onclick="selectIntensity('high')">
+            <div class="text-3xl mb-2">🔴</div>
+            <div class="font-semibold">High</div>
+            <div class="text-xs text-gray-600">Intense workout</div>
+          </div>
+        </div>
+        <input type="hidden" id="intensity_input" name="intensity" required>
+      </div>`;
+      
+      // Body Fat % (Optional)
+      html += `<div class="bg-white p-6 rounded-lg border-2 border-gray-200 shadow-sm">
+        <h3 class="text-lg font-semibold mb-3">Body Fat % <span class="text-sm text-gray-500">(Optional)</span></h3>
+        <input type="number" name="body_fat_pct" class="w-full p-3 border-2 rounded-lg" placeholder="e.g. 20" min="0" max="100" step="0.1">
+      </div>`;
+      
+      // Submit Buttons
+      html += `<div class="flex justify-between mt-6">
+        <button type="button" onclick="step({}, 'back')" class="px-6 py-3 bg-gray-300 rounded-lg font-medium">← Back</button>
+        <button type="submit" class="px-6 py-3 bg-orange-500 text-white rounded-lg font-medium">Next →</button>
+      </div>`;
+      
+      html += `</form></div>`;
+      
+      document.getElementById("app").innerHTML = html;
+      
+      // Form submit handler
+      document.getElementById("personal_form").onsubmit = (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const answer = {};
+        for (const [key, value] of formData.entries()) {
+          answer[key] = value;
+        }
+        // Validate required hidden fields
+        if (!answer.sex) { alert('Please select your sex'); return; }
+        if (!answer.avg_session_duration) { alert('Please select session duration'); return; }
+        if (!answer.intensity) { alert('Please select exercise intensity'); return; }
+        step(answer, 'next');
+      };
+      
+      // Initialize unit conversion displays
+      updateWeightConversion();
+      updateHeightConversion();
+    }
+
+    // Global handlers for personal info form
+    window.toggleWeightUnit = function(unit) {
+      document.getElementById('weight_unit').value = unit;
+      document.getElementById('unit_kg').className = unit === 'kg' ? 'px-4 py-2 rounded bg-orange-500 text-white font-medium' : 'px-4 py-2 rounded bg-gray-200 text-gray-700';
+      document.getElementById('unit_lbs').className = unit === 'lbs' ? 'px-4 py-2 rounded bg-orange-500 text-white font-medium' : 'px-4 py-2 rounded bg-gray-200 text-gray-700';
+      updateWeightConversion();
+    };
+
+    window.toggleHeightUnit = function(unit) {
+      document.getElementById('height_unit').value = unit;
+      document.getElementById('unit_cm').className = unit === 'cm' ? 'px-4 py-2 rounded bg-orange-500 text-white font-medium' : 'px-4 py-2 rounded bg-gray-200 text-gray-700';
+      document.getElementById('unit_in').className = unit === 'in' ? 'px-4 py-2 rounded bg-orange-500 text-white font-medium' : 'px-4 py-2 rounded bg-gray-200 text-gray-700';
+      updateHeightConversion();
+    };
+
+    function updateWeightConversion() {
+      const input = document.getElementById('weight_input');
+      const unit = document.getElementById('weight_unit').value;
+      const conversionDiv = document.getElementById('weight_conversion');
+      input.oninput = () => {
+        const val = parseFloat(input.value) || 0;
+        if (unit === 'kg') {
+          conversionDiv.textContent = val > 0 ? `≈ ${(val * 2.20462).toFixed(1)} lbs` : '';
+        } else {
+          conversionDiv.textContent = val > 0 ? `≈ ${(val / 2.20462).toFixed(1)} kg` : '';
+        }
+      };
+    }
+
+    function updateHeightConversion() {
+      const input = document.getElementById('height_input');
+      const unit = document.getElementById('height_unit').value;
+      const conversionDiv = document.getElementById('height_conversion');
+      input.oninput = () => {
+        const val = parseFloat(input.value) || 0;
+        if (unit === 'cm') {
+          conversionDiv.textContent = val > 0 ? `≈ ${(val / 2.54).toFixed(1)} inches` : '';
+        } else {
+          conversionDiv.textContent = val > 0 ? `≈ ${(val * 2.54).toFixed(1)} cm` : '';
+        }
+      };
+    }
+
+    window.selectSex = function(value) {
+      document.querySelectorAll('.sex-card').forEach(card => {
+        card.classList.remove('ring-4', 'ring-orange-500');
+      });
+      const selectedCard = document.querySelector(`.sex-card[data-value="${value}"]`);
+      if (selectedCard) {
+        selectedCard.classList.add('ring-4', 'ring-orange-500');
+      }
+      document.getElementById('sex_input').value = value;
+    };
+
+    window.adjustDays = function(delta) {
+      const input = document.getElementById('days_input');
+      const display = document.getElementById('days_display');
+      let current = parseInt(input.value) || 0;
+      current = Math.max(0, Math.min(7, current + delta));
+      input.value = current;
+      display.textContent = current;
+    };
+
+    window.selectDuration = function(value) {
+      document.querySelectorAll('.duration-card').forEach(card => {
+        card.classList.remove('ring-4', 'ring-orange-500');
+      });
+      const selectedCard = document.querySelector(`.duration-card[data-value="${value}"]`);
+      if (selectedCard) {
+        selectedCard.classList.add('ring-4', 'ring-orange-500');
+      }
+      document.getElementById('duration_input').value = value;
+    };
+
+    window.selectIntensity = function(value) {
+      document.querySelectorAll('.intensity-card').forEach(card => {
+        card.classList.remove('ring-4', 'ring-orange-500');
+      });
+      const selectedCard = document.querySelector(`.intensity-card[data-value="${value}"]`);
+      if (selectedCard) {
+        selectedCard.classList.add('ring-4', 'ring-orange-500');
+      }
+      document.getElementById('intensity_input').value = value;
+    };
+
+    // Helper function to group meals by day
+    function groupMealsByDay(meals) {
+      const grouped = {};
+      meals.forEach(meal => {
+        const day = meal.day_number || 1;
+        if (!grouped[day]) grouped[day] = [];
+        grouped[day].push(meal);
+      });
+      return grouped;
+    }
 
     function renderMenu(data){
       console.log('🍽️ renderMenu() called - Checkout button should appear');
