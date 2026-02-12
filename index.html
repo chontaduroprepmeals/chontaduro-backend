@@ -396,7 +396,131 @@ html.in-iframe .app-card {
     /* === The rest of your JS (renderForm, renderMenu, zip modal handlers etc.)
        is unchanged from your original file. Keep the existing functions below as-is. === */
 
+    // Special rendering for plan selection with visual cards
+    function renderPlanSelection(question, field) {
+      const plans = [
+        { value: "Plan 1: 1 main meal per day", emoji: "🍽️", price: "$15/day", desc: "One nutritious main meal", meals: "1 meal" },
+        { value: "Plan 2: 2 main meals per day", emoji: "🥗", price: "$30/day", desc: "Two balanced main meals", meals: "2 meals" },
+        { value: "Plan 3: 1 main meal + 1 breakfast", emoji: "🍳", price: "$26/day", desc: "Start strong with breakfast", meals: "2 meals" },
+        { value: "Plan 4: 2 main meals + 1 breakfast (full day)", emoji: "✨", price: "$41/day", desc: "Complete nutrition plan", meals: "3 meals", featured: true }
+      ];
+
+      let html = `<form id="f">
+        <h2 class="text-2xl font-bold mb-2 text-center">${question}</h2>
+        <p class="text-gray-600 text-center mb-6">Choose the meal plan that fits your lifestyle</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">`;
+
+      plans.forEach((plan, idx) => {
+        const featuredClass = plan.featured ? 'border-orange-500 border-2 bg-orange-50' : 'border-gray-300';
+        const featuredBadge = plan.featured ? '<span class="absolute top-2 right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded">MOST POPULAR</span>' : '';
+        html += `
+          <div class="relative plan-card ${featuredClass} border rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg hover:scale-105" 
+               data-value="${plan.value}" 
+               onclick="selectPlan('${plan.value}')">
+            ${featuredBadge}
+            <div class="text-4xl mb-2 text-center">${plan.emoji}</div>
+            <div class="text-lg font-bold text-center mb-1">${plan.meals}</div>
+            <div class="text-sm text-gray-600 text-center mb-2">${plan.desc}</div>
+            <div class="text-xl font-bold text-orange-600 text-center">${plan.price}</div>
+          </div>`;
+      });
+
+      html += `</div>
+        <input type="hidden" name="Plan" id="plan_input" required>
+        <div class="flex justify-between mt-4">
+          <div></div>
+          <button type="submit" class="px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition">Continue →</button>
+        </div>
+      </form>`;
+
+      document.getElementById("app").innerHTML = html;
+
+      // Setup form handler
+      const form = document.getElementById("f");
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const selectedValue = document.getElementById("plan_input").value;
+        if (!selectedValue) {
+          alert("Please select a plan");
+          return;
+        }
+        step({ Plan: selectedValue }, "next");
+      };
+    }
+
+    // Special rendering for objective selection with visual cards
+    function renderObjectiveSelection(question, field) {
+      const objectives = [
+        { value: "Lose Fat", emoji: "🔥", color: "red", desc: "Burn fat with a calorie deficit", detail: "20% calorie reduction" },
+        { value: "Gain Muscle", emoji: "💪", color: "blue", desc: "Build muscle with a calorie surplus", detail: "15% calorie increase" },
+        { value: "Maintain Shape", emoji: "⚖️", color: "green", desc: "Stay at your current weight", detail: "Maintenance calories" },
+        { value: "Body Recomposition (Lose Fat & Gain Muscle)", emoji: "✨", color: "purple", desc: "Lose fat and gain muscle simultaneously", detail: "15% deficit + high protein", featured: true }
+      ];
+
+      let html = `<form id="f">
+        <h2 class="text-2xl font-bold mb-2 text-center">${question}</h2>
+        <p class="text-gray-600 text-center mb-6">Select your primary fitness goal</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">`;
+
+      objectives.forEach(obj => {
+        const borderColor = obj.color === 'red' ? 'border-red-400' : 
+                          obj.color === 'blue' ? 'border-blue-400' : 
+                          obj.color === 'green' ? 'border-green-400' : 'border-purple-400';
+        const bgColor = obj.color === 'red' ? 'bg-red-50' : 
+                       obj.color === 'blue' ? 'bg-blue-50' : 
+                       obj.color === 'green' ? 'bg-green-50' : 'bg-purple-50';
+        const featuredClass = obj.featured ? `${borderColor} border-2 ${bgColor}` : 'border-gray-300';
+        const featuredBadge = obj.featured ? `<span class="absolute top-2 right-2 bg-${obj.color}-500 text-white text-xs px-2 py-1 rounded">NEW</span>` : '';
+        
+        html += `
+          <div class="relative objective-card ${featuredClass} border rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg hover:scale-105" 
+               data-value="${obj.value}" 
+               onclick="selectObjective('${obj.value}')">
+            ${featuredBadge}
+            <div class="text-4xl mb-2 text-center">${obj.emoji}</div>
+            <div class="text-lg font-bold text-center mb-1">${obj.value}</div>
+            <div class="text-sm text-gray-600 text-center mb-2">${obj.desc}</div>
+            <div class="text-xs text-gray-500 text-center italic">${obj.detail}</div>
+          </div>`;
+      });
+
+      html += `</div>
+        <input type="hidden" name="Objective" id="objective_input" required>
+        <div class="flex justify-between mt-4">
+          <button type="button" id="back" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400 transition">← Back</button>
+          <button type="submit" class="px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition">Continue →</button>
+        </div>
+      </form>`;
+
+      document.getElementById("app").innerHTML = html;
+
+      // Setup form handler
+      const form = document.getElementById("f");
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const selectedValue = document.getElementById("objective_input").value;
+        if (!selectedValue) {
+          alert("Please select your goal");
+          return;
+        }
+        step({ Objective: selectedValue }, "next");
+      };
+
+      const backBtn = document.getElementById("back");
+      if (backBtn) backBtn.onclick = () => step({}, "back");
+    }
+
+    // Main form rendering function
     function renderForm(question, fields){
+      // Check if this is plan selection or objective selection for special rendering
+      if (currentStep === "pick_plan" && fields.length === 1 && fields[0].name === "Plan") {
+        return renderPlanSelection(question, fields[0]);
+      }
+      if (currentStep === "objective" && fields.length === 1 && fields[0].name === "Objective") {
+        return renderObjectiveSelection(question, fields[0]);
+      }
+
+      // Default form rendering for other steps
       let html = `<form id="f"><h2 class="text-lg font-semibold mb-4">${question}</h2>`;
       const enhanced = (fields || []).map(f => {
         const payloadKey = f.name.replace(/\s+/g, "_");
@@ -460,6 +584,35 @@ html.in-iframe .app-card {
       const backBtn = document.getElementById("back");
       if (backBtn) backBtn.onclick = () => step({}, "back");
     }
+
+    // Global selection handlers for plan and objective cards
+    window.selectPlan = function(value) {
+      // Remove previous selection
+      document.querySelectorAll('.plan-card').forEach(card => {
+        card.classList.remove('ring-4', 'ring-orange-500');
+      });
+      // Add selection to clicked card
+      const selectedCard = document.querySelector(`.plan-card[data-value="${value}"]`);
+      if (selectedCard) {
+        selectedCard.classList.add('ring-4', 'ring-orange-500');
+      }
+      // Set hidden input
+      document.getElementById('plan_input').value = value;
+    };
+
+    window.selectObjective = function(value) {
+      // Remove previous selection
+      document.querySelectorAll('.objective-card').forEach(card => {
+        card.classList.remove('ring-4', 'ring-orange-500');
+      });
+      // Add selection to clicked card
+      const selectedCard = document.querySelector(`.objective-card[data-value="${value}"]`);
+      if (selectedCard) {
+        selectedCard.classList.add('ring-4', 'ring-orange-500');
+      }
+      // Set hidden input
+      document.getElementById('objective_input').value = value;
+    };
 
     function renderMenu(data){
       console.log('🍽️ renderMenu() called - Checkout button should appear');
