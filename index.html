@@ -1093,54 +1093,100 @@ html.in-iframe .app-card {
       </div>`;
 
       html += `<div class="space-y-3">`;
-
-      (data.menu || []).forEach((m, idx) => {
-        const ing = (m.ingredients || []).join(", ");
-        const safeName = (m.name || "").replace(/'/g, "\\'");
-        const protein = m.protein_assigned || m.provided_protein || 0;
-        const carbs = m.carbs_assigned || 0;
-        const fat = m.fat_assigned || 0;
-        const calories = m.calories_assigned || m.calories || 0;
-        const portionMultiplier = m.portion_multiplier || 1.0;
-        const servingSize = m.serving_size_adjusted || m.serving_size_g || 0;
+      // Group meals by day
+      const mealsByDay = groupMealsByDay(data.menu || []);
+      const dayKeys = Object.keys(mealsByDay).sort((a, b) => parseInt(a) - parseInt(b));
+      
+      let globalIdx = 0; // Track global meal index for protein inputs
+      
+      // Render each day section
+      dayKeys.forEach(dayNum => {
+        const dayMeals = mealsByDay[dayNum];
         
-        // Build macro info display
-        let perMealInfo = `<div class="text-sm text-gray-700 mt-2">
-          <strong>Macros (for this portion):</strong><br/>
-          <span class="inline-block mr-3">🥩 Protein: <strong>${protein}g</strong></span>
-          <span class="inline-block mr-3">🍞 Carbs: <strong>${carbs}g</strong></span>
-          <span class="inline-block mr-3">🥑 Fat: <strong>${fat}g</strong></span>
-        </div>`;
+        // Calculate day totals
+        let dayProtein = 0, dayCarbs = 0, dayFat = 0, dayCalories = 0;
+        dayMeals.forEach(m => {
+          dayProtein += m.protein_assigned || 0;
+          dayCarbs += m.carbs_assigned || 0;
+          dayFat += m.fat_assigned || 0;
+          dayCalories += m.calories_assigned || m.calories || 0;
+        });
         
-        // Show portion information if it's scaled
-        let portionInfo = '';
-        if (portionMultiplier !== 1.0) {
-          portionInfo = `<div class="text-xs text-blue-600 mt-1">
-            📏 Portion size: ${portionMultiplier}x (${servingSize}g total)
+        // Day header
+        html += `<div class="mb-6 bg-white p-4 rounded-lg border-2 border-orange-200 shadow-sm">
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="text-2xl font-bold text-orange-600">📅 DAY ${dayNum}</h3>
+            <div class="text-sm text-gray-600">Total: ${dayCalories} kcal</div>
           </div>`;
-        }
+        
+        // Render meals for this day
+        html += `<div class="space-y-3">`;
+        
+        dayMeals.forEach(m => {
+          const ing = (m.ingredients || []).join(", ");
+          const safeName = (m.name || "").replace(/'/g, "\\'");
+          const protein = m.protein_assigned || m.provided_protein || 0;
+          const carbs = m.carbs_assigned || 0;
+          const fat = m.fat_assigned || 0;
+          const calories = m.calories_assigned || m.calories || 0;
+          const portionMultiplier = m.portion_multiplier || 1.0;
+          const servingSize = m.serving_size_adjusted || m.serving_size_g || 0;
+          const mealType = m.meal_type || 'MEAL';
+          
+          // Meal type emoji
+          let mealTypeEmoji = '🍽️';
+          if (mealType === 'BREAKFAST') mealTypeEmoji = '🌅';
+          else if (mealType === 'DINNER') mealTypeEmoji = '🌙';
+          
+          // Build macro info display
+          let perMealInfo = `<div class="text-sm text-gray-700 mt-2">
+            <strong>Macros:</strong>
+            <span class="inline-block mr-3">🥩 <strong>${protein}g</strong></span>
+            <span class="inline-block mr-3">🍞 <strong>${carbs}g</strong></span>
+            <span class="inline-block mr-3">🥑 <strong>${fat}g</strong></span>
+          </div>`;
+          
+          // Show portion information if it's scaled
+          let portionInfo = '';
+          if (portionMultiplier !== 1.0) {
+            portionInfo = `<div class="text-xs text-blue-600 mt-1">
+              📏 Portion: ${portionMultiplier.toFixed(2)}x (${servingSize}g)
+            </div>`;
+          }
 
-        html += `<div class="p-3 bg-gray-50 rounded border">
-          <div class="flex justify-between">
-            <div class="text-left">
-              <strong>${m.name}</strong>
-              <div class="text-sm text-gray-600">${m.type} • ${calories} kcal • $${(m.price||0).toFixed(2)}</div>
-              ${portionInfo}
-              <div class="mt-2 text-sm">Ingredients: ${ing}</div>
-              ${perMealInfo}
-            </div>
-            <div class="flex flex-col items-end gap-2">
-              <button onclick="swapMeal('${safeName}')" class="px-2 py-1 bg-yellow-400 rounded text-xs">Swap</button>
-              <div class="flex items-center gap-1">
-                <input id="p-${idx}" type="number" min="0" placeholder="g" class="w-16 p-1 border rounded text-sm" />
-                <button onclick="addProteinToMeal(${idx})" class="px-2 py-1 bg-green-500 text-white rounded text-xs">+Protein</button>
+          html += `<div class="p-4 bg-gray-50 rounded border-2 border-gray-200">
+            <div class="flex justify-between items-start">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-2xl">${mealTypeEmoji}</span>
+                  <div>
+                    <div class="font-bold text-sm text-gray-600">${mealType}</div>
+                    <div class="text-lg font-semibold">${m.name}</div>
+                  </div>
+                </div>
+                <div class="text-sm text-gray-600">${m.type} • ${calories} kcal • $${(m.price||0).toFixed(2)}</div>
+                ${portionInfo}
+                <div class="mt-2 text-sm text-gray-700">Ingredients: ${ing}</div>
+                ${perMealInfo}
+              </div>
+              <div class="flex flex-col items-end gap-2 ml-4">
+                <button onclick="swapMeal('${safeName}')" class="px-3 py-1 bg-yellow-400 rounded text-xs font-medium hover:bg-yellow-500">Swap</button>
+                <div class="flex items-center gap-1">
+                  <input id="p-${globalIdx}" type="number" min="0" placeholder="g" class="w-16 p-1 border rounded text-sm" />
+                  <button onclick="addProteinToMeal(${globalIdx})" class="px-2 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600">+Protein</button>
+                </div>
               </div>
             </div>
-          </div>
-        </div>`;
+          </div>`;
+          
+          globalIdx++;
+        });
+        
+        html += `</div>`; // Close day meals
+        html += `</div>`; // Close day section
       });
 
-      html += `</div>
+      html += `</div>`;
         <div class="mt-4 flex gap-3 justify-center flex-wrap">
           <button onclick="redoMenu()" class="px-3 py-2 bg-blue-600 text-white rounded">Regenerate Full Menu</button>
           <button onclick="proceedToCheckout()" class="px-4 py-3 bg-green-600 text-white rounded font-bold text-lg">🛒 Place Order</button>
