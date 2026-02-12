@@ -1228,9 +1228,41 @@ async def next_step(request: Request):
                 print(f"- Total Calories: {total_calories} kcal")
 
                 # Modifica la respuesta según el plan
+                # Determine meals per day based on plan
+                plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}  # (num_main, num_break)
+                num_main, num_break = plan_map.get(state.plan, (1, 0))
+                meals_per_day = num_main + num_break
+                
                 response_menu = []
+                meal_index = 0
                 for meal in menu_with_protein:
                     meal_entry = dict(meal)
+                    
+                    # Calculate day number and meal type
+                    day_num = (meal_index // meals_per_day) + 1
+                    position_in_day = meal_index % meals_per_day
+                    
+                    # Determine meal type based on plan and position
+                    if state.plan == 1:  # 1 lunch per day
+                        meal_type = "LUNCH"
+                    elif state.plan == 2:  # 2 lunches (lunch + dinner)
+                        meal_type = "LUNCH" if position_in_day == 0 else "DINNER"
+                    elif state.plan == 3:  # breakfast + lunch
+                        meal_type = "BREAKFAST" if position_in_day == 0 else "LUNCH"
+                    elif state.plan == 4:  # breakfast + lunch + dinner
+                        if position_in_day == 0:
+                            meal_type = "BREAKFAST"
+                        elif position_in_day == 1:
+                            meal_type = "LUNCH"
+                        else:
+                            meal_type = "DINNER"
+                    else:
+                        meal_type = "MEAL"
+                    
+                    # Add day and meal type labels
+                    meal_entry["day_number"] = day_num
+                    meal_entry["meal_type"] = meal_type
+                    meal_entry["day_label"] = f"DAY {day_num} - {meal_type}"
                     
                     # Use the values already calculated by allocate_protein_to_menu
                     # These are already correct and evenly distributed
@@ -1249,7 +1281,7 @@ async def next_step(request: Request):
                         meal_entry["portion_multiplier"] = 1.0
                         meal_entry["serving_size_adjusted"] = meal.get("serving_size_g", 300)
                     
-                    print(f"[DEBUG] Meal: {meal.get('name', 'Unnamed')} - "
+                    print(f"[DEBUG] {meal_entry['day_label']}: {meal.get('name', 'Unnamed')} - "
                           f"Protein: {meal_entry['protein_assigned']}g, "
                           f"Carbs: {meal_entry['carbs_assigned']}g, "
                           f"Fat: {meal_entry['fat_assigned']}g, "
@@ -1257,6 +1289,7 @@ async def next_step(request: Request):
                           f"Portion: {meal_entry['portion_multiplier']}x")
 
                     response_menu.append(meal_entry)
+                    meal_index += 1
 
                 # Calcula el precio total
                 total_price = calculate_price(
