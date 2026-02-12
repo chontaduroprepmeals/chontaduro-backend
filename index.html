@@ -510,9 +510,159 @@ html.in-iframe .app-card {
       if (backBtn) backBtn.onclick = () => step({}, "back");
     }
 
+    // Diet Preference Visual Cards
+    function renderDietPreference(question, field) {
+      const diets = [
+        { value: "Omnivore", emoji: "🍖", desc: "Eat everything including meat and vegetables" },
+        { value: "Vegetarian", emoji: "🥗", desc: "No meat or poultry, but dairy/eggs OK" },
+        { value: "Vegan", emoji: "🌱", desc: "No animal products at all" },
+        { value: "Pescatarian", emoji: "🐟", desc: "No meat, but fish/seafood is included" }
+      ];
+
+      let html = `<form id="f">
+        <h2 class="text-2xl font-bold mb-2 text-center">${question}</h2>
+        <p class="text-gray-600 text-center mb-6">Choose the option that best describes your overall diet</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">`;
+
+      diets.forEach(diet => {
+        html += `
+          <div class="diet-card border border-gray-300 rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg hover:scale-105" 
+               data-value="${diet.value}" 
+               onclick="selectDiet('${diet.value}')">
+            <div class="text-4xl mb-2 text-center">${diet.emoji}</div>
+            <div class="text-lg font-bold text-center mb-1">${diet.value}</div>
+            <div class="text-sm text-gray-600 text-center">${diet.desc}</div>
+          </div>`;
+      });
+
+      html += `</div>
+        <input type="hidden" name="Diet_Preference" id="diet_input" required>
+        <div class="flex justify-between mt-4">
+          <div></div>
+          <button type="submit" class="px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition">Continue →</button>
+        </div>
+      </form>`;
+
+      document.getElementById("app").innerHTML = html;
+
+      const form = document.getElementById("f");
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const selectedValue = document.getElementById("diet_input").value;
+        if (!selectedValue) {
+          alert("Please select your diet preference");
+          return;
+        }
+        step({ Diet_Preference: selectedValue }, "next");
+      };
+    }
+
+    // Allergies and Restrictions Tag Input
+    function renderAllergiesAndRestrictions(question, field) {
+      let html = `<form id="f">
+        <h2 class="text-2xl font-bold mb-2 text-center">${question}</h2>
+        <p class="text-gray-600 text-center mb-4">Type and press Enter to add items you're allergic to or simply dislike</p>
+        
+        <div class="mb-4">
+          <label class="block text-sm font-medium mb-2">Allergies & Food Restrictions</label>
+          <div id="tags-container" class="border rounded-lg p-3 min-h-[80px] mb-2 bg-gray-50">
+            <div id="tags-display" class="flex flex-wrap gap-2 mb-2"></div>
+            <div class="flex gap-2">
+              <input type="text" id="restriction-input" 
+                     class="flex-1 p-2 border rounded" 
+                     placeholder="Type item and press Enter (e.g., dairy, chicken, nuts)">
+              <button type="button" id="add-restriction-btn" 
+                      class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600">
+                Add
+              </button>
+            </div>
+          </div>
+          <p class="text-xs text-gray-500">Common items: dairy, nuts, seafood, gluten, soy, eggs, chicken, broccoli, oats</p>
+          <p class="text-xs text-gray-500 mt-1">Leave empty if you have no restrictions</p>
+        </div>
+        
+        <input type="hidden" name="Allergies_and_Restrictions" id="restrictions_input" value="">
+        
+        <div class="flex justify-between mt-4">
+          <button type="button" id="back" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400 transition">← Back</button>
+          <button type="submit" class="px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition">Continue →</button>
+        </div>
+      </form>`;
+
+      document.getElementById("app").innerHTML = html;
+
+      // Initialize tag system
+      window.restrictionTags = [];
+
+      const input = document.getElementById("restriction-input");
+      const addBtn = document.getElementById("add-restriction-btn");
+      const tagsDisplay = document.getElementById("tags-display");
+      const hiddenInput = document.getElementById("restrictions_input");
+
+      function updateHiddenInput() {
+        hiddenInput.value = window.restrictionTags.join(", ");
+      }
+
+      function renderTags() {
+        tagsDisplay.innerHTML = "";
+        window.restrictionTags.forEach(tag => {
+          const tagEl = document.createElement("span");
+          tagEl.className = "inline-flex items-center bg-orange-500 text-white px-3 py-1 rounded-full text-sm";
+          tagEl.innerHTML = `
+            🏷️ ${tag}
+            <button type="button" onclick="removeRestrictionTag('${tag}')" class="ml-2 hover:text-orange-200">✕</button>
+          `;
+          tagsDisplay.appendChild(tagEl);
+        });
+        updateHiddenInput();
+      }
+
+      window.addRestrictionTag = function(value) {
+        if (!value) return;
+        const normalized = value.trim().toLowerCase();
+        if (normalized && !window.restrictionTags.includes(normalized)) {
+          window.restrictionTags.push(normalized);
+          renderTags();
+        }
+        input.value = "";
+      };
+
+      window.removeRestrictionTag = function(value) {
+        window.restrictionTags = window.restrictionTags.filter(t => t !== value);
+        renderTags();
+      };
+
+      addBtn.onclick = () => {
+        addRestrictionTag(input.value);
+      };
+
+      input.onkeypress = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          addRestrictionTag(input.value);
+        }
+      };
+
+      const form = document.getElementById("f");
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const value = hiddenInput.value || "";
+        step({ Allergies_and_Restrictions: value }, "next");
+      };
+
+      const backBtn = document.getElementById("back");
+      if (backBtn) backBtn.onclick = () => step({}, "back");
+    }
+
     // Main form rendering function
     function renderForm(question, fields){
-      // Check if this is plan selection or objective selection for special rendering
+      // Check for special rendering cases
+      if (currentStep === "diet_preference" && fields.length === 1 && fields[0].name === "Diet Preference") {
+        return renderDietPreference(question, fields[0]);
+      }
+      if (currentStep === "allergies_and_restrictions" && fields.length === 1 && fields[0].name === "Allergies and Restrictions") {
+        return renderAllergiesAndRestrictions(question, fields[0]);
+      }
       if (currentStep === "pick_plan" && fields.length === 1 && fields[0].name === "Plan") {
         return renderPlanSelection(question, fields[0]);
       }
@@ -612,6 +762,20 @@ html.in-iframe .app-card {
       }
       // Set hidden input
       document.getElementById('objective_input').value = value;
+    };
+
+    window.selectDiet = function(value) {
+      // Remove previous selection
+      document.querySelectorAll('.diet-card').forEach(card => {
+        card.classList.remove('ring-4', 'ring-orange-500');
+      });
+      // Add selection to clicked card
+      const selectedCard = document.querySelector(`.diet-card[data-value="${value}"]`);
+      if (selectedCard) {
+        selectedCard.classList.add('ring-4', 'ring-orange-500');
+      }
+      // Set hidden input
+      document.getElementById('diet_input').value = value;
     };
 
     function renderMenu(data){

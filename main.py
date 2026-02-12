@@ -162,13 +162,13 @@ sessions: Dict[str, Dict[str, Any]] = {}
 
 # --- FLOW STEPS ---
 STEPS = {
-    "start": "pick_plan",
+    "start": "diet_preference",
+    "diet_preference": "pick_plan",
     "pick_plan": "objective",
-    "objective": "personal_info",
-    "personal_info": "restrictions",
-    "restrictions": "duration",
-    "duration": "dislikes",
-    "dislikes": "review",
+    "objective": "allergies_and_restrictions",
+    "allergies_and_restrictions": "personal_info",
+    "personal_info": "duration",
+    "duration": "review",
     "review": "review"
 }
 
@@ -194,6 +194,7 @@ class SessionState(BaseModel):
     dislikes: List[str] = Field(default_factory=list)
     allergies: List[str] = Field(default_factory=list)
     dietary_restrictions: List[str] = Field(default_factory=list)
+    allergies_and_restrictions: Optional[str] = None  # New unified field for allergies/dislikes
     extra_protein_grams: int = 0  # global extra grams to distribute
     extra_protein_map: Dict[int, int] = Field(default_factory=dict)  # per-meal extras
     menu: List[Any] = Field(default_factory=list)
@@ -995,16 +996,18 @@ def process_meal_data(meal: Meal, protein: int, calories: int, fat_ratio: float 
 
 # --- UI form definitions (unchanged) ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
+    if step_name == "diet_preference":
+        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Vegan","Pescatarian"], "required": True}],"current_step":"diet_preference"}
     if step_name == "pick_plan":
         return {"question":"Which plan do you want?","fields":[{"name":"Plan","type":"select","options":["Plan 1: 1 main meal per day","Plan 2: 2 main meals per day","Plan 3: 1 main meal + 1 breakfast","Plan 4: 2 main meals + 1 breakfast (full day)"], "required": True}],"current_step":"pick_plan"}
     if step_name == "objective":
         return {"question":"What is your main goal?","fields":[{"name":"Objective","type":"select","options":["Lose Fat","Gain Muscle","Maintain Shape","Body Recomposition (Lose Fat & Gain Muscle)"], "required": True}],"current_step":"objective"}
+    if step_name == "allergies_and_restrictions":
+        return {"question":"Do you have any allergies or food restrictions?","fields":[{"name":"Allergies and Restrictions","type":"text","placeholder":"e.g., dairy, nuts, chicken (leave empty if none)", "required": False}],"current_step":"allergies_and_restrictions"}
     if step_name == "personal_info":
         return {
             "question":"Tell us your personal data:",
             "fields":[
-                {"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Vegan","Pescatarian","Few restrictions"], "unit":"Choose the option that best describes your overall diet.", "required": True},
-                {"name":"Food Allergies","type":"multiselect","options":["None - no allergies","Egg-free","Nut-free","Seafood-free","Dairy-free","Soy-free","Gluten-free"], "unit":"Medical allergies - select all that apply", "required": True},
                 {"name":"Weight Unit","type":"select","options":["kg","lbs"], "required": True},
                 {"name":"Weight","type":"number","placeholder":"e.g. 70","unit":"kg or lbs", "required": True},
                 {"name":"Height Unit","type":"select","options":["cm","in"], "required": True},
@@ -1018,16 +1021,13 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
             ],
             "current_step":"personal_info"
         }
-    if step_name == "restrictions":
-        return {"question":"Please select any dietary restrictions (preferences):","fields":[{"name":"Dietary Restrictions","type":"multiselect","options":["None - no special restrictions","No pork","No beef","No chicken / poultry","No seafood / shellfish","Gluten-free","Lactose-free / Dairy-free","Soy-free","Corn-free","Sesame-free"],"unit":"Personal or cultural preferences (not medical)"}],"current_step":"restrictions"}
     if step_name == "duration":
         return {"question":"For how many days do you want this plan?","fields":[{"name":"Days","type":"number","min":1,"max":30,"placeholder":"e.g. 7", "required": True}],"current_step":"duration"}
-    if step_name == "dislikes":
-        return {"question":"Select ingredients you DON'T like:","fields":[{"name":"Dislikes","type":"multiselect","options":["None - I like everything","Vegetables","Oats","Berries","Milk","Chicken","Rice","Broccoli","Salmon","Lettuce","Avocado","Tofu","Carrots","Beef","Pork","Shellfish","Banana"], "unit":"Select foods you simply dislike (taste).", "required": True}],"current_step":"dislikes"}
     if step_name == "review":
         if not state:
             return {"question":"State error. Start again.","current_step":"review"}
-        summary = (f"Plan: {state.plan} for {state.days} days\nDiet: {state.diet_preference or 'N/A'}\nDietary restrictions: {', '.join(state.dietary_restrictions) if state.dietary_restrictions else 'None'}\nAllergies: {', '.join(state.allergies) if state.allergies else 'None'}\nDislikes: {', '.join(state.dislikes) if state.dislikes else 'None'}\nWeight: {state.weight or 'N/A'} {state.weight_unit}\nHeight: {state.height or 'N/A'} {state.height_unit}\nAge: {state.age or 'N/A'}\nActivity: {state.activity_days_bucket or 'N/A'} days, {state.activity_duration_bucket or 'N/A'} min, {state.activity_intensity or 'N/A'} intensity\n")
+        allergies_str = state.allergies_and_restrictions if state.allergies_and_restrictions else "None"
+        summary = (f"Plan: {state.plan} for {state.days} days\nDiet: {state.diet_preference or 'Omnivore'}\nAllergies/Restrictions: {allergies_str}\nWeight: {state.weight or 'N/A'} {state.weight_unit}\nHeight: {state.height or 'N/A'} {state.height_unit}\nAge: {state.age or 'N/A'}\nActivity: {state.activity_days_bucket or 'N/A'} days, {state.activity_duration_bucket or 'N/A'} min, {state.activity_intensity or 'N/A'} intensity\n")
         return {"question": f"Review your info and generate the menu:\n\n{summary}", "fields": [], "current_step":"review"}
     return {"question":"Unknown step. Start again.","current_step":"start"}
 
@@ -1067,6 +1067,11 @@ async def next_step(request: Request):
     if step_name == "start":
         step_to_render_name = STEPS["start"]
 
+    elif step_name == "diet_preference":
+        if "diet_preference" in answer:
+            state.diet_preference = str(answer.get("diet_preference"))
+        step_to_render_name = STEPS["diet_preference"]
+
     elif step_name == "pick_plan":
         plan = answer.get("plan")
         if plan:
@@ -1086,14 +1091,14 @@ async def next_step(request: Request):
             state.objective = answer.get("objective")
         step_to_render_name = STEPS["objective"]
 
+    elif step_name == "allergies_and_restrictions":
+        if "allergies_and_restrictions" in answer:
+            state.allergies_and_restrictions = str(answer.get("allergies_and_restrictions"))
+        step_to_render_name = STEPS["allergies_and_restrictions"]
+
     elif step_name == "personal_info":
         try:
-            if "diet_preference" in answer:
-                state.diet_preference = str(answer.get("diet_preference"))
-            # Allergies are collected here for everyone
-            if "allergies" in answer:
-                ag = answer.get("allergies")
-                state.allergies = ag if isinstance(ag, list) else [ag]
+            # Note: diet_preference is now collected in an earlier step
             if "weight_unit" in answer:
                 state.weight_unit = answer.get("weight_unit")
             if "weight" in answer:
@@ -1127,20 +1132,10 @@ async def next_step(request: Request):
                 except Exception:
                     state.body_fat = None
 
-            # Conditional flow: show restrictions only if user chose "Few restrictions"
-            dp = (state.diet_preference or "").strip().lower()
-            if dp == "few restrictions":
-                step_to_render_name = "restrictions"
-            else:
-                step_to_render_name = "duration"
+            # Go directly to duration (no restrictions step anymore)
+            step_to_render_name = STEPS["personal_info"]
         except Exception:
             step_to_render_name = "personal_info"
-
-    elif step_name == "restrictions":
-        dr = raw_answer.get("Dietary Restrictions") or raw_answer.get("DietaryRestrictions") or answer.get("dietary_restrictions")
-        if dr:
-            state.dietary_restrictions = dr if isinstance(dr, list) else [dr]
-        step_to_render_name = "duration"
 
     elif step_name == "duration":
         days_val = answer.get("days") or answer.get("Days")
@@ -1149,15 +1144,7 @@ async def next_step(request: Request):
                 state.days = int(days_val)
         except Exception:
             pass
-        step_to_render_name = "dislikes"
-
-    elif step_name == "dislikes":
-        d = answer.get("dislikes") or answer.get("Dislikes")
-        if isinstance(d, list) and any(str(x).lower().startswith("none") or str(x).lower().startswith("i like") for x in d):
-            state.dislikes = []
-        else:
-            state.dislikes = d if isinstance(d, list) else [d] if d else []
-        step_to_render_name = "review"
+        step_to_render_name = STEPS["duration"]  # Goes to review
 
 
     elif step_name == "review":
