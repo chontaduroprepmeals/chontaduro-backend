@@ -672,6 +672,15 @@ html.in-iframe .app-card {
       if (currentStep === "personal_info") {
         return renderPersonalInfo(question, fields);
       }
+      if (currentStep === "duration") {
+        return renderDaysSelector(question, fields);
+      }
+      if (currentStep === "zipcode") {
+        return renderZipCodeInput(question, fields);
+      }
+      if (currentStep === "review") {
+        return renderReviewSection(question, fields);
+      }
 
       // Default form rendering for other steps
       let html = `<form id="f"><h2 class="text-lg font-semibold mb-4">${question}</h2>`;
@@ -1046,6 +1055,243 @@ html.in-iframe .app-card {
         grouped[day].push(meal);
       });
       return grouped;
+    }
+
+    // Visual Days Selector with calendar-style cards
+    function renderDaysSelector(question, fields) {
+      const daysOptions = [3, 4, 5, 6, 7];
+      
+      let html = `
+        <div class="space-y-6">
+          <div class="text-center mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">📅 How many days of meal prep?</h2>
+            <p class="text-gray-600">Choose the number of days you want your meals prepared for</p>
+          </div>
+          
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      `;
+      
+      daysOptions.forEach(days => {
+        // Create visual calendar grid
+        let calendarGrid = '';
+        const rows = Math.ceil(days / 4);
+        for (let row = 0; row < rows; row++) {
+          calendarGrid += '<div class="flex justify-center gap-1">';
+          for (let col = 0; col < Math.min(4, days - row * 4); col++) {
+            calendarGrid += '<span class="text-lg">🗓️</span>';
+          }
+          calendarGrid += '</div>';
+        }
+        
+        html += `
+          <div onclick="selectDays(${days})" 
+               class="days-card cursor-pointer p-6 border-2 border-gray-300 rounded-xl text-center
+                      hover:scale-105 hover:shadow-lg transition-all duration-200
+                      hover:border-orange-400 bg-white"
+               data-days="${days}">
+            <div class="text-3xl font-bold text-orange-600 mb-2">${days}</div>
+            <div class="text-sm text-gray-600 mb-3">days</div>
+            <div class="calendar-visual space-y-1">
+              ${calendarGrid}
+            </div>
+          </div>
+        `;
+      });
+      
+      html += `
+          </div>
+        </div>
+      `;
+      
+      return html;
+    }
+    
+    // Global function to select days
+    window.selectDays = function(days) {
+      // Remove selection from all cards
+      document.querySelectorAll('.days-card').forEach(card => {
+        card.classList.remove('ring-4', 'ring-orange-500', 'border-orange-500');
+        card.classList.add('border-gray-300');
+      });
+      
+      // Add selection to clicked card
+      const selectedCard = document.querySelector(`[data-days="${days}"]`);
+      if (selectedCard) {
+        selectedCard.classList.add('ring-4', 'ring-orange-500', 'border-orange-500');
+        selectedCard.classList.remove('border-gray-300');
+      }
+      
+      // Store the value
+      sessionData.days = days;
+      
+      // Enable next button
+      const nextBtn = document.querySelector('button[type="submit"]');
+      if (nextBtn) nextBtn.disabled = false;
+    };
+
+    // Beautiful ZIP Code Input with map styling
+    function renderZipCodeInput(question, fields) {
+      const allowedZips = ['98027', '98052', '98004', '98033', '98008', '98005', '98006', '98007', '98009', '98034'];
+      
+      let html = `
+        <div class="space-y-6">
+          <div class="text-center mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">🗺️ Delivery Location</h2>
+            <p class="text-gray-600">Enter your ZIP code to verify delivery availability</p>
+          </div>
+          
+          <div class="max-w-md mx-auto">
+            <div class="border-2 border-gray-300 rounded-xl p-6 bg-gradient-to-br from-blue-50 to-white shadow-md">
+              <div class="flex items-center gap-3 mb-4">
+                <span class="text-3xl">📍</span>
+                <div>
+                  <div class="font-bold text-lg text-gray-800">Enter your ZIP Code</div>
+                  <div class="text-sm text-gray-600">We'll check if we deliver to your area</div>
+                </div>
+              </div>
+              
+              <div class="mb-4">
+                <input type="text" 
+                       id="zipcode_input" 
+                       name="zipcode" 
+                       placeholder="e.g., 98027"
+                       maxlength="5"
+                       pattern="[0-9]{5}"
+                       class="w-full px-4 py-3 text-xl font-semibold text-center border-2 border-gray-300 rounded-lg
+                              focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none"
+                       required />
+              </div>
+              
+              <div class="border-t border-gray-200 pt-4 mt-4">
+                <div class="flex items-start gap-2 text-sm text-gray-600">
+                  <span class="text-lg">🚚</span>
+                  <div>
+                    <div class="font-semibold mb-1">We deliver to Seattle area:</div>
+                    <div class="text-xs text-gray-500">${allowedZips.join(', ')}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      return html;
+    }
+
+    // Inspirational Review Section with visual cards
+    function renderReviewSection(question, fields) {
+      const sd = sessionData;
+      
+      // Format data for display
+      const planText = `Plan ${sd.plan_number || 'N/A'}`;
+      const daysText = `${sd.days || 'N/A'} days/week`;
+      const dietText = sd.diet_preference || 'Not specified';
+      
+      const weightText = sd.weight_value ? `${sd.weight_value} ${sd.weight_unit || 'kg'}` : 'N/A';
+      const heightText = sd.height_value ? `${sd.height_value} ${sd.height_unit || 'cm'}` : 'N/A';
+      const ageText = sd.age || 'N/A';
+      
+      const exerciseDays = sd.days_per_week || 0;
+      const duration = sd.avg_session_duration || 'N/A';
+      const intensity = sd.intensity || 'N/A';
+      
+      const restrictions = sd.allergies_and_restrictions || 'None';
+      
+      let html = `
+        <div class="space-y-6">
+          <!-- Inspirational Header -->
+          <div class="bg-gradient-to-r from-orange-100 to-yellow-100 border-2 border-orange-300 rounded-xl p-6 text-center shadow-md">
+            <div class="text-2xl font-bold text-gray-800 mb-3">
+              ✨ Reviewing Your Information
+            </div>
+            <div class="text-lg text-gray-700 leading-relaxed">
+              You look like someone <span class="font-bold text-orange-600">admirable</span> about to 
+              <span class="font-bold text-orange-600">improve their life</span>!
+            </div>
+            <div class="text-2xl font-bold text-orange-600 mt-2">
+              GREAT CHOICE! 💪
+            </div>
+          </div>
+          
+          <!-- Info Cards Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Plan Card -->
+            <div class="border-2 border-blue-200 rounded-xl p-4 bg-white shadow">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="text-2xl">🍽️</span>
+                <span class="font-bold text-lg text-gray-800">Your Plan</span>
+              </div>
+              <div class="text-gray-700">
+                <div class="text-xl font-semibold text-blue-600">${planText}</div>
+                <div class="text-sm text-gray-600">${daysText}</div>
+              </div>
+            </div>
+            
+            <!-- Diet Card -->
+            <div class="border-2 border-green-200 rounded-xl p-4 bg-white shadow">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="text-2xl">🥗</span>
+                <span class="font-bold text-lg text-gray-800">Diet Type</span>
+              </div>
+              <div class="text-gray-700">
+                <div class="text-xl font-semibold text-green-600">${dietText}</div>
+              </div>
+            </div>
+            
+            <!-- Body Stats Card -->
+            <div class="border-2 border-purple-200 rounded-xl p-4 bg-white shadow">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="text-2xl">⚖️</span>
+                <span class="font-bold text-lg text-gray-800">Body Stats</span>
+              </div>
+              <div class="text-gray-700 space-y-1">
+                <div><span class="text-sm text-gray-600">Weight:</span> <span class="font-semibold">${weightText}</span></div>
+                <div><span class="text-sm text-gray-600">Height:</span> <span class="font-semibold">${heightText}</span></div>
+                <div><span class="text-sm text-gray-600">Age:</span> <span class="font-semibold">${ageText}</span></div>
+              </div>
+            </div>
+            
+            <!-- Activity Card -->
+            <div class="border-2 border-red-200 rounded-xl p-4 bg-white shadow">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="text-2xl">🏃‍♂️</span>
+                <span class="font-bold text-lg text-gray-800">Activity Level</span>
+              </div>
+              <div class="text-gray-700 space-y-1">
+                <div><span class="text-sm text-gray-600">Frequency:</span> <span class="font-semibold">${exerciseDays} days/week</span></div>
+                <div><span class="text-sm text-gray-600">Duration:</span> <span class="font-semibold">${duration} min</span></div>
+                <div><span class="text-sm text-gray-600">Intensity:</span> <span class="font-semibold">${intensity}</span></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Restrictions Card (Full Width) -->
+          <div class="border-2 border-yellow-200 rounded-xl p-4 bg-white shadow">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-2xl">🚫</span>
+              <span class="font-bold text-lg text-gray-800">Allergies & Restrictions</span>
+            </div>
+            <div class="text-gray-700">
+              ${restrictions === 'None' || !restrictions || restrictions === '' 
+                ? '<span class="text-green-600 font-semibold">None - Ready to enjoy all meals! 🎉</span>' 
+                : `<span class="font-semibold text-orange-600">${restrictions}</span>`}
+            </div>
+          </div>
+          
+          <!-- Enhanced Generate Button -->
+          <div class="mt-6 text-center">
+            <button type="submit" 
+                    class="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xl font-bold rounded-xl
+                           shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200
+                           border-2 border-orange-600">
+              ✨ Generate My Personalized Menu ✨
+            </button>
+          </div>
+        </div>
+      `;
+      
+      return html;
     }
 
     function renderMenu(data){
