@@ -874,7 +874,7 @@ html.in-iframe .app-card {
           <span class="text-3xl">⏱️</span>
           <h3 class="text-lg font-semibold">Typical Session Duration</h3>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 duration-cards-container">
           <div class="duration-card cursor-pointer border-2 border-gray-300 rounded-lg p-4 text-center hover:shadow-lg transition-all hover:scale-105"
                data-value="<30" onclick="selectDuration('<30')">
             <div class="font-semibold">&lt;30</div>
@@ -902,7 +902,7 @@ html.in-iframe .app-card {
       // Intensity - Color-Coded Cards
       html += `<div class="bg-white p-6 rounded-lg border-2 border-gray-200 shadow-sm">
         <h3 class="text-lg font-semibold mb-4">Exercise Intensity</h3>
-        <div class="grid grid-cols-3 gap-4">
+        <div class="grid grid-cols-3 gap-4 intensity-cards-container">
           <div class="intensity-card cursor-pointer border-2 border-green-300 rounded-lg p-6 text-center hover:shadow-lg transition-all hover:scale-105 bg-green-50"
                data-value="low" onclick="selectIntensity('low')">
             <div class="text-3xl mb-2">🟢</div>
@@ -959,6 +959,10 @@ html.in-iframe .app-card {
       // Initialize unit conversion displays
       updateWeightConversion();
       updateHeightConversion();
+      
+      // Initialize exercise days conditional options
+      window.currentExerciseDays = 0; // Default to 0
+      setTimeout(() => updateDurationIntensityOptions(), 100); // Small delay to ensure DOM is ready
     }
 
     // Global handlers for personal info form
@@ -1022,7 +1026,92 @@ html.in-iframe .app-card {
       current = Math.max(0, Math.min(7, current + delta));
       input.value = current;
       display.textContent = current;
+      
+      // Store in window for conditional rendering
+      window.currentExerciseDays = current;
+      
+      // Update duration and intensity options if they're visible
+      updateDurationIntensityOptions();
     };
+    
+    // Helper function to update duration/intensity based on exercise days
+    function updateDurationIntensityOptions() {
+      const days = window.currentExerciseDays || 0;
+      
+      // Update duration cards
+      const durationContainer = document.querySelector('.duration-cards-container');
+      if (durationContainer) {
+        if (days === 0) {
+          durationContainer.innerHTML = `
+            <div class="duration-card cursor-pointer border-2 border-gray-400 rounded-lg p-6 text-center bg-gray-100 ring-4 ring-orange-500"
+                 data-value="none" onclick="selectDuration('none')">
+              <div class="text-3xl mb-2">😢</div>
+              <div class="font-semibold">I don't train at all</div>
+            </div>
+          `;
+          document.getElementById('duration_input').value = 'none';
+        } else {
+          durationContainer.innerHTML = `
+            <div class="duration-card cursor-pointer border-2 border-gray-300 rounded-lg p-4 text-center hover:shadow-lg transition-all hover:scale-105"
+                 data-value="<30" onclick="selectDuration('<30')">
+              <div class="font-semibold">&lt;30</div>
+              <div class="text-sm text-gray-600">min</div>
+            </div>
+            <div class="duration-card cursor-pointer border-2 border-gray-300 rounded-lg p-4 text-center hover:shadow-lg transition-all hover:scale-105"
+                 data-value="30-60" onclick="selectDuration('30-60')">
+              <div class="font-semibold">30-60</div>
+              <div class="text-sm text-gray-600">min</div>
+            </div>
+            <div class="duration-card cursor-pointer border-2 border-gray-300 rounded-lg p-4 text-center hover:shadow-lg transition-all hover:scale-105"
+                 data-value="60-120" onclick="selectDuration('60-120')">
+              <div class="font-semibold">60-120</div>
+              <div class="text-sm text-gray-600">min</div>
+            </div>
+            <div class="duration-card cursor-pointer border-2 border-gray-300 rounded-lg p-4 text-center hover:shadow-lg transition-all hover:scale-105"
+                 data-value="120+" onclick="selectDuration('120+')">
+              <div class="font-semibold">120+</div>
+              <div class="text-sm text-gray-600">min</div>
+            </div>
+          `;
+        }
+      }
+      
+      // Update intensity cards
+      const intensityContainer = document.querySelector('.intensity-cards-container');
+      if (intensityContainer) {
+        if (days === 0) {
+          intensityContainer.innerHTML = `
+            <div class="intensity-card cursor-pointer border-2 border-gray-400 rounded-lg p-6 text-center bg-gray-100 ring-4 ring-orange-500"
+                 data-value="none" onclick="selectIntensity('none')">
+              <div class="text-3xl mb-2">😢</div>
+              <div class="font-semibold">I don't train at all</div>
+            </div>
+          `;
+          document.getElementById('intensity_input').value = 'none';
+        } else {
+          intensityContainer.innerHTML = `
+            <div class="intensity-card cursor-pointer border-2 border-green-300 rounded-lg p-6 text-center hover:shadow-lg transition-all hover:scale-105 bg-green-50"
+                 data-value="low" onclick="selectIntensity('low')">
+              <div class="text-3xl mb-2">🟢</div>
+              <div class="font-semibold">Low</div>
+              <div class="text-xs text-gray-600">Light activity</div>
+            </div>
+            <div class="intensity-card cursor-pointer border-2 border-yellow-300 rounded-lg p-6 text-center hover:shadow-lg transition-all hover:scale-105 bg-yellow-50"
+                 data-value="moderate" onclick="selectIntensity('moderate')">
+              <div class="text-3xl mb-2">🟡</div>
+              <div class="font-semibold">Moderate</div>
+              <div class="text-xs text-gray-600">Some sweat</div>
+            </div>
+            <div class="intensity-card cursor-pointer border-2 border-red-300 rounded-lg p-6 text-center hover:shadow-lg transition-all hover:scale-105 bg-red-50"
+                 data-value="high" onclick="selectIntensity('high')">
+              <div class="text-3xl mb-2">🔴</div>
+              <div class="font-semibold">High</div>
+              <div class="text-xs text-gray-600">Intense workout</div>
+            </div>
+          `;
+        }
+      }
+    }
 
     window.selectDuration = function(value) {
       document.querySelectorAll('.duration-card').forEach(card => {
