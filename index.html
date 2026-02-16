@@ -1263,6 +1263,7 @@ html.in-iframe .app-card {
       const allowedZips = ['98027', '98052', '98004', '98033', '98008', '98005', '98006', '98007', '98009', '98034'];
       
       let html = `
+        <form id="f">
         <div class="space-y-6">
           <div class="text-center mb-6">
             <h2 class="text-2xl font-bold text-gray-800 mb-2">🗺️ Delivery Location</h2>
@@ -1303,9 +1304,17 @@ html.in-iframe .app-card {
             </div>
           </div>
         </div>
+        </form>
       `;
       
-      return html;
+      document.getElementById("app").innerHTML = html;
+      
+      const form = document.getElementById("f");
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const zipValue = document.getElementById("zipcode_input").value;
+        step({ zipcode: zipValue }, "next");
+      };
     }
 
     // Inspirational Review Section with visual cards
