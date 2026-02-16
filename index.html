@@ -967,6 +967,26 @@ html.in-iframe .app-card {
 
     // Global handlers for personal info form
     window.toggleWeightUnit = function(unit) {
+      const input = document.getElementById('weight_input');
+      const currentUnit = document.getElementById('weight_unit').value;
+      const currentValue = parseFloat(input.value);
+      
+      // Convert the value if there's a valid number
+      if (!isNaN(currentValue) && currentValue > 0) {
+        let convertedValue;
+        if (unit === 'kg' && currentUnit === 'lbs') {
+          // Converting from lbs to kg
+          convertedValue = currentValue / 2.20462;
+        } else if (unit === 'lbs' && currentUnit === 'kg') {
+          // Converting from kg to lbs
+          convertedValue = currentValue * 2.20462;
+        }
+        
+        if (convertedValue) {
+          input.value = Math.round(convertedValue * 10) / 10; // Round to 1 decimal
+        }
+      }
+      
       document.getElementById('weight_unit').value = unit;
       document.getElementById('unit_kg').className = unit === 'kg' ? 'px-4 py-2 rounded bg-orange-500 text-white font-medium' : 'px-4 py-2 rounded bg-gray-200 text-gray-700';
       document.getElementById('unit_lbs').className = unit === 'lbs' ? 'px-4 py-2 rounded bg-orange-500 text-white font-medium' : 'px-4 py-2 rounded bg-gray-200 text-gray-700';
@@ -974,6 +994,26 @@ html.in-iframe .app-card {
     };
 
     window.toggleHeightUnit = function(unit) {
+      const input = document.getElementById('height_input');
+      const currentUnit = document.getElementById('height_unit').value;
+      const currentValue = parseFloat(input.value);
+      
+      // Convert the value if there's a valid number
+      if (!isNaN(currentValue) && currentValue > 0) {
+        let convertedValue;
+        if (unit === 'cm' && currentUnit === 'in') {
+          // Converting from inches to cm
+          convertedValue = currentValue * 2.54;
+        } else if (unit === 'in' && currentUnit === 'cm') {
+          // Converting from cm to inches
+          convertedValue = currentValue / 2.54;
+        }
+        
+        if (convertedValue) {
+          input.value = Math.round(convertedValue * 10) / 10; // Round to 1 decimal
+        }
+      }
+      
       document.getElementById('height_unit').value = unit;
       document.getElementById('unit_cm').className = unit === 'cm' ? 'px-4 py-2 rounded bg-orange-500 text-white font-medium' : 'px-4 py-2 rounded bg-gray-200 text-gray-700';
       document.getElementById('unit_in').className = unit === 'in' ? 'px-4 py-2 rounded bg-orange-500 text-white font-medium' : 'px-4 py-2 rounded bg-gray-200 text-gray-700';
