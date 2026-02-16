@@ -1287,7 +1287,7 @@ html.in-iframe .app-card {
       
       const restrictions = sd.allergies_and_restrictions || 'None';
       
-      let html = `
+      let html = `<form id="f">
         <div class="space-y-6">
           <!-- Inspirational Header -->
           <div class="bg-gradient-to-r from-orange-100 to-yellow-100 border-2 border-orange-300 rounded-xl p-6 text-center shadow-md">
@@ -1378,9 +1378,16 @@ html.in-iframe .app-card {
             </button>
           </div>
         </div>
-      `;
+      </form>`;
       
-      return html;
+      document.getElementById("app").innerHTML = html;
+      
+      // Setup form submit handler
+      const form = document.getElementById("f");
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        step({}, "next");
+      };
     }
 
     function renderMenu(data){
