@@ -1190,7 +1190,7 @@ html.in-iframe .app-card {
     function renderDaysSelector(question, fields) {
       const daysOptions = [3, 4, 5, 6, 7];
       
-      let html = `
+      let html = `<form id="f">
         <div class="space-y-6">
           <div class="text-center mb-6">
             <h2 class="text-2xl font-bold text-gray-800 mb-2">📅 How many days of meal prep?</h2>
@@ -1229,10 +1229,41 @@ html.in-iframe .app-card {
       
       html += `
           </div>
+          
+          <!-- Submit Button -->
+          <div class="mt-8 text-center">
+            <button type="submit" 
+                    class="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xl font-bold rounded-xl
+                           shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200
+                           border-2 border-orange-600">
+              Continue to ZIP Code →
+            </button>
+          </div>
         </div>
-      `;
+      </form>`;
       
-      return html;
+      // Inject into DOM
+      document.getElementById("app").innerHTML = html;
+      
+      // Set default selection to 5 days
+      sessionData.days = sessionData.days || 5;
+      
+      // Highlight default selection
+      setTimeout(() => {
+        const defaultCard = document.querySelector(`[data-days="${sessionData.days}"]`);
+        if (defaultCard) {
+          defaultCard.classList.add('ring-4', 'ring-orange-500', 'border-orange-500');
+          defaultCard.classList.remove('border-gray-300');
+        }
+      }, 10);
+      
+      // Setup form submit handler
+      const form = document.getElementById("f");
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const selectedDays = sessionData.days || 5;
+        step({ days: selectedDays }, "next");
+      };
     }
     
     // Global function to select days
