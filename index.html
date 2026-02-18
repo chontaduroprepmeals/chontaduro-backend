@@ -1188,7 +1188,7 @@ html.in-iframe .app-card {
 
     // Visual Days Selector with calendar-style cards
     function renderDaysSelector(question, fields) {
-      const daysOptions = [3, 4, 5, 6, 7];
+      const daysOptions = [1, 2, 3, 4, 5, 6, 7];
       
       let html = `<form id="f">
         <div class="space-y-6">
@@ -1197,7 +1197,7 @@ html.in-iframe .app-card {
             <p class="text-gray-600">Choose the number of days you want your meals prepared for</p>
           </div>
           
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div class="grid grid-cols-2 md:grid-cols-7 gap-4">
       `;
       
       daysOptions.forEach(days => {
