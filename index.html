@@ -1246,11 +1246,11 @@ html.in-iframe .app-card {
       document.getElementById("app").innerHTML = html;
       
       // Set default selection to 5 days
-      sessionData.days = sessionData.days || 5;
+      window.selectedDays = window.selectedDays || 5;
       
       // Highlight default selection
       setTimeout(() => {
-        const defaultCard = document.querySelector(`[data-days="${sessionData.days}"]`);
+        const defaultCard = document.querySelector(`[data-days="${window.selectedDays}"]`);
         if (defaultCard) {
           defaultCard.classList.add('ring-4', 'ring-orange-500', 'border-orange-500');
           defaultCard.classList.remove('border-gray-300');
@@ -1261,7 +1261,7 @@ html.in-iframe .app-card {
       const form = document.getElementById("f");
       form.onsubmit = (e) => {
         e.preventDefault();
-        const selectedDays = sessionData.days || 5;
+        const selectedDays = window.selectedDays || 5;
         step({ days: selectedDays }, "next");
       };
     }
@@ -1282,7 +1282,7 @@ html.in-iframe .app-card {
       }
       
       // Store the value
-      sessionData.days = days;
+      window.selectedDays = days;
       
       // Enable next button
       const nextBtn = document.querySelector('button[type="submit"]');
