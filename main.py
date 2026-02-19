@@ -342,39 +342,60 @@ def calc_calorie_target(tdee: float, objective: str) -> Optional[float]:
     # Default: mantener el peso
     return round(tdee)
 
-def calc_macros(calories: int, objective: str, weight_kg: Optional[float]) -> Dict[str, Any]:
-    if calories is None:
+def calc_macros(calories: int, objective: str, weight_kg: Optional[float], sex: str = "female") -> Dict[str, Any]:
+    """
+    Calculate macros based on g/kg for protein (not percentage).
+    User feedback: protein should be based on weight, not calories percentage.
+    """
+    if calories is None or calories == 0:
         return {}
+    
     obj = (objective or "").lower()
+    
+    # Protein g/kg based on objective
     if obj in ["lose fat", "lose", "fat"]:
-        pct_protein, pct_fat, pct_carb = 0.30, 0.25, 0.45
         prot_per_kg = 2.0
     elif obj in ["gain muscle", "gain", "muscle"]:
-        pct_protein, pct_fat, pct_carb = 0.28, 0.25, 0.47
         prot_per_kg = 1.8
     elif obj in ["body recomposition", "recomposition", "recomp", "lose fat and gain muscle"]:
-        # Body recomposition: HIGH protein (2.0-2.2g/kg), moderate fat, fill rest with carbs
-        # Scientific basis: 1.6-2.2g/kg protein for muscle growth in deficit
-        pct_protein, pct_fat, pct_carb = 0.35, 0.25, 0.40
-        prot_per_kg = 2.2  # Higher protein for body recomposition
+        prot_per_kg = 2.0  # 1.8-2.2 range, use 2.0
     else:
-        pct_protein, pct_fat, pct_carb = 0.25, 0.30, 0.45
         prot_per_kg = 1.6
 
-    if weight_kg:
+    # Calculate protein based on weight
+    if weight_kg and weight_kg > 0:
         protein_grams = round(prot_per_kg * weight_kg)
-        protein_grams = max(protein_grams, round((calories * pct_protein) / 4))
-        protein_grams = min(protein_grams, round(2.2 * weight_kg))
+        # Cap protein: max 2.2 g/kg or 160g (women) / 200g (men)
+        max_protein_kg = round(2.2 * weight_kg)
+        max_protein_absolute = 160 if sex == "female" else 200
+        max_protein = min(max_protein_kg, max_protein_absolute)
+        protein_grams = min(protein_grams, max_protein)
     else:
-        protein_grams = round((calories * pct_protein) / 4)
+        # Fallback if no weight (shouldn't happen with new fix)
+        protein_grams = round((calories * 0.30) / 4)
 
+    # Fat: 25-30% of calories, minimum 0.8 g/kg for women, 0.6 for men
+    fat_pct = 0.27  # 27% average
+    fat_calories = round(calories * fat_pct)
+    fat_grams = round(fat_calories / 9)
+    
+    # Ensure minimum fat for hormonal health
+    if weight_kg and weight_kg > 0:
+        min_fat = round(0.8 * weight_kg) if sex == "female" else round(0.6 * weight_kg)
+        fat_grams = max(fat_grams, min_fat)
+
+    # Carbs: remainder of calories
     protein_cal = protein_grams * 4
-    fat_cal = round(calories * pct_fat)
-    fat_grams = round(fat_cal / 9)
+    fat_cal = fat_grams * 9
     remaining_cal = calories - (protein_cal + fat_cal)
     carbs_grams = round(max(0, remaining_cal) / 4) if remaining_cal > 0 else 0
 
-    return {"calories": int(calories), "protein_grams": int(protein_grams), "fat_grams": int(fat_grams), "carbs_grams": int(carbs_grams), "pct_protein": pct_protein, "pct_fat": pct_fat, "pct_carbs": pct_carb}
+    return {
+        "calories": int(calories), 
+        "protein_grams": int(protein_grams), 
+        "fat_grams": int(fat_grams), 
+        "carbs_grams": int(carbs_grams)
+    }
 
 
 # --- DIET / RESTRICTION KEYWORDS (expanded vegetables list) ---
@@ -1310,7 +1331,7 @@ async def next_step(request: Request):
                     else None
                 )
                 calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
-                macros = calc_macros(calorie_target, state.objective, weight_kg)
+                macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
 
                 # Ajusta proteína y calorías dinámicamente por comida
                 daily_protein_target = macros.get("protein_grams", 0)
@@ -1694,7 +1715,7 @@ async def add_protein(request: Request):
     if tmb is not None:
         tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
     calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
-    macros = calc_macros(calorie_target, state.objective, weight_kg)
+    macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
 
     menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
@@ -1772,7 +1793,7 @@ async def swap_meal(request: Request):
     if tmb is not None:
         tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
     calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
-    macros = calc_macros(calorie_target, state.objective, weight_kg)
+    macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
 
     menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
@@ -1818,7 +1839,7 @@ async def redo_menu(request: Request):
     if tmb is not None:
         tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
     calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
-    macros = calc_macros(calorie_target, state.objective, weight_kg)
+    macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
     state.menu = allocate_protein_to_menu(state, menu_objs, daily_protein_target)
     state.extra_protein_grams = 0
