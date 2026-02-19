@@ -1115,14 +1115,26 @@ async def next_step(request: Request):
             # Note: diet_preference is now collected in an earlier step
             if "weight_unit" in answer:
                 state.weight_unit = answer.get("weight_unit")
-            if "weight" in answer:
+            # Check for both weight_value (from new form) and weight (legacy)
+            if "weight_value" in answer:
+                try:
+                    state.weight = float(answer.get("weight_value"))
+                except Exception:
+                    state.weight = None
+            elif "weight" in answer:
                 try:
                     state.weight = float(answer.get("weight"))
                 except Exception:
                     state.weight = None
             if "height_unit" in answer:
                 state.height_unit = answer.get("height_unit")
-            if "height" in answer:
+            # Check for both height_value (from new form) and height (legacy)
+            if "height_value" in answer:
+                try:
+                    state.height = float(answer.get("height_value"))
+                except Exception:
+                    state.height = None
+            elif "height" in answer:
                 try:
                     state.height = float(answer.get("height"))
                 except Exception:
