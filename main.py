@@ -1126,18 +1126,23 @@ async def next_step(request: Request):
             elif "weight_unit" in answer:
                 state.weight_unit = answer.get("weight_unit")
                 
-            # Weight - check "Weight" (from form), "weight_value" (custom), or "weight" (legacy)
-            if "Weight" in answer:
+            # Weight - check all possible field names
+            if "weightvalue" in answer:         # From form (no underscore!)
+                try:
+                    state.weight = float(answer.get("weightvalue"))
+                except Exception:
+                    state.weight = None
+            elif "Weight" in answer:            # From form (capital W)
                 try:
                     state.weight = float(answer.get("Weight"))
                 except Exception:
                     state.weight = None
-            elif "weight_value" in answer:
+            elif "weight_value" in answer:      # From custom renderer
                 try:
                     state.weight = float(answer.get("weight_value"))
                 except Exception:
                     state.weight = None
-            elif "weight" in answer:
+            elif "weight" in answer:            # Legacy
                 try:
                     state.weight = float(answer.get("weight"))
                 except Exception:
@@ -1149,18 +1154,23 @@ async def next_step(request: Request):
             elif "height_unit" in answer:
                 state.height_unit = answer.get("height_unit")
                 
-            # Height - check "Height" (from form), "height_value" (custom), or "height" (legacy)
-            if "Height" in answer:
+            # Height - check all possible field names
+            if "heightvalue" in answer:         # From form (no underscore!)
+                try:
+                    state.height = float(answer.get("heightvalue"))
+                except Exception:
+                    state.height = None
+            elif "Height" in answer:            # From form (capital H)
                 try:
                     state.height = float(answer.get("Height"))
                 except Exception:
                     state.height = None
-            elif "height_value" in answer:
+            elif "height_value" in answer:      # From custom renderer
                 try:
                     state.height = float(answer.get("height_value"))
                 except Exception:
                     state.height = None
-            elif "height" in answer:
+            elif "height" in answer:            # Legacy
                 try:
                     state.height = float(answer.get("height"))
                 except Exception:
