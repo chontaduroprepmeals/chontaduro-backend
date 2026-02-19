@@ -1026,9 +1026,23 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "review":
         if not state:
             return {"question":"State error. Start again.","current_step":"review"}
-        allergies_str = state.allergies_and_restrictions if state.allergies_and_restrictions else "None"
-        summary = (f"Plan: {state.plan} for {state.days} days\nDiet: {state.diet_preference or 'Omnivore'}\nAllergies/Restrictions: {allergies_str}\nWeight: {state.weight or 'N/A'} {state.weight_unit}\nHeight: {state.height or 'N/A'} {state.height_unit}\nAge: {state.age or 'N/A'}\nActivity: {state.activity_days_bucket or 'N/A'} days, {state.activity_duration_bucket or 'N/A'} min, {state.activity_intensity or 'N/A'} intensity\n")
-        return {"question": f"Review your info and generate the menu:\n\n{summary}", "fields": [], "current_step":"review"}
+        # Send state data as a single field for frontend to parse
+        state_data = {
+            "plan_number": state.plan,
+            "days": state.days,
+            "diet_preference": state.diet_preference or "Omnivore",
+            "allergies_and_restrictions": state.allergies_and_restrictions or "None",
+            "weight_value": state.weight,
+            "weight_unit": state.weight_unit,
+            "height_value": state.height,
+            "height_unit": state.height_unit,
+            "age": state.age,
+            "days_per_week": state.activity_days_bucket,
+            "avg_session_duration": state.activity_duration_bucket,
+            "intensity": state.activity_intensity,
+            "sex": state.sex
+        }
+        return {"question": "Review your information and generate the menu", "fields": [{"name": "state_data", "type": "hidden", "value": state_data}], "current_step":"review"}
     return {"question":"Unknown step. Start again.","current_step":"start"}
 
 

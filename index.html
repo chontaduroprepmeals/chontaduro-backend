@@ -1236,7 +1236,7 @@ html.in-iframe .app-card {
                     class="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xl font-bold rounded-xl
                            shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200
                            border-2 border-orange-600">
-              Continue to ZIP Code →
+              Continue to Review →
             </button>
           </div>
         </div>
@@ -1350,7 +1350,9 @@ html.in-iframe .app-card {
 
     // Inspirational Review Section with visual cards
     function renderReviewSection(question, fields) {
-      const sd = sessionData;
+      // Get state data from fields
+      const stateField = fields.find(f => f.name === "state_data");
+      const sd = stateField ? stateField.value : {};
       
       // Format data for display
       const planText = `Plan ${sd.plan_number || 'N/A'}`;
