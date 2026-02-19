@@ -1267,7 +1267,20 @@ async def next_step(request: Request):
                 # Calcula calorías objetivo y macros
                 weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
                 height_cm = to_cm(state.height, state.height_unit) if state.height else None
+                
+                # DEBUG: Log values to help troubleshoot
+                print(f"DEBUG - Menu Generation:")
+                print(f"  state.weight: {state.weight}")
+                print(f"  state.weight_unit: {state.weight_unit}")
+                print(f"  weight_kg: {weight_kg}")
+                print(f"  state.height: {state.height}")
+                print(f"  state.height_unit: {state.height_unit}")
+                print(f"  height_cm: {height_cm}")
+                print(f"  state.age: {state.age}")
+                print(f"  state.sex: {state.sex}")
+                
                 tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+                print(f"  TMB calculated: {tmb}")
                 tdee = (
                     round(
                         tmb
