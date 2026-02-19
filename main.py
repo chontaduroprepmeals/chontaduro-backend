@@ -1346,14 +1346,15 @@ async def next_step(request: Request):
                         "issue": "validation_failed",
                     }
 
-                # **Calcula totales del día**
-                total_protein = sum((meal.get("provided_protein", 0) for meal in menu_with_protein))
-                total_carbs = sum((meal.get("carbs_assigned", 0) for meal in menu_with_protein))
-                total_fat = sum((meal.get("fat_assigned", 0) for meal in menu_with_protein))
-                total_calories = sum((getattr(meal, "calories", 0) for meal in menu_with_protein))
+                # **Get daily macros from calc_macros (not by summing all meals across all days!)**
+                # The macros dict contains the DAILY targets, not totals across all days
+                total_protein = macros.get("protein_grams", 0)
+                total_carbs = macros.get("carbs_grams", 0)
+                total_fat = macros.get("fat_grams", 0)
+                total_calories = macros.get("calories", 0)
 
                 # Print debug information about daily totals
-                print("[DEBUG] Daily macronutrient totals:")
+                print("[DEBUG] Daily macronutrient totals (per day, not across all days):")
                 print(f"- Total Protein: {total_protein} g")
                 print(f"- Total Carbohydrates: {total_carbs} g")
                 print(f"- Total Fats: {total_fat} g")
