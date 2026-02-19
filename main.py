@@ -1113,10 +1113,21 @@ async def next_step(request: Request):
     elif step_name == "personal_info":
         try:
             # Note: diet_preference is now collected in an earlier step
-            if "weight_unit" in answer:
+            # Handle both form field names (with spaces) and custom renderer names
+            
+            # Weight unit - check "Weight Unit" (from form) or "weight_unit" (custom)
+            if "Weight Unit" in answer:
+                state.weight_unit = answer.get("Weight Unit")
+            elif "weight_unit" in answer:
                 state.weight_unit = answer.get("weight_unit")
-            # Check for both weight_value (from new form) and weight (legacy)
-            if "weight_value" in answer:
+                
+            # Weight - check "Weight" (from form), "weight_value" (custom), or "weight" (legacy)
+            if "Weight" in answer:
+                try:
+                    state.weight = float(answer.get("Weight"))
+                except Exception:
+                    state.weight = None
+            elif "weight_value" in answer:
                 try:
                     state.weight = float(answer.get("weight_value"))
                 except Exception:
@@ -1126,10 +1137,20 @@ async def next_step(request: Request):
                     state.weight = float(answer.get("weight"))
                 except Exception:
                     state.weight = None
-            if "height_unit" in answer:
+                    
+            # Height unit - check "Height Unit" (from form) or "height_unit" (custom)
+            if "Height Unit" in answer:
+                state.height_unit = answer.get("Height Unit")
+            elif "height_unit" in answer:
                 state.height_unit = answer.get("height_unit")
-            # Check for both height_value (from new form) and height (legacy)
-            if "height_value" in answer:
+                
+            # Height - check "Height" (from form), "height_value" (custom), or "height" (legacy)
+            if "Height" in answer:
+                try:
+                    state.height = float(answer.get("Height"))
+                except Exception:
+                    state.height = None
+            elif "height_value" in answer:
                 try:
                     state.height = float(answer.get("height_value"))
                 except Exception:
@@ -1139,20 +1160,56 @@ async def next_step(request: Request):
                     state.height = float(answer.get("height"))
                 except Exception:
                     state.height = None
-            if "age" in answer:
+                    
+            # Age - check "Age" (from form) or "age" (custom)
+            if "Age" in answer:
+                try:
+                    state.age = int(answer.get("Age"))
+                except Exception:
+                    state.age = None
+            elif "age" in answer:
                 try:
                     state.age = int(answer.get("age"))
                 except Exception:
                     state.age = None
-            if "sex" in answer:
+                    
+            # Sex - check "Sex" (from form) or "sex" (custom)
+            if "Sex" in answer:
+                state.sex = answer.get("Sex")
+            elif "sex" in answer:
                 state.sex = answer.get("sex")
-            if "activity_days_bucket" in answer:
+                
+            # Activity days - check "Days per week" (from form) or other variants
+            if "Days per week" in answer:
+                state.activity_days_bucket = str(answer.get("Days per week"))
+            elif "days_per_week" in answer:
+                state.activity_days_bucket = str(answer.get("days_per_week"))
+            elif "activity_days_bucket" in answer:
                 state.activity_days_bucket = str(answer.get("activity_days_bucket"))
-            if "activity_duration_bucket" in answer:
+                
+            # Activity duration - check "Avg session duration" (from form) or other variants
+            if "Avg session duration" in answer:
+                state.activity_duration_bucket = str(answer.get("Avg session duration"))
+            elif "avg_session_duration" in answer:
+                state.activity_duration_bucket = str(answer.get("avg_session_duration"))
+            elif "activity_duration_bucket" in answer:
                 state.activity_duration_bucket = str(answer.get("activity_duration_bucket"))
-            if "activity_intensity" in answer:
+                
+            # Intensity - check "Intensity" (from form) or other variants
+            if "Intensity" in answer:
+                state.activity_intensity = str(answer.get("Intensity"))
+            elif "intensity" in answer:
+                state.activity_intensity = str(answer.get("intensity"))
+            elif "activity_intensity" in answer:
                 state.activity_intensity = str(answer.get("activity_intensity"))
-            if "body_fat" in answer:
+                
+            # Body fat - check "Body Fat % (optional)" (from form) or "body_fat" (custom)
+            if "Body Fat % (optional)" in answer:
+                try:
+                    state.body_fat = float(answer.get("Body Fat % (optional)"))
+                except Exception:
+                    state.body_fat = None
+            elif "body_fat" in answer:
                 try:
                     state.body_fat = float(answer.get("body_fat"))
                 except Exception:
