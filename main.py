@@ -1111,6 +1111,11 @@ async def next_step(request: Request):
         step_to_render_name = STEPS["allergies_and_restrictions"]
 
     elif step_name == "personal_info":
+        # DEBUG: Log all field names to identify issue
+        print(f"DEBUG - Personal Info Handler Received:")
+        print(f"  Field names: {list(answer.keys())}")
+        print(f"  Full data: {answer}")
+        
         try:
             # Note: diet_preference is now collected in an earlier step
             # Handle both form field names (with spaces) and custom renderer names
