@@ -329,16 +329,19 @@ def calc_calorie_target(tdee: float, objective: str) -> Optional[float]:
     if tdee is None:
         return None
     obj = (objective or "").lower()
-    if obj in ["lose fat", "lose", "fat"]:
+    if "lose fat" in obj and "gain muscle" not in obj:
         # Reduce por un 20% del TDEE (pérdida de grasa más sostenible)
         return round(tdee * 0.80)
-    if obj in ["gain muscle", "gain", "muscle"]:
+    if "gain muscle" in obj and "lose fat" not in obj:
         # Incrementa un 15% para ganancia muscular
         return round(tdee * 1.15)
-    if obj in ["body recomposition", "recomposition", "recomp", "lose fat and gain muscle"]:
+    if "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
         # Body recomposition: 10-15% deficit (mild deficit for simultaneous fat loss and muscle gain)
         # Scientific basis: 200-300 kcal deficit with high protein
         return round(tdee * 0.85)
+    if "maintain" in obj:
+        # Maintain weight
+        return round(tdee)
     # Default: mantener el peso
     return round(tdee)
 
@@ -353,11 +356,11 @@ def calc_macros(calories: int, objective: str, weight_kg: Optional[float], sex: 
     obj = (objective or "").lower()
     
     # Protein g/kg based on objective
-    if obj in ["lose fat", "lose", "fat"]:
+    if "lose fat" in obj and "gain muscle" not in obj:
         prot_per_kg = 2.0
-    elif obj in ["gain muscle", "gain", "muscle"]:
+    elif "gain muscle" in obj and "lose fat" not in obj:
         prot_per_kg = 1.8
-    elif obj in ["body recomposition", "recomposition", "recomp", "lose fat and gain muscle"]:
+    elif "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
         prot_per_kg = 2.0  # 1.8-2.2 range, use 2.0
     else:
         prot_per_kg = 1.6
