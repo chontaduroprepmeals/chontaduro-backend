@@ -336,9 +336,10 @@ def calc_calorie_target(tdee: float, objective: str) -> Optional[float]:
         # Incrementa un 15% para ganancia muscular
         return round(tdee * 1.15)
     if "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
-        # Body recomposition: 10-15% deficit (mild deficit for simultaneous fat loss and muscle gain)
-        # Scientific basis: 200-300 kcal deficit with high protein
-        return round(tdee * 0.85)
+        # Body recomposition: 10% deficit (sustainable for simultaneous fat loss and muscle gain)
+        # Scientific basis: Moderate deficit (10%) allows muscle building while losing fat
+        # User feedback: 15% deficit (0.85) was too low and caused excessive hunger
+        return round(tdee * 0.90)
     if "maintain" in obj:
         # Maintain weight
         return round(tdee)
