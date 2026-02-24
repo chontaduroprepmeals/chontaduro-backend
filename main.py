@@ -309,11 +309,14 @@ def to_cm(height: float, unit: str) -> Optional[float]:
     return float(height)
 
 def compute_activity_factor(days_bucket: str, duration_bucket: str, intensity: str) -> float:
-    days_map = {"0":1.2, "1-2":1.3, "3-4":1.45, "5-7":1.6}
+    # Updated base values to match scientific PAL standards and expert recommendations
+    # For 5x/week training, should result in factor ~1.50-1.55
+    days_map = {"0":1.2, "1-2":1.375, "3-4":1.50, "5-7":1.55}
     base = days_map.get(str(days_bucket), 1.2)
-    dur_map = {"<30":0.0, "30-60":0.05, "60-120":0.08}
+    # Simplified duration/intensity adjustments
+    dur_map = {"<30":0.0, "30-60":0.0, "60-120":0.05}
     dur = dur_map.get(str(duration_bucket), 0.0)
-    int_map = {"low":0.0, "moderate":0.03, "high":0.06}
+    int_map = {"low":0.0, "moderate":0.0, "high":0.05}
     iadj = int_map.get((intensity or "").lower(), 0.0)
     return round(min(base + dur + iadj, 1.9), 3)
 
@@ -336,10 +339,10 @@ def calc_calorie_target(tdee: float, objective: str) -> Optional[float]:
         # Incrementa un 15% para ganancia muscular
         return round(tdee * 1.15)
     if "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
-        # Body recomposition: 10% deficit (sustainable for simultaneous fat loss and muscle gain)
-        # Scientific basis: Moderate deficit (10%) allows muscle building while losing fat
-        # User feedback: 15% deficit (0.85) was too low and caused excessive hunger
-        return round(tdee * 0.90)
+        # Body recomposition: 12% deficit (expert recommended 10-12%)
+        # Scientific basis: Moderate deficit allows muscle building while losing fat
+        # Expert feedback: For active individuals (5x/week), 12% deficit is optimal
+        return round(tdee * 0.88)
     if "maintain" in obj:
         # Maintain weight
         return round(tdee)
@@ -362,7 +365,7 @@ def calc_macros(calories: int, objective: str, weight_kg: Optional[float], sex: 
     elif "gain muscle" in obj and "lose fat" not in obj:
         prot_per_kg = 1.8
     elif "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
-        prot_per_kg = 2.0  # 1.8-2.2 range, use 2.0
+        prot_per_kg = 2.1  # Expert recommended ~2.1 g/kg for recomp
     else:
         prot_per_kg = 1.6
 
@@ -385,7 +388,8 @@ def calc_macros(calories: int, objective: str, weight_kg: Optional[float], sex: 
     
     # Ensure minimum fat for hormonal health
     if weight_kg and weight_kg > 0:
-        min_fat = round(0.8 * weight_kg) if sex == "female" else round(0.6 * weight_kg)
+        # Expert recommended ~0.85 g/kg for women, 0.7 for men
+        min_fat = round(0.85 * weight_kg) if sex == "female" else round(0.7 * weight_kg)
         fat_grams = max(fat_grams, min_fat)
 
     # Carbs: remainder of calories
