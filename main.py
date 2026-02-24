@@ -320,6 +320,25 @@ def compute_activity_factor(days_bucket: str, duration_bucket: str, intensity: s
     iadj = int_map.get((intensity or "").lower(), 0.0)
     return round(min(base + dur + iadj, 1.9), 3)
 
+def get_activity_factor_with_recomp_minimum(days_bucket: str, duration_bucket: str, intensity: str, objective: str) -> float:
+    """
+    Calculate activity factor with minimum enforcement for body recomposition.
+    
+    Expert recommendation: For body recomposition, use minimum AF 1.50-1.55
+    because you cannot build muscle and lose fat simultaneously on sedentary calories.
+    
+    This prevents accidentally giving recomp users too few calories if activity data
+    isn't saved properly or user selects low activity (which would be counterproductive for recomp).
+    """
+    base_factor = compute_activity_factor(days_bucket, duration_bucket, intensity)
+    obj = (objective or "").lower()
+    
+    # For body recomposition, enforce minimum 1.50 activity factor
+    if "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
+        return max(base_factor, 1.50)
+    
+    return base_factor
+
 def calc_tmb_mifflin(weight_kg: float, height_cm: float, age: int, sex: str) -> Optional[float]:
     if None in (weight_kg, height_cm, age, sex):
         return None
@@ -1685,10 +1704,11 @@ async def add_protein(request: Request):
             height_cm = to_cm(state.height, state.height_unit) if state.height else None
             tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
             tdee = round(
-                tmb * compute_activity_factor(
+                tmb * get_activity_factor_with_recomp_minimum(
                     state.activity_days_bucket or "0",
                     state.activity_duration_bucket or "<30",
                     state.activity_intensity or "Low",
+                    state.objective or "",
                 ),
                 1,
             ) if tmb else None
@@ -1722,7 +1742,7 @@ async def add_protein(request: Request):
     tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
     tdee = None
     if tmb is not None:
-        tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
+        tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
     calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
     macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
@@ -1800,7 +1820,7 @@ async def swap_meal(request: Request):
     tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
     tdee = None
     if tmb is not None:
-        tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
+        tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
     calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
     macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
@@ -1825,7 +1845,7 @@ async def validate_menu(request: Request):
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
     tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
-    tdee = round(tmb * compute_activity_factor(state.activity_days_bucket, state.activity_duration_bucket, state.activity_intensity), 2) if tmb else None
+    tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket, state.activity_duration_bucket, state.activity_intensity, state.objective or ""), 2) if tmb else None
     calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
     weekly_menu = generate_weekly_menu(MEALS_DATA, calorie_target)
     return {"menu": weekly_menu, "calorie_target": calorie_target, "details": {"tmb": tmb, "tdee": tdee}}
@@ -1846,7 +1866,7 @@ async def redo_menu(request: Request):
     tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
     tdee = None
     if tmb is not None:
-        tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
+        tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
     calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
     macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
