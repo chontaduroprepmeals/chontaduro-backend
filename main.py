@@ -327,15 +327,28 @@ def get_activity_factor_with_recomp_minimum(days_bucket: str, duration_bucket: s
     Expert recommendation: For body recomposition, use minimum AF 1.50-1.55
     because you cannot build muscle and lose fat simultaneously on sedentary calories.
     
-    This prevents accidentally giving recomp users too few calories if activity data
-    isn't saved properly or user selects low activity (which would be counterproductive for recomp).
+    Also enforces universal minimums based on training frequency:
+    - Training 3+ days/week cannot result in sedentary factor (1.20)
+    - Ensures active people get appropriate calorie estimates
     """
     base_factor = compute_activity_factor(days_bucket, duration_bucket, intensity)
     obj = (objective or "").lower()
     
-    # For body recomposition, enforce minimum 1.50 activity factor
+    # UNIVERSAL MINIMUM based on training frequency
+    # If training 3+ days/week, CANNOT be sedentary regardless of goal
+    if days_bucket in ["3-4", "5-7"]:
+        min_factor = 1.45  # Moderately active minimum
+        if base_factor < min_factor:
+            print(f"[ACTIVITY] Training {days_bucket} days/week but factor {base_factor:.2f} too low. Enforcing minimum {min_factor}.")
+            base_factor = max(base_factor, min_factor)
+    
+    # EXTRA MINIMUM for body recomposition
+    # Recomp needs even more calories to build muscle
     if "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
-        return max(base_factor, 1.50)
+        min_recomp = 1.50
+        if base_factor < min_recomp:
+            print(f"[RECOMP] Body recomposition requires minimum {min_recomp} factor. Enforcing.")
+            base_factor = max(base_factor, min_recomp)
     
     return base_factor
 
