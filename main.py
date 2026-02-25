@@ -339,34 +339,70 @@ def get_activity_factor_with_recomp_minimum(days_bucket: str, duration_bucket: s
     
     return base_factor
 
-def calc_tmb_mifflin(weight_kg: float, height_cm: float, age: int, sex: str) -> Optional[float]:
+def calc_tmb_mifflin(weight_kg: float, height_cm: float, age: int, sex: str, objective: str = "") -> Optional[float]:
+    """
+    Calculate BMR using Mifflin-St Jeor equation.
+    Includes validation to prevent unrealistic values for body recomposition.
+    """
     if None in (weight_kg, height_cm, age, sex):
         return None
+    
+    # Validation: For body recomposition with very high age, use realistic age
+    # Body recomp is typically done by younger, active individuals
+    obj = (objective or "").lower()
+    if ("recomp" in obj or "body recomp" in obj) and age > 55:
+        print(f"[VALIDATION] Age {age} too high for aggressive body recomposition. Using age 30 for calculations.")
+        age = 30
+    
     sex = (sex or "").lower()
     if sex in ["male", "m", "man"]:
-        return round((10*weight_kg)+(6.25*height_cm)-(5*age)+5, 1)
-    return round((10*weight_kg)+(6.25*height_cm)-(5*age)-161, 1)
+        bmr = round((10*weight_kg)+(6.25*height_cm)-(5*age)+5, 1)
+    else:
+        bmr = round((10*weight_kg)+(6.25*height_cm)-(5*age)-161, 1)
+    
+    # Validation: Warn if BMR is suspiciously low
+    if bmr < 1200 and sex not in ["male", "m", "man"]:
+        print(f"[WARNING] BMR {bmr} kcal is unusually low for a woman. Check age and weight values.")
+    elif bmr < 1400 and sex in ["male", "m", "man"]:
+        print(f"[WARNING] BMR {bmr} kcal is unusually low for a man. Check age and weight values.")
+    
+    return bmr
 
-def calc_calorie_target(tdee: float, objective: str) -> Optional[float]:
+def calc_calorie_target(tdee: float, objective: str, sex: str = "female") -> Optional[float]:
+    """
+    Calculate calorie target based on objective.
+    Includes minimum calorie enforcement for body recomposition.
+    """
     if tdee is None:
         return None
     obj = (objective or "").lower()
+    
     if "lose fat" in obj and "gain muscle" not in obj:
         # Reduce por un 20% del TDEE (pérdida de grasa más sostenible)
-        return round(tdee * 0.80)
-    if "gain muscle" in obj and "lose fat" not in obj:
+        target = round(tdee * 0.80)
+    elif "gain muscle" in obj and "lose fat" not in obj:
         # Incrementa un 15% para ganancia muscular
-        return round(tdee * 1.15)
-    if "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
+        target = round(tdee * 1.15)
+    elif "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
         # Body recomposition: 12% deficit (expert recommended 10-12%)
         # Scientific basis: Moderate deficit allows muscle building while losing fat
         # Expert feedback: For active individuals (5x/week), 12% deficit is optimal
-        return round(tdee * 0.88)
-    if "maintain" in obj:
+        target = round(tdee * 0.88)
+        
+        # Validation: Enforce minimum calories for body recomposition
+        # You cannot build muscle on too few calories
+        min_calories = 1500 if sex.lower() in ["female", "f", "mujer", "femenino"] else 1800
+        if target < min_calories:
+            print(f"[VALIDATION] Recomp target {target} kcal too low. Enforcing minimum {min_calories} kcal.")
+            target = min_calories
+    elif "maintain" in obj:
         # Maintain weight
-        return round(tdee)
-    # Default: mantener el peso
-    return round(tdee)
+        target = round(tdee)
+    else:
+        # Default: mantener el peso
+        target = round(tdee)
+    
+    return target
 
 def calc_macros(calories: int, objective: str, weight_kg: Optional[float], sex: str = "female") -> Dict[str, Any]:
     """
@@ -1342,7 +1378,7 @@ async def next_step(request: Request):
                 print(f"  state.age: {state.age}")
                 print(f"  state.sex: {state.sex}")
                 
-                tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+                tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
                 print(f"  TMB calculated: {tmb}")
                 tdee = (
                     round(
@@ -1357,7 +1393,7 @@ async def next_step(request: Request):
                     if tmb
                     else None
                 )
-                calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+                calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
                 macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
 
                 # Ajusta proteína y calorías dinámicamente por comida
@@ -1702,7 +1738,7 @@ async def add_protein(request: Request):
             # Generamos base menú (Meal objects) usando validación calórica diaria y semanal
             weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
             height_cm = to_cm(state.height, state.height_unit) if state.height else None
-            tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+            tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
             tdee = round(
                 tmb * get_activity_factor_with_recomp_minimum(
                     state.activity_days_bucket or "0",
@@ -1712,7 +1748,7 @@ async def add_protein(request: Request):
                 ),
                 1,
             ) if tmb else None
-            calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+            calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
 
             # Generamos el menú semanal verificando que cada día cumpla las calorías objetivo
             weekly_menu = generate_weekly_menu(MEALS_DATA, calorie_target)
@@ -1739,11 +1775,11 @@ async def add_protein(request: Request):
     # recompute macros/daily protein
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
-    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
     tdee = None
     if tmb is not None:
         tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
-    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+    calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
     macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
 
@@ -1817,11 +1853,11 @@ async def swap_meal(request: Request):
     # Recompute macros/daily proteins
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
-    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
     tdee = None
     if tmb is not None:
         tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
-    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+    calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
     macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
 
@@ -1844,9 +1880,9 @@ async def validate_menu(request: Request):
     state = SessionState(**sessions[session_id])
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
-    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
     tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket, state.activity_duration_bucket, state.activity_intensity, state.objective or ""), 2) if tmb else None
-    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+    calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
     weekly_menu = generate_weekly_menu(MEALS_DATA, calorie_target)
     return {"menu": weekly_menu, "calorie_target": calorie_target, "details": {"tmb": tmb, "tdee": tdee}}
 
@@ -1863,11 +1899,11 @@ async def redo_menu(request: Request):
         return {"message":"Could not generate a menu with current filters."}
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
-    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
     tdee = None
     if tmb is not None:
         tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
-    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+    calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
     macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
     state.menu = allocate_protein_to_menu(state, menu_objs, daily_protein_target)
