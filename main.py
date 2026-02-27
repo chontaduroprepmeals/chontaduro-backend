@@ -474,6 +474,177 @@ def calc_macros(calories: int, objective: str, weight_kg: Optional[float], sex: 
     }
 
 
+# --- SNACK DATABASE FOR MACRO COMPLETION ---
+SNACK_DATABASE = [
+    {
+        "name": "Protein Shake + Banana + Almendras",
+        "description": "1 scoop whey protein + 1 banana mediana + 15 almendras",
+        "protein_g": 28,
+        "carbs_g": 30,
+        "fat_g": 9,
+        "calories": 325,
+        "category": "shake"
+    },
+    {
+        "name": "Pechuga de Pollo + Camote",
+        "description": "100g pechuga de pollo + 100g camote + 1 cdta aceite oliva",
+        "protein_g": 31,
+        "carbs_g": 20,
+        "fat_g": 5,
+        "calories": 253,
+        "category": "whole_food"
+    },
+    {
+        "name": "Greek Yogurt + Granola + Mantequilla de Maní",
+        "description": "170g Greek yogurt 0% + 30g granola + 1 cda PB",
+        "protein_g": 21,
+        "carbs_g": 22,
+        "fat_g": 11,
+        "calories": 267,
+        "category": "yogurt"
+    },
+    {
+        "name": "Atún + Arroz + Aguacate",
+        "description": "1 lata atún en agua + 60g arroz cocido + 1/4 aguacate",
+        "protein_g": 25,
+        "carbs_g": 25,
+        "fat_g": 8,
+        "calories": 272,
+        "category": "whole_food"
+    },
+    {
+        "name": "Huevos Revueltos + Pan Integral + Aguacate",
+        "description": "2 huevos + 2 rebanadas pan integral + 1/4 aguacate",
+        "protein_g": 18,
+        "carbs_g": 28,
+        "fat_g": 14,
+        "calories": 310,
+        "category": "eggs"
+    },
+    {
+        "name": "Cottage Cheese + Frutas + Nueces",
+        "description": "150g cottage cheese + 80g fresas + 15g nueces",
+        "protein_g": 20,
+        "carbs_g": 15,
+        "fat_g": 12,
+        "calories": 252,
+        "category": "dairy"
+    },
+    {
+        "name": "Protein Bar de Alta Calidad",
+        "description": "1 protein bar (Quest/RX Bar)",
+        "protein_g": 20,
+        "carbs_g": 24,
+        "fat_g": 8,
+        "calories": 248,
+        "category": "bar"
+    },
+    {
+        "name": "Batido de Proteína Vegana + Avena",
+        "description": "1 scoop proteína vegana + 40g avena + 1 cda mantequilla de almendra",
+        "protein_g": 26,
+        "carbs_g": 35,
+        "fat_g": 10,
+        "calories": 342,
+        "category": "shake"
+    },
+    {
+        "name": "Pavo + Pan Pita + Hummus",
+        "description": "100g pavo + 1 pan pita integral + 3 cdas hummus",
+        "protein_g": 27,
+        "carbs_g": 30,
+        "fat_g": 8,
+        "calories": 304,
+        "category": "whole_food"
+    },
+    {
+        "name": "Salmón Ahumado + Galletas Integrales + Queso Crema Light",
+        "description": "60g salmón ahumado + 6 galletas integrales + 2 cdas queso crema light",
+        "protein_g": 15,
+        "carbs_g": 18,
+        "fat_g": 9,
+        "calories": 213,
+        "category": "fish"
+    },
+]
+
+
+def calculate_macro_deficit(target_macros: Dict[str, int], achieved_macros: Dict[str, int]) -> Dict[str, int]:
+    """
+    Calculate the difference between target macros and what was achieved in the meal plan.
+    
+    Args:
+        target_macros: Dict with 'protein_grams', 'carbs_grams', 'fat_grams', 'calories'
+        achieved_macros: Dict with same keys
+        
+    Returns:
+        Dict with deficit for each macro (positive means still needed, negative means exceeded)
+    """
+    deficit = {
+        "protein": max(0, target_macros.get("protein_grams", 0) - achieved_macros.get("protein_grams", 0)),
+        "carbs": max(0, target_macros.get("carbs_grams", 0) - achieved_macros.get("carbs_grams", 0)),
+        "fat": max(0, target_macros.get("fat_grams", 0) - achieved_macros.get("fat_grams", 0)),
+        "calories": max(0, target_macros.get("calories", 0) - achieved_macros.get("calories", 0))
+    }
+    return deficit
+
+
+def recommend_snacks(deficit: Dict[str, int], num_recommendations: int = 3) -> List[Dict[str, Any]]:
+    """
+    Recommend snacks that best fill the macro deficit.
+    
+    Args:
+        deficit: Dict with 'protein', 'carbs', 'fat', 'calories' deficits
+        num_recommendations: Number of snack recommendations to return
+        
+    Returns:
+        List of snack dicts sorted by how well they fill the deficit
+    """
+    if all(v <= 0 for v in deficit.values()):
+        # No deficit, no need for snacks
+        return []
+    
+    # Score each snack based on how well it fills the deficit
+    scored_snacks = []
+    for snack in SNACK_DATABASE:
+        # Calculate how well this snack matches the deficit
+        # Higher score = better match
+        score = 0.0
+        
+        # Protein match (most important for body recomposition)
+        if deficit["protein"] > 0:
+            protein_ratio = min(snack["protein_g"] / deficit["protein"], 1.0)
+            score += protein_ratio * 3.0  # Weight protein heavily
+        
+        # Carbs match
+        if deficit["carbs"] > 0:
+            carbs_ratio = min(snack["carbs_g"] / deficit["carbs"], 1.0)
+            score += carbs_ratio * 1.5
+        
+        # Fat match
+        if deficit["fat"] > 0:
+            fat_ratio = min(snack["fat_g"] / deficit["fat"], 1.0)
+            score += fat_ratio * 1.5
+        
+        # Calorie match
+        if deficit["calories"] > 0:
+            cal_ratio = min(snack["calories"] / deficit["calories"], 1.0)
+            score += cal_ratio * 1.0
+        
+        # Penalize snacks that are too large (exceed deficit too much)
+        if deficit["calories"] > 0 and snack["calories"] > deficit["calories"] * 1.5:
+            score *= 0.7
+        
+        scored_snacks.append({
+            "snack": snack,
+            "score": score
+        })
+    
+    # Sort by score (highest first) and return top N
+    scored_snacks.sort(key=lambda x: x["score"], reverse=True)
+    return [item["snack"] for item in scored_snacks[:num_recommendations]]
+
+
 # --- DIET / RESTRICTION KEYWORDS (expanded vegetables list) ---
 MEAT_KEYWORDS = {"chicken","beef","pork","turkey","lamb","bacon","ham","steak"}
 FISH_KEYWORDS = {"salmon","shrimp","fish","tuna","trout","cod","shellfish","prawns"}
@@ -1505,6 +1676,49 @@ async def next_step(request: Request):
                     [Meal(**m) if isinstance(m, dict) else m for m in response_menu], 0
                 )
 
+                # Calculate achieved macros from the actual meals (for ONE day only)
+                achieved_protein = 0
+                achieved_carbs = 0
+                achieved_fat = 0
+                achieved_calories = 0
+                
+                # Sum macros for first day's meals only
+                for i, meal_entry in enumerate(response_menu):
+                    if meal_entry.get("day_number", 1) == 1:  # Only first day
+                        achieved_protein += meal_entry.get("protein_assigned", 0)
+                        achieved_carbs += meal_entry.get("carbs_assigned", 0)
+                        achieved_fat += meal_entry.get("fat_assigned", 0)
+                        achieved_calories += meal_entry.get("calories_assigned", 0)
+                
+                print(f"\n[DEBUG] Achieved macros (Day 1):")
+                print(f"  - Protein: {achieved_protein}g")
+                print(f"  - Carbs: {achieved_carbs}g")
+                print(f"  - Fat: {achieved_fat}g")
+                print(f"  - Calories: {achieved_calories} kcal")
+                
+                # Calculate macro deficit
+                deficit = calculate_macro_deficit(
+                    target_macros=macros,
+                    achieved_macros={
+                        "protein_grams": achieved_protein,
+                        "carbs_grams": achieved_carbs,
+                        "fat_grams": achieved_fat,
+                        "calories": achieved_calories
+                    }
+                )
+                
+                print(f"\n[DEBUG] Macro Deficit:")
+                print(f"  - Protein: {deficit['protein']}g")
+                print(f"  - Carbs: {deficit['carbs']}g")
+                print(f"  - Fat: {deficit['fat']}g")
+                print(f"  - Calories: {deficit['calories']} kcal")
+                
+                # Get snack recommendations if there's a significant deficit
+                snack_recommendations = []
+                if deficit["protein"] >= 10 or deficit["calories"] >= 200:
+                    snack_recommendations = recommend_snacks(deficit, num_recommendations=3)
+                    print(f"\n[DEBUG] Recommended {len(snack_recommendations)} snacks to fill deficit")
+
                 # Respuesta basada en el plan seleccionado
                 if state.plan == 4:
                     return {
@@ -1523,7 +1737,15 @@ async def next_step(request: Request):
                                 "fat_total": total_fat,
                                 "calories_total": total_calories,
                             },
+                            "achieved": {  # What the meal plan actually provides (Day 1)
+                                "protein": achieved_protein,
+                                "carbs": achieved_carbs,
+                                "fat": achieved_fat,
+                                "calories": achieved_calories
+                            },
+                            "deficit": deficit,
                         },
+                        "snack_recommendations": snack_recommendations,
                         "current_step": state.current_step,
                     }
                 else:
@@ -1536,7 +1758,15 @@ async def next_step(request: Request):
                             "tdee": tdee,
                             "calorie_target": calorie_target,
                             "protein_needed": daily_protein_target,  # Solo mostrar proteína necesaria
+                            "achieved": {  # What the meal plan actually provides (Day 1)
+                                "protein": achieved_protein,
+                                "carbs": achieved_carbs,
+                                "fat": achieved_fat,
+                                "calories": achieved_calories
+                            },
+                            "deficit": deficit,
                         },
+                        "snack_recommendations": snack_recommendations,
                         "current_step": state.current_step,
                     }
             except Exception as e:
