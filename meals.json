@@ -1,715 +1,912 @@
 [
   {
-    "name": "Overnight Protein Oats with Berries",
-    "type": "Breakfast",
-    "ingredients": ["oats", "almond milk", "berries", "chia seeds", "honey"],
-    "calories": 360,
-    "price": 11,
-    "image_url": "https://placehold.co/150x150/ffe7a9/333333?text=Overnight+Oats",
-    "tags": ["vegetarian", "nut"]
+    "name": "Scrambled Eggs with Whole Wheat Toast",
+    "type": "breakfast",
+    "ingredients": [
+      "eggs",
+      "whole wheat bread",
+      "olive oil",
+      "salt"
+    ],
+    "serving_size_g": 250,
+    "protein_g": 35,
+    "carbs_g": 30,
+    "fat_g": 14,
+    "calories": 386,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Pollo con Champiñones y Vegetales",
+    "name": "Oatmeal with Banana and Peanut Butter",
+    "type": "breakfast",
+    "ingredients": [
+      "oats",
+      "banana",
+      "peanut butter",
+      "regular milk"
+    ],
+    "serving_size_g": 350,
+    "protein_g": 35,
+    "carbs_g": 52,
+    "fat_g": 10,
+    "calories": 438,
+    "price": 11.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Greek Yogurt with Apple and Granola",
+    "type": "breakfast",
+    "ingredients": [
+      "greek yogurt",
+      "apple",
+      "simple cereal",
+      "honey"
+    ],
+    "serving_size_g": 300,
+    "protein_g": 35,
+    "carbs_g": 45,
+    "fat_g": 5,
+    "calories": 365,
+    "price": 11.0,
+    "tags": [
+      "vegetarian",
+      "high protein"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Egg and Cheese Arepa",
+    "type": "breakfast",
+    "ingredients": [
+      "arepa",
+      "eggs",
+      "fresh cheese",
+      "olive oil"
+    ],
+    "serving_size_g": 280,
+    "protein_g": 35,
+    "carbs_g": 35,
+    "fat_g": 16,
+    "calories": 424,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Corn Tortilla Breakfast Wrap",
+    "type": "breakfast",
+    "ingredients": [
+      "corn tortillas",
+      "scrambled eggs",
+      "black beans",
+      "fresh cheese"
+    ],
+    "serving_size_g": 300,
+    "protein_g": 35,
+    "carbs_g": 40,
+    "fat_g": 12,
+    "calories": 408,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Cottage Cheese with Papaya",
+    "type": "breakfast",
+    "ingredients": [
+      "cottage cheese",
+      "papaya",
+      "banana"
+    ],
+    "serving_size_g": 350,
+    "protein_g": 35,
+    "carbs_g": 35,
+    "fat_g": 4,
+    "calories": 316,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "vegetarian"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Rice Cereal with Milk and Banana",
+    "type": "breakfast",
+    "ingredients": [
+      "rice cereal",
+      "regular milk",
+      "banana"
+    ],
+    "serving_size_g": 300,
+    "protein_g": 35,
+    "carbs_g": 55,
+    "fat_g": 5,
+    "calories": 405,
+    "price": 11.0,
+    "tags": [
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Protein Pancakes",
+    "type": "breakfast",
+    "ingredients": [
+      "oats",
+      "eggs",
+      "banana",
+      "protein powder",
+      "regular milk"
+    ],
+    "serving_size_g": 350,
+    "protein_g": 35,
+    "carbs_g": 48,
+    "fat_g": 8,
+    "calories": 404,
+    "price": 11.0,
+    "tags": [
+      "high protein"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Grilled Chicken Breast with White Rice and Broccoli",
     "type": "main meal",
-    "ingredients": ["pollo", "champiñones", "pimientos rojos", "arroz integral", "ensalada mixta"],
-    "calories_per_100g": 120,
-    "protein_per_100g": 22,
-    "carbs_per_100g": 10,
-    "fat_per_100g": 3,
-    "image_url": "uploads/chicken_mushrooms.jpg",
-    "tags": ["high protein", "low carb"]
-  }, 
-  {
-    "name": "Greek Yogurt Parfait",
-    "type": "Breakfast",
-    "ingredients": ["greek yogurt", "granola", "honey", "berries"],
-    "calories": 320,
-    "price": 11,
-    "image_url": "https://placehold.co/150x150/ffd1f5/333333?text=Yogurt+Parfait",
-    "tags": ["vegetarian", "dairy"]
+    "ingredients": [
+      "chicken breast",
+      "white rice",
+      "broccoli",
+      "olive oil",
+      "garlic"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 40,
+    "carbs_g": 48,
+    "fat_g": 10,
+    "calories": 442,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Avocado Toast with Poached Egg",
-    "type": "Breakfast",
-    "ingredients": ["bread", "avocado", "egg", "lemon", "salt", "pepper"],
-    "calories": 420,
-    "price": 11,
-    "image_url": "https://placehold.co/150x150/ccffdd/333333?text=Avocado+Toast",
-    "tags": ["vegetarian"]
+    "name": "Ground Beef with Pasta and Tomato Sauce",
+    "type": "main meal",
+    "ingredients": [
+      "lean ground beef",
+      "white pasta",
+      "tomato",
+      "onion",
+      "garlic",
+      "olive oil"
+    ],
+    "serving_size_g": 500,
+    "protein_g": 35,
+    "carbs_g": 55,
+    "fat_g": 18,
+    "calories": 522,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Banana Peanut Butter Smoothie Bowl",
-    "type": "Breakfast",
-    "ingredients": ["banana", "peanut butter", "oats", "almond milk", "chia seeds"],
-    "calories": 480,
-    "price": 11,
-    "image_url": "https://placehold.co/150x150/ffd4a9/333333?text=Smoothie+Bowl",
-    "tags": ["vegetarian", "nut"]
+    "name": "Lentil Stew with Rice",
+    "type": "main meal",
+    "ingredients": [
+      "lentils",
+      "white rice",
+      "carrots",
+      "onion",
+      "celery",
+      "olive oil"
+    ],
+    "serving_size_g": 500,
+    "protein_g": 35,
+    "carbs_g": 68,
+    "fat_g": 8,
+    "calories": 484,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly",
+      "high fiber"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Spinach & Feta Omelette",
-    "type": "Breakfast",
-    "ingredients": ["eggs", "spinach", "feta", "olive oil", "salt"],
-    "calories": 350,
-    "price": 11,
-    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Omelette",
-    "tags": ["vegetarian", "dairy"]
+    "name": "Black Bean Rice Bowl",
+    "type": "main meal",
+    "ingredients": [
+      "black beans",
+      "white rice",
+      "red bell pepper",
+      "onion",
+      "corn",
+      "lime"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 35,
+    "carbs_g": 75,
+    "fat_g": 5,
+    "calories": 485,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly",
+      "high fiber"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Breakfast Burrito with Black Beans",
-    "type": "Breakfast",
-    "ingredients": ["tortilla", "eggs", "black beans", "cheddar", "salsa"],
-    "calories": 540,
-    "price": 8.0,
-    "image_url": "https://placehold.co/150x150/ffe7d6/333333?text=Breakfast+Burrito",
-    "tags": ["vegetarian"]
+    "name": "Chicken Meatballs with Mashed Potatoes",
+    "type": "main meal",
+    "ingredients": [
+      "chicken meatballs",
+      "white potatoes",
+      "butter",
+      "regular milk",
+      "mixed frozen vegetables"
+    ],
+    "serving_size_g": 480,
+    "protein_g": 35,
+    "carbs_g": 45,
+    "fat_g": 14,
+    "calories": 446,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Smoked Salmon Bagel",
-    "type": "Breakfast",
-    "ingredients": ["bagel", "smoked salmon", "cream cheese", "capers", "dill"],
-    "calories": 520,
-    "price": 8.5,
-    "image_url": "https://placehold.co/150x150/a9d1ff/333333?text=Salmon+Bagel",
-    "tags": ["pescatarian", "dairy"]
+    "name": "Tuna Pasta Salad",
+    "type": "main meal",
+    "ingredients": [
+      "canned tuna",
+      "white pasta",
+      "cucumber",
+      "tomato",
+      "corn",
+      "olive oil"
+    ],
+    "serving_size_g": 400,
+    "protein_g": 35,
+    "carbs_g": 48,
+    "fat_g": 12,
+    "calories": 440,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Blueberry Pancakes",
-    "type": "Breakfast",
-    "ingredients": ["flour", "milk", "egg", "blueberries", "syrup"],
-    "calories": 610,
-    "price": 7.5,
-    "image_url": "https://placehold.co/150x150/ffd1ff/333333?text=Blueberry+Pancakes",
-    "tags": ["vegetarian"]
+    "name": "Egg Fried Rice with Mixed Vegetables",
+    "type": "main meal",
+    "ingredients": [
+      "white rice",
+      "eggs",
+      "mixed frozen vegetables",
+      "soy sauce",
+      "garlic",
+      "olive oil"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 35,
+    "carbs_g": 62,
+    "fat_g": 14,
+    "calories": 514,
+    "price": 15.0,
+    "tags": [
+      "budget friendly",
+      "vegetarian"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Tofu Scramble with Veggies",
-    "type": "Breakfast",
-    "ingredients": ["tofu", "turmeric", "bell pepper", "spinach", "onion"],
+    "name": "Ground Turkey with Sweet Plantains and Rice",
+    "type": "main meal",
+    "ingredients": [
+      "ground turkey",
+      "ripe plantain",
+      "white rice",
+      "onion",
+      "bell pepper"
+    ],
+    "serving_size_g": 500,
+    "protein_g": 35,
+    "carbs_g": 70,
+    "fat_g": 10,
+    "calories": 510,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Chickpea Curry with Brown Rice",
+    "type": "main meal",
+    "ingredients": [
+      "chickpeas",
+      "brown rice",
+      "tomato",
+      "onion",
+      "spinach",
+      "olive oil",
+      "spices"
+    ],
+    "serving_size_g": 480,
+    "protein_g": 35,
+    "carbs_g": 72,
+    "fat_g": 10,
+    "calories": 518,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly",
+      "high fiber"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Grilled Chicken with Roasted Potatoes and Green Beans",
+    "type": "main meal",
+    "ingredients": [
+      "chicken breast",
+      "yellow potatoes",
+      "green beans",
+      "olive oil",
+      "garlic"
+    ],
+    "serving_size_g": 480,
+    "protein_g": 40,
+    "carbs_g": 42,
+    "fat_g": 12,
+    "calories": 436,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Red Beans and Rice",
+    "type": "main meal",
+    "ingredients": [
+      "red beans",
+      "white rice",
+      "onion",
+      "bell pepper",
+      "celery",
+      "olive oil"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 35,
+    "carbs_g": 70,
+    "fat_g": 6,
+    "calories": 474,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly",
+      "high fiber"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Pasta with Ground Chicken and Spinach",
+    "type": "main meal",
+    "ingredients": [
+      "ground chicken",
+      "whole wheat pasta",
+      "spinach",
+      "garlic",
+      "tomato",
+      "olive oil"
+    ],
+    "serving_size_g": 480,
+    "protein_g": 36,
+    "carbs_g": 52,
+    "fat_g": 12,
+    "calories": 460,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Baked Chicken Thighs with Cauliflower Rice",
+    "type": "main meal",
+    "ingredients": [
+      "whole chicken",
+      "cauliflower",
+      "olive oil",
+      "garlic",
+      "lemon"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 35,
+    "carbs_g": 12,
+    "fat_g": 20,
+    "calories": 368,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "low carb"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Turkey Meatballs with Spaghetti",
+    "type": "main meal",
+    "ingredients": [
+      "ground turkey",
+      "white pasta",
+      "tomato",
+      "onion",
+      "garlic",
+      "olive oil"
+    ],
+    "serving_size_g": 500,
+    "protein_g": 35,
+    "carbs_g": 58,
+    "fat_g": 14,
+    "calories": 498,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Sardine Rice Bowl with Vegetables",
+    "type": "main meal",
+    "ingredients": [
+      "canned sardines",
+      "white rice",
+      "broccoli",
+      "carrots",
+      "olive oil",
+      "lemon"
+    ],
+    "serving_size_g": 420,
+    "protein_g": 35,
+    "carbs_g": 48,
+    "fat_g": 15,
+    "calories": 467,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "omega-3",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Chicken and Vegetable Stir-Fry with Rice",
+    "type": "main meal",
+    "ingredients": [
+      "chicken breast",
+      "mixed frozen vegetables",
+      "white rice",
+      "soy sauce",
+      "garlic",
+      "olive oil"
+    ],
+    "serving_size_g": 480,
+    "protein_g": 38,
+    "carbs_g": 55,
+    "fat_g": 10,
+    "calories": 462,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Lentil and Vegetable Soup with Bread",
+    "type": "main meal",
+    "ingredients": [
+      "lentils",
+      "carrots",
+      "celery",
+      "onion",
+      "tomato",
+      "whole wheat bread"
+    ],
+    "serving_size_g": 500,
+    "protein_g": 35,
+    "carbs_g": 62,
+    "fat_g": 6,
+    "calories": 442,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly",
+      "high fiber"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Ground Beef Tacos with Corn Tortillas",
+    "type": "main meal",
+    "ingredients": [
+      "lean ground beef",
+      "corn tortillas",
+      "lettuce",
+      "tomato",
+      "onion",
+      "fresh cheese"
+    ],
+    "serving_size_g": 400,
+    "protein_g": 35,
+    "carbs_g": 42,
+    "fat_g": 16,
+    "calories": 452,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Chicken Breast with Quinoa and Zucchini",
+    "type": "main meal",
+    "ingredients": [
+      "chicken breast",
+      "white rice",
+      "zucchini",
+      "onion",
+      "olive oil"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 40,
+    "carbs_g": 45,
+    "fat_g": 11,
+    "calories": 439,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Egg and Potato Hash",
+    "type": "main meal",
+    "ingredients": [
+      "eggs",
+      "white potatoes",
+      "onion",
+      "bell pepper",
+      "olive oil"
+    ],
+    "serving_size_g": 420,
+    "protein_g": 35,
+    "carbs_g": 45,
+    "fat_g": 18,
+    "calories": 482,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Tuna Salad with Mixed Greens and Whole Wheat Bread",
+    "type": "main meal",
+    "ingredients": [
+      "canned tuna",
+      "romaine lettuce",
+      "tomato",
+      "cucumber",
+      "whole wheat bread",
+      "olive oil"
+    ],
+    "serving_size_g": 400,
+    "protein_g": 35,
+    "carbs_g": 35,
+    "fat_g": 12,
+    "calories": 388,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Black Bean and Sweet Plantain Bowl",
+    "type": "main meal",
+    "ingredients": [
+      "black beans",
+      "ripe plantain",
+      "white rice",
+      "onion",
+      "avocado"
+    ],
+    "serving_size_g": 480,
+    "protein_g": 35,
+    "carbs_g": 78,
+    "fat_g": 12,
+    "calories": 560,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Ground Chicken Stuffed Bell Peppers with Rice",
+    "type": "main meal",
+    "ingredients": [
+      "ground chicken",
+      "red bell peppers",
+      "white rice",
+      "tomato",
+      "onion",
+      "mozzarella cheese"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 35,
+    "carbs_g": 42,
+    "fat_g": 14,
+    "calories": 434,
+    "price": 15.0,
+    "tags": [
+      "high protein"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Pasta with White Beans and Spinach",
+    "type": "main meal",
+    "ingredients": [
+      "white pasta",
+      "chickpeas",
+      "spinach",
+      "garlic",
+      "olive oil",
+      "lemon"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 35,
+    "carbs_g": 68,
+    "fat_g": 10,
+    "calories": 502,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Baked Chicken Breast with Mashed Cauliflower",
+    "type": "main meal",
+    "ingredients": [
+      "chicken breast",
+      "cauliflower",
+      "butter",
+      "regular milk",
+      "garlic"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 40,
+    "carbs_g": 18,
+    "fat_g": 12,
     "calories": 340,
-    "price": 6.5,
-    "image_url": "https://placehold.co/150x150/c5ffd1/333333?text=Tofu+Scramble",
-    "tags": ["vegan"]
-  },
-  {
-    "name": "Chia Seed Pudding with Mango",
-    "type": "Breakfast",
-    "ingredients": ["chia seeds", "coconut milk", "mango", "maple syrup"],
-    "calories": 300,
-    "price": 6.0,
-    "image_url": "https://placehold.co/150x150/fff0b3/333333?text=Chia+Pudding",
-    "tags": ["vegan", "gluten_free"]
-  },
-  {
-    "name": "Egg & Spinach Breakfast Sandwich",
-    "type": "Breakfast",
-    "ingredients": ["english muffin", "egg", "spinach", "cheddar"],
-    "calories": 430,
-    "price": 6.8,
-    "image_url": "https://placehold.co/150x150/e6ffd8/333333?text=Breakfast+Sandwich",
-    "tags": ["vegetarian", "dairy"]
-  },
-  {
-    "name": "Apple Cinnamon Oatmeal",
-    "type": "Breakfast",
-    "ingredients": ["oats", "apple", "cinnamon", "milk", "honey"],
-    "calories": 360,
-    "price": 5.5,
-    "image_url": "https://placehold.co/150x150/ffd1a9/333333?text=Oatmeal",
-    "tags": ["vegetarian"]
-  },
-  {
-    "name": "Smashed Chickpea & Avocado Toast",
-    "type": "Breakfast",
-    "ingredients": ["bread", "chickpeas", "avocado", "lemon", "pepper"],
-    "calories": 380,
-    "price": 6.5,
-    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Chickpea+Toast",
-    "tags": ["vegan"]
-  },
-  {
-    "name": "Cottage Cheese & Fruit Bowl",
-    "type": "Breakfast",
-    "ingredients": ["cottage cheese", "pineapple", "berries", "almonds"],
-    "calories": 330,
-    "price": 6.2,
-    "image_url": "https://placehold.co/150x150/ffe7d6/333333?text=Cottage+Cheese+Bowl",
-    "tags": ["vegetarian", "dairy", "nut"]
-  },
-  {
-    "name": "Breakfast Quinoa with Almonds",
-    "type": "Breakfast",
-    "ingredients": ["quinoa", "almond milk", "almonds", "berries", "honey"],
-    "calories": 400,
-    "price": 6.9,
-    "image_url": "https://placehold.co/150x150/ffd4a9/333333?text=Quinoa+Breakfast",
-    "tags": ["vegetarian", "nut"]
-  },
-  {
-    "name": "Huevos Rancheros",
-    "type": "Breakfast",
-    "ingredients": ["corn tortilla", "eggs", "black beans", "salsa", "avocado"],
-    "calories": 520,
-    "price": 8.0,
-    "image_url": "https://placehold.co/150x150/ffd1ff/333333?text=Huevos+Rancheros",
-    "tags": ["vegetarian"]
-  },
-  {
-    "name": "Protein Pancakes with Banana",
-    "type": "Breakfast",
-    "ingredients": ["oat flour", "egg", "banana", "protein powder", "maple syrup"],
-    "calories": 470,
-    "price": 7.8,
-    "image_url": "https://placehold.co/150x150/ffe7a9/333333?text=Protein+Pancakes",
-    "tags": ["vegetarian"]
-  },
-  {
-    "name": "Savory Oatmeal with Mushrooms",
-    "type": "Breakfast",
-    "ingredients": ["oats", "mushrooms", "soy sauce", "scallion", "sesame oil"],
-    "calories": 380,
-    "price": 6.7,
-    "image_url": "https://placehold.co/150x150/c5ffd1/333333?text=Savory+Oats",
-    "tags": ["vegetarian", "soy"]
-  },
-  {
-    "name": "Breakfast Polenta with Tomato & Herb",
-    "type": "Breakfast",
-    "ingredients": ["polenta", "tomato", "basil", "olive oil", "parmesan"],
-    "calories": 360,
-    "price": 6.5,
-    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Polenta+Breakfast",
-    "tags": ["vegetarian", "dairy"]
-  },
-  {
-    "name": "Coconut Yogurt & Granola Bowl",
-    "type": "Breakfast",
-    "ingredients": ["coconut yogurt", "granola", "mango", "chia seeds"],
-    "calories": 340,
-    "price": 6.5,
-    "image_url": "https://placehold.co/150x150/fff0b3/333333?text=Coconut+Yogurt",
-    "tags": ["vegan", "gluten_free"]
-  },
-  {
-    "name": "Grilled Lemon Chicken with Rice",
-    "type": "Main Meal",
-    "ingredients": ["chicken", "rice", "olive oil", "lemon", "garlic", "salt", "pepper"],
-    "calories": 650,
-    "price": 13.0,
-    "image_url": "https://placehold.co/150x150/ffd1a9/333333?text=Grilled+Chicken",
-    "tags": ["nut_free"]
-  },
-  {
-    "name": "Salmon with Quinoa & Greens",
-    "type": "Main Meal",
-    "ingredients": ["salmon", "quinoa", "spinach", "lemon", "olive oil", "salt"],
-    "calories": 620,
-    "price": 14.0,
-    "image_url": "https://placehold.co/150x150/9ad1ff/333333?text=Salmon+Quinoa",
-    "tags": ["pescatarian"]
-  },
-  {
-    "name": "Beef Stew with Root Vegetables",
-    "type": "Main Meal",
-    "ingredients": ["beef", "potato", "carrot", "onion", "beef broth", "salt", "pepper"],
-    "calories": 720,
-    "price": 14.0,
-    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Beef+Stew",
-    "tags": []
-  },
-  {
-    "name": "Tofu Stir Fry with Vegetables",
-    "type": "Main Meal",
-    "ingredients": ["tofu", "broccoli", "carrot", "soy sauce", "garlic", "olive oil"],
-    "calories": 540,
-    "price": 12.0,
-    "image_url": "https://placehold.co/150x150/c5ffd1/333333?text=Tofu+Stir+Fry",
-    "tags": ["vegetarian", "soy"]
-  },
-  {
-    "name": "Shrimp & Veggie Pasta",
-    "type": "Main Meal",
-    "ingredients": ["shrimp", "pasta", "tomato", "garlic", "olive oil", "parsley"],
-    "calories": 680,
-    "price": 13.5,
-    "image_url": "https://placehold.co/150x150/a9fff0/333333?text=Shrimp+Pasta",
-    "tags": ["pescatarian", "shellfish"]
-  },
-  {
-    "name": "Vegan Chickpea Curry",
-    "type": "Main Meal",
-    "ingredients": ["chickpeas", "tomato", "coconut milk", "onion", "garlic", "spices"],
-    "calories": 580,
-    "price": 12.0,
-    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Chickpea+Curry",
-    "tags": ["vegan", "gluten_free"]
-  },
-  {
-    "name": "Pork Tenderloin with Sweet Potato",
-    "type": "Main Meal",
-    "ingredients": ["pork", "sweet potato", "rosemary", "olive oil", "salt"],
-    "calories": 700,
-    "price": 14.5,
-    "image_url": "https://placehold.co/150x150/ffd1c1/333333?text=Pork+Tenderloin",
-    "tags": []
-  },
-  {
-    "name": "Lentil & Vegetable Shepherd's Pie",
-    "type": "Main Meal",
-    "ingredients": ["lentils", "potato", "carrot", "peas", "onion", "vegetable broth"],
-    "calories": 610,
-    "price": 11.5,
-    "image_url": "https://placehold.co/150x150/dbe7ff/333333?text=Lentil+Shepherds+Pie",
-    "tags": ["vegan"]
-  },
-  {
-    "name": "Chicken Caesar Salad",
-    "type": "Main Meal",
-    "ingredients": ["chicken", "romaine", "parmesan", "croutons", "caesar dressing"],
-    "calories": 520,
-    "price": 12.0,
-    "image_url": "https://placehold.co/150x150/fff0d1/333333?text=Chicken+Caesar",
-    "tags": []
-  },
-  {
-    "name": "Quinoa & Roasted Vegetable Bowl",
-    "type": "Main Meal",
-    "ingredients": ["quinoa", "zucchini", "eggplant", "bell pepper", "olive oil"],
-    "calories": 560,
-    "price": 11.0,
-    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Quinoa+Bowl",
-    "tags": ["vegetarian", "gluten_free"]
-  },
-  {
-    "name": "Turkey Meatballs with Tomato Sauce",
-    "type": "Main Meal",
-    "ingredients": ["turkey", "breadcrumbs", "egg", "tomato sauce", "parmesan"],
-    "calories": 640,
-    "price": 12.5,
-    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Turkey+Meatballs",
-    "tags": []
-  },
-  {
-    "name": "Miso Glazed Salmon with Bok Choy",
-    "type": "Main Meal",
-    "ingredients": ["salmon", "miso", "bok choy", "rice", "sesame oil"],
-    "calories": 610,
     "price": 15.0,
-    "image_url": "https://placehold.co/150x150/a9d1ff/333333?text=Miso+Salmon",
-    "tags": ["pescatarian"]
+    "tags": [
+      "high protein",
+      "low carb"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Vegetable Pad Thai (Tofu)",
-    "type": "Main Meal",
-    "ingredients": ["rice noodles", "tofu", "bean sprouts", "peanuts", "tamarind sauce"],
-    "calories": 700,
-    "price": 12.5,
-    "image_url": "https://placehold.co/150x150/ffd1ff/333333?text=Pad+Thai",
-    "tags": ["vegetarian", "nut"]
-  },
-  {
-    "name": "Steak Fajitas with Peppers",
-    "type": "Main Meal",
-    "ingredients": ["beef", "tortilla", "bell pepper", "onion", "spices"],
-    "calories": 760,
-    "price": 15.5,
-    "image_url": "https://placehold.co/150x150/ffd1c1/333333?text=Steak+Fajitas",
-    "tags": []
-  },
-  {
-    "name": "Moroccan Chickpea Tagine",
-    "type": "Main Meal",
-    "ingredients": ["chickpeas", "tomato", "couscous", "apricot", "spices"],
-    "calories": 590,
-    "price": 11.0,
-    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Chickpea+Tagine",
-    "tags": ["vegan"]
-  },
-  {
-    "name": "BBQ Pulled Pork Sandwich",
-    "type": "Main Meal",
-    "ingredients": ["pulled pork", "bun", "bbq sauce", "coleslaw"],
-    "calories": 820,
-    "price": 13.5,
-    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Pulled+Pork",
-    "tags": []
-  },
-  {
-    "name": "Mediterranean Falafel Plate",
-    "type": "Main Meal",
-    "ingredients": ["falafel", "hummus", "tabbouleh", "pita", "olive oil"],
-    "calories": 650,
-    "price": 11.5,
-    "image_url": "https://placehold.co/150x150/dbe7ff/333333?text=Falafel+Plate",
-    "tags": ["vegan"]
-  },
-  {
-    "name": "Pesto Pasta with Cherry Tomatoes",
-    "type": "Main Meal",
-    "ingredients": ["pasta", "pesto", "cherry tomatoes", "parmesan"],
-    "calories": 700,
-    "price": 12.0,
-    "image_url": "https://placehold.co/150x150/ffd1ff/333333?text=Pesto+Pasta",
-    "tags": ["vegetarian", "nut"]
-  },
-  {
-    "name": "Cajun Shrimp Rice Bowl",
-    "type": "Main Meal",
-    "ingredients": ["shrimp", "rice", "bell pepper", "cajun spice", "onion"],
-    "calories": 640,
-    "price": 13.0,
-    "image_url": "https://placehold.co/150x150/a9fff0/333333?text=Cajun+Shrimp",
-    "tags": ["pescatarian", "shellfish"]
-  },
-  {
-    "name": "Eggplant Parmesan with Spaghetti",
-    "type": "Main Meal",
-    "ingredients": ["eggplant", "tomato sauce", "mozzarella", "breadcrumbs", "spaghetti"],
-    "calories": 770,
-    "price": 13.5,
-    "image_url": "https://placehold.co/150x150/ffd1a9/333333?text=Eggplant+Parm",
-    "tags": ["vegetarian", "dairy"]
-  },
-  {
-    "name": "Grilled Vegetable & Halloumi Skewers",
-    "type": "Main Meal",
-    "ingredients": ["halloumi", "zucchini", "bell pepper", "olive oil", "lemon"],
-    "calories": 560,
-    "price": 12.0,
-    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Veg+Skewers",
-    "tags": ["vegetarian", "dairy"]
-  },
-  {
-    "name": "Korean Beef Bowl with Kimchi",
-    "type": "Main Meal",
-    "ingredients": ["beef", "rice", "kimchi", "scallion", "soy sauce"],
-    "calories": 730,
-    "price": 14.0,
-    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Korean+Beef",
-    "tags": []
-  },
-  {
-    "name": "Lemon Herb Baked Cod",
-    "type": "Main Meal",
-    "ingredients": ["cod", "lemon", "herbs", "olive oil", "asparagus"],
-    "calories": 520,
-    "price": 14.0,
-    "image_url": "https://placehold.co/150x150/9ad1ff/333333?text=Baked+Cod",
-    "tags": ["pescatarian", "gluten_free"]
-  },
-  {
-    "name": "Mushroom Risotto",
-    "type": "Main Meal",
-    "ingredients": ["arborio rice", "mushroom", "parmesan", "white wine", "onion"],
-    "calories": 680,
-    "price": 13.0,
-    "image_url": "https://placehold.co/150x150/dbe7ff/333333?text=Mushroom+Risotto",
-    "tags": ["vegetarian", "dairy"]
-  },
-  {
-    "name": "Black Bean & Sweet Potato Tacos",
-    "type": "Main Meal",
-    "ingredients": ["corn tortilla", "black beans", "sweet potato", "avocado", "lime"],
-    "calories": 590,
-    "price": 11.0,
-    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Bean+Tacos",
-    "tags": ["vegan", "gluten_free"]
-  },
-  {
-    "name": "Chicken Tikka Masala with Rice",
-    "type": "Main Meal",
-    "ingredients": ["chicken", "tomato sauce", "cream", "spices", "rice"],
-    "calories": 780,
-    "price": 14.5,
-    "image_url": "https://placehold.co/150x150/ffd1c1/333333?text=Tikka+Masala",
-    "tags": []
-  },
-  {
-    "name": "Mediterranean Grilled Shrimp",
-    "type": "Main Meal",
-    "ingredients": ["shrimp", "olive oil", "lemon", "garlic", "parsley"],
-    "calories": 560,
-    "price": 14.0,
-    "image_url": "https://placehold.co/150x150/a9fff0/333333?text=Grilled+Shrimp",
-    "tags": ["pescatarian", "shellfish"]
-  },
-  {
-    "name": "Butternut Squash & Sage Gnocchi",
-    "type": "Main Meal",
-    "ingredients": ["gnocchi", "butternut squash", "sage", "parmesan", "butter"],
-    "calories": 720,
-    "price": 12.5,
-    "image_url": "https://placehold.co/150x150/ffd4a9/333333?text=Squash+Gnocchi",
-    "tags": ["vegetarian", "dairy"]
-  },
-  {
-    "name": "Thai Green Curry with Tofu",
-    "type": "Main Meal",
-    "ingredients": ["tofu", "green curry paste", "coconut milk", "bamboo shoots", "basil"],
-    "calories": 650,
-    "price": 12.5,
-    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Green+Curry",
-    "tags": ["vegan", "gluten_free"]
-  },
-  {
-    "name": "Herb Roasted Chicken with Vegetables",
-    "type": "Main Meal",
-    "ingredients": ["chicken", "potato", "carrot", "rosemary", "olive oil"],
-    "calories": 700,
-    "price": 13.5,
-    "image_url": "https://placehold.co/150x150/ffd1a9/333333?text=Roasted+Chicken",
-    "tags": []
-  },
-  {
-    "name": "Blackened Fish Tacos",
-    "type": "Main Meal",
-    "ingredients": ["white fish", "tortilla", "cabbage", "lime", "spice"],
-    "calories": 620,
-    "price": 13.0,
-    "image_url": "https://placehold.co/150x150/9ad1ff/333333?text=Fish+Tacos",
-    "tags": ["pescatarian"]
-  },
-  {
-    "name": "Mango & Cashew Chicken Stir Fry",
-    "type": "Main Meal",
-    "ingredients": ["chicken", "mango", "cashew", "bell pepper", "soy sauce"],
-    "calories": 680,
-    "price": 13.0,
-    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Mango+Stir+Fry",
-    "tags": ["nut"]
-  },
-  {
-    "name": "Ratatouille with Polenta",
-    "type": "Main Meal",
-    "ingredients": ["eggplant", "zucchini", "tomato", "bell pepper", "polenta"],
-    "calories": 540,
-    "price": 11.0,
-    "image_url": "https://placehold.co/150x150/dbe7ff/333333?text=Ratatouille",
-    "tags": ["vegan", "gluten_free"]
-  },
-  {
-    "name": "Soba Noodle Bowl with Sesame Tofu",
-    "type": "Main Meal",
-    "ingredients": ["soba noodles", "tofu", "sesame", "bok choy", "soy sauce"],
-    "calories": 670,
-    "price": 12.5,
-    "image_url": "https://placehold.co/150x150/c5ffd1/333333?text=Soba+Bowl",
-    "tags": ["vegetarian", "soy", "sesame"]
-  },
-  {
-    "name": "Classic Margherita Pizza",
-    "type": "Main Meal",
-    "ingredients": ["pizza dough", "tomato", "mozzarella", "basil", "olive oil"],
-    "calories": 850,
-    "price": 13.0,
-    "image_url": "https://placehold.co/150x150/ffd1ff/333333?text=Margherita+Pizza",
-    "tags": ["vegetarian", "dairy"]
-  },
-  {
-    "name": "Seared Tuna Niçoise",
-    "type": "Main Meal",
-    "ingredients": ["tuna", "green beans", "potato", "egg", "olive"],
-    "calories": 620,
+    "name": "Ground Beef and Cabbage Stir-Fry",
+    "type": "main meal",
+    "ingredients": [
+      "lean ground beef",
+      "cabbage",
+      "carrots",
+      "onion",
+      "soy sauce",
+      "olive oil"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 35,
+    "carbs_g": 22,
+    "fat_g": 18,
+    "calories": 390,
     "price": 15.0,
-    "image_url": "https://placehold.co/150x150/9ad1ff/333333?text=Tuna+Nicoise",
-    "tags": ["pescatarian"]
+    "tags": [
+      "high protein",
+      "low carb"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Buffalo Cauliflower with Brown Rice",
-    "type": "Main Meal",
-    "ingredients": ["cauliflower", "buffalo sauce", "brown rice", "celery"],
-    "calories": 560,
-    "price": 11.0,
-    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Buffalo+Cauliflower",
-    "tags": ["vegan"]
-  },
-  {
-    "name": "Ginger Garlic Beef & Broccoli",
-    "type": "Main Meal",
-    "ingredients": ["beef", "broccoli", "ginger", "garlic", "soy sauce"],
-    "calories": 710,
-    "price": 14.0,
-    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Beef+Broccoli",
-    "tags": []
-  },
-  {
-    "name": "Steak with Mashed Potatoes",
-    "type": "Main Meal",
-    "ingredients": ["beef steak", "potatoes", "butter", "cream", "garlic", "salt", "pepper"],
-    "calories": 820,
-    "price": 16.5,
-    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Steak+Mashed+Potatoes",
-    "tags": []
-  },
-  {
-    "name": "Grilled Lemon Chicken with Rice",
-    "type": "Main Meal",
-    "ingredients": ["chicken", "rice", "olive oil", "lemon", "garlic", "salt", "pepper"],
-    "calories": 650,
-    "price": 13.0,
-    "image_url": "https://placehold.co/150x150/ffd1a9/333333?text=Grilled+Chicken",
-    "tags": ["nut_free"]
-  },
-  {
-    "name": "Honey Garlic Salmon with Jasmine Rice",
-    "type": "Main Meal",
-    "ingredients": ["salmon", "honey", "garlic", "soy sauce", "rice", "butter"],
-    "calories": 640,
+    "name": "Rice and Egg White Scramble with Vegetables",
+    "type": "main meal",
+    "ingredients": [
+      "egg whites",
+      "white rice",
+      "broccoli",
+      "bell pepper",
+      "onion",
+      "olive oil"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 35,
+    "carbs_g": 58,
+    "fat_g": 8,
+    "calories": 444,
     "price": 15.0,
-    "image_url": "https://placehold.co/150x150/9ad1ff/333333?text=Honey+Salmon",
-    "tags": ["pescatarian"]
+    "tags": [
+      "high protein",
+      "low fat"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Pork Chop with Apple Compote",
-    "type": "Main Meal",
-    "ingredients": ["pork chop", "apple", "cinnamon", "butter", "brown sugar", "salt"],
-    "calories": 720,
-    "price": 14.0,
-    "image_url": "https://placehold.co/150x150/ffd1c1/333333?text=Pork+Chop",
-    "tags": []
+    "name": "Chicken Breast with Sweet Potato and Green Beans",
+    "type": "main meal",
+    "ingredients": [
+      "chicken breast",
+      "white potato",
+      "green beans",
+      "olive oil"
+    ],
+    "serving_size_g": 480,
+    "protein_g": 40,
+    "carbs_g": 48,
+    "fat_g": 10,
+    "calories": 442,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Lamb Kofta with Saffron Rice",
-    "type": "Main Meal",
-    "ingredients": ["lamb", "spices", "yogurt", "rice", "saffron", "olive oil"],
-    "calories": 760,
-    "price": 15.5,
-    "image_url": "https://placehold.co/150x150/dbe7ff/333333?text=Lamb+Kofta",
-    "tags": []
+    "name": "Tuna and White Bean Salad",
+    "type": "main meal",
+    "ingredients": [
+      "canned tuna",
+      "chickpeas",
+      "tomato",
+      "cucumber",
+      "red onion",
+      "olive oil",
+      "lemon"
+    ],
+    "serving_size_g": 400,
+    "protein_g": 35,
+    "carbs_g": 38,
+    "fat_g": 14,
+    "calories": 418,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Beef in Cream Sauce with Egg Noodles",
-    "type": "Main Meal",
-    "ingredients": ["beef", "cream", "butter", "mustard", "egg noodles", "salt", "pepper"],
-    "calories": 800,
-    "price": 14.5,
-    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Beef+Cream+Noodles",
-    "tags": []
+    "name": "Ground Turkey and Lentil Chili",
+    "type": "main meal",
+    "ingredients": [
+      "ground turkey",
+      "lentils",
+      "tomato",
+      "onion",
+      "bell pepper",
+      "spices"
+    ],
+    "serving_size_g": 480,
+    "protein_g": 35,
+    "carbs_g": 45,
+    "fat_g": 10,
+    "calories": 410,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "high fiber"
+    ],
+    "image_url": ""
   },
   {
-    "name": "BBQ Pulled Pork with Sweet Potato Mash",
-    "type": "Main Meal",
-    "ingredients": ["pulled pork", "bbq sauce", "sweet potato", "butter", "brown sugar", "salt"],
-    "calories": 820,
-    "price": 14.0,
-    "image_url": "https://placehold.co/150x150/ffd6a9/333333?text=Pulled+Pork",
-    "tags": []
+    "name": "Whole Chicken Leg with Rice and Corn",
+    "type": "main meal",
+    "ingredients": [
+      "whole chicken",
+      "white rice",
+      "corn",
+      "olive oil",
+      "garlic"
+    ],
+    "serving_size_g": 480,
+    "protein_g": 36,
+    "carbs_g": 52,
+    "fat_g": 16,
+    "calories": 496,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Garlic Butter Shrimp with Rice",
-    "type": "Main Meal",
-    "ingredients": ["shrimp", "garlic", "butter", "lemon", "rice", "parsley"],
-    "calories": 560,
-    "price": 14.0,
-    "image_url": "https://placehold.co/150x150/a9fff0/333333?text=Garlic+Shrimp",
-    "tags": ["pescatarian", "shellfish"]
+    "name": "Greek Yogurt Chicken with Cucumber Salad",
+    "type": "main meal",
+    "ingredients": [
+      "chicken breast",
+      "greek yogurt",
+      "cucumber",
+      "tomato",
+      "whole wheat bread"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 40,
+    "carbs_g": 35,
+    "fat_g": 8,
+    "calories": 372,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "low fat"
+    ],
+    "image_url": ""
   },
   {
-    "name": "Teriyaki Chicken and Rice",
-    "type": "Main Meal",
-    "ingredients": ["chicken", "soy sauce", "mirin", "honey", "ginger", "rice"],
-    "calories": 630,
-    "price": 12.5,
-    "image_url": "https://placehold.co/150x150/ffd1ff/333333?text=Teriyaki+Chicken",
-    "tags": []
-  },
-  {
-    "name": "Sausage and Potato Bake",
-    "type": "Main Meal",
-    "ingredients": ["sausage", "potatoes", "olive oil", "rosemary", "salt", "pepper"],
-    "calories": 760,
-    "price": 12.5,
-    "image_url": "https://placehold.co/150x150/e6ffd8/333333?text=Sausage+Potato",
-    "tags": []
-  },
-  {
-    "name": "Baked Cod with Lemon Butter and Rice",
-    "type": "Main Meal",
-    "ingredients": ["cod", "butter", "lemon", "olive oil", "rice", "salt"],
-    "calories": 520,
-    "price": 14.0,
-    "image_url": "https://placehold.co/150x150/9ad1ff/333333?text=Baked+Cod",
-    "tags": ["pescatarian", "gluten_free"]
-  },
-  {
-    "name": "Turkey Meatloaf with Mustard Glaze and Mash",
-    "type": "Main Meal",
-    "ingredients": ["turkey", "breadcrumbs", "egg", "mustard", "potatoes", "butter"],
-    "calories": 680,
-    "price": 12.8,
-    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Turkey+Meatloaf",
-    "tags": []
-  },
-  {
-    "name": "Creamy Prawn Pasta",
-    "type": "Main Meal",
-    "ingredients": ["prawns", "cream", "pasta", "garlic", "olive oil", "parmesan"],
-    "calories": 720,
-    "price": 14.5,
-    "image_url": "https://placehold.co/150x150/ffd4a9/333333?text=Prawn+Pasta",
-    "tags": ["pescatarian"]
-  },
-  {
-    "name": "Ham & Cheese Omelette with Roasted Potatoes",
-    "type": "Main Meal",
-    "ingredients": ["eggs", "ham", "cheddar", "potatoes", "butter", "salt"],
-    "calories": 580,
-    "price": 11.0,
-    "image_url": "https://placehold.co/150x150/ffe7d6/333333?text=Ham+Omelette",
-    "tags": ["breakfast_style"]
-  },
-  {
-    "name": "Tuna Melt with Rustic Bread",
-    "type": "Main Meal",
-    "ingredients": ["tuna", "cheese", "mayonnaise", "bread", "lemon", "pepper"],
-    "calories": 610,
-    "price": 10.5,
-    "image_url": "https://placehold.co/150x150/ffd1f5/333333?text=Tuna+Melt",
-    "tags": []
-  },
-  {
-    "name": "Chicken & Bacon Carbonara",
-    "type": "Main Meal",
-    "ingredients": ["chicken", "bacon", "pasta", "egg", "parmesan", "black pepper"],
-    "calories": 760,
-    "price": 13.5,
-    "image_url": "https://placehold.co/150x150/ffd1ff/333333?text=Chicken+Carbonara",
-    "tags": []
-  },
-  {
-    "name": "Beef and Cheese Quesadilla",
-    "type": "Main Meal",
-    "ingredients": ["beef", "cheddar", "tortilla", "sour cream", "spices"],
-    "calories": 780,
-    "price": 12.0,
-    "image_url": "https://placehold.co/150x150/ffd6d6/333333?text=Beef+Quesadilla",
-    "tags": []
-  },
-  {
-    "name": "Seared Scallops with Lemon Butter and Rice",
-    "type": "Main Meal",
-    "ingredients": ["scallops", "butter", "lemon", "rice", "salt", "pepper"],
-    "calories": 480,
-    "price": 16.0,
-    "image_url": "https://placehold.co/150x150/a9fff0/333333?text=Seared+Scallops",
-    "tags": ["pescatarian", "shellfish"]
-  },
-  {
-    "name": "Chicken Alfredo with Fettuccine",
-    "type": "Main Meal",
-    "ingredients": ["chicken", "cream", "parmesan", "fettuccine", "butter", "garlic"],
-    "calories": 840,
-    "price": 14.0,
-    "image_url": "https://placehold.co/150x150/ffd1a9/333333?text=Chicken+Alfredo",
-    "tags": []
-  },
-  {
-    "name": "Lamb & Chickpea Stew (no veg)",
-    "type": "Main Meal",
-    "ingredients": ["lamb", "chickpeas", "spices", "olive oil", "apricot", "stock"],
-    "calories": 700,
-    "price": 14.5,
-    "image_url": "https://placehold.co/150x150/d1ffd6/333333?text=Lamb+Chickpea+Stew",
-    "tags": ["halal"]
+    "name": "Red Bean and Rice Burrito",
+    "type": "main meal",
+    "ingredients": [
+      "red beans",
+      "white rice",
+      "flour tortilla",
+      "fresh cheese",
+      "salsa"
+    ],
+    "serving_size_g": 450,
+    "protein_g": 35,
+    "carbs_g": 72,
+    "fat_g": 10,
+    "calories": 518,
+    "price": 15.0,
+    "tags": [
+      "vegetarian",
+      "budget friendly"
+    ],
+    "image_url": ""
   }
 ]

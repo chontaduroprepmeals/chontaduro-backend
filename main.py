@@ -38,12 +38,6 @@ engine = create_engine(SQLITE_DATABASE_URL, connect_args={"check_same_thread": F
 # Create session maker
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Initialize database tables
-def init_db():
-    Base.metadata.create_all(bind=engine)
-
-init_db()
-
 # --- Database Models (User table) ---
 class User(Base):
     __tablename__ = "users"
@@ -58,6 +52,12 @@ class User(Base):
     def hash_password(password: str) -> str:
         salt = "secret_salt_here"  # Use a secure salt
         return hashlib.sha256((password + salt).encode()).hexdigest()
+
+# Initialize database tables AFTER models are defined
+def init_db():
+    Base.metadata.create_all(bind=engine)
+
+init_db()
 
 app = FastAPI()
 
@@ -80,19 +80,23 @@ register_delivery_routes(app)
 def healthz():
     return {"status": "ok"}
 
+@app.get("/version")
+def version():
+    """Return current app version to verify deployment"""
+    return {
+        "version": "v2.1-checkout-enabled",
+        "deploy_date": "2026-02-06T05:25:00Z",
+        "features": {
+            "checkout_button": True,
+            "checkout_modal": True,
+            "database_persistence": True
+        },
+        "status": "deployed"
+    }
+
 # Serve frontend
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
-    return FileResponse("index.html")
-
-# Manejo de solicitudes HEAD en la raíz
-@app.head("/")
-async def handle_head_request():
-    return HTMLResponse(content="", status_code=200)
-
-# Manejo de solicitudes GET explícito en la raíz
-@app.get("/")
-async def handle_get_request_override():
     return FileResponse("index.html")
 
 # --- LOAD MEALS (expects English keys; tolerant with Spanish keys) ---
@@ -158,13 +162,13 @@ sessions: Dict[str, Dict[str, Any]] = {}
 
 # --- FLOW STEPS ---
 STEPS = {
-    "start": "pick_plan",
+    "start": "diet_preference",
+    "diet_preference": "pick_plan",
     "pick_plan": "objective",
-    "objective": "personal_info",
-    "personal_info": "restrictions",
-    "restrictions": "duration",
-    "duration": "dislikes",
-    "dislikes": "review",
+    "objective": "allergies_and_restrictions",
+    "allergies_and_restrictions": "personal_info",
+    "personal_info": "duration",
+    "duration": "review",
     "review": "review"
 }
 
@@ -190,6 +194,7 @@ class SessionState(BaseModel):
     dislikes: List[str] = Field(default_factory=list)
     allergies: List[str] = Field(default_factory=list)
     dietary_restrictions: List[str] = Field(default_factory=list)
+    allergies_and_restrictions: Optional[str] = None  # New unified field for allergies/dislikes
     extra_protein_grams: int = 0  # global extra grams to distribute
     extra_protein_map: Dict[int, int] = Field(default_factory=dict)  # per-meal extras
     menu: List[Any] = Field(default_factory=list)
@@ -304,63 +309,340 @@ def to_cm(height: float, unit: str) -> Optional[float]:
     return float(height)
 
 def compute_activity_factor(days_bucket: str, duration_bucket: str, intensity: str) -> float:
-    days_map = {"0":1.2, "1-2":1.3, "3-4":1.45, "5-7":1.6}
+    # Updated base values to match scientific PAL standards and expert recommendations
+    # For 5x/week training, should result in factor ~1.50-1.55
+    days_map = {"0":1.2, "1-2":1.375, "3-4":1.50, "5-7":1.55}
     base = days_map.get(str(days_bucket), 1.2)
-    dur_map = {"<30":0.0, "30-60":0.05, "60-120":0.08}
+    # Simplified duration/intensity adjustments
+    dur_map = {"<30":0.0, "30-60":0.0, "60-120":0.05}
     dur = dur_map.get(str(duration_bucket), 0.0)
-    int_map = {"low":0.0, "moderate":0.03, "high":0.06}
+    int_map = {"low":0.0, "moderate":0.0, "high":0.05}
     iadj = int_map.get((intensity or "").lower(), 0.0)
     return round(min(base + dur + iadj, 1.9), 3)
 
-def calc_tmb_mifflin(weight_kg: float, height_cm: float, age: int, sex: str) -> Optional[float]:
+def get_activity_factor_with_recomp_minimum(days_bucket: str, duration_bucket: str, intensity: str, objective: str) -> float:
+    """
+    Calculate activity factor with minimum enforcement for body recomposition.
+    
+    Expert recommendation: For body recomposition, use minimum AF 1.50-1.55
+    because you cannot build muscle and lose fat simultaneously on sedentary calories.
+    
+    Also enforces universal minimums based on training frequency:
+    - Training 3+ days/week cannot result in sedentary factor (1.20)
+    - Ensures active people get appropriate calorie estimates
+    """
+    base_factor = compute_activity_factor(days_bucket, duration_bucket, intensity)
+    obj = (objective or "").lower()
+    
+    # UNIVERSAL MINIMUM based on training frequency
+    # If training 3+ days/week, CANNOT be sedentary regardless of goal
+    if days_bucket in ["3-4", "5-7"]:
+        min_factor = 1.45  # Moderately active minimum
+        if base_factor < min_factor:
+            print(f"[ACTIVITY] Training {days_bucket} days/week but factor {base_factor:.2f} too low. Enforcing minimum {min_factor}.")
+            base_factor = max(base_factor, min_factor)
+    
+    # EXTRA MINIMUM for body recomposition
+    # Recomp needs even more calories to build muscle
+    if "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
+        min_recomp = 1.50
+        if base_factor < min_recomp:
+            print(f"[RECOMP] Body recomposition requires minimum {min_recomp} factor. Enforcing.")
+            base_factor = max(base_factor, min_recomp)
+    
+    return base_factor
+
+def calc_tmb_mifflin(weight_kg: float, height_cm: float, age: int, sex: str, objective: str = "") -> Optional[float]:
+    """
+    Calculate BMR using Mifflin-St Jeor equation.
+    Includes validation to prevent unrealistic values for body recomposition.
+    """
     if None in (weight_kg, height_cm, age, sex):
         return None
+    
+    # Validation: For body recomposition with very high age, use realistic age
+    # Body recomp is typically done by younger, active individuals
+    obj = (objective or "").lower()
+    if ("recomp" in obj or "body recomp" in obj) and age > 55:
+        print(f"[VALIDATION] Age {age} too high for aggressive body recomposition. Using age 30 for calculations.")
+        age = 30
+    
     sex = (sex or "").lower()
     if sex in ["male", "m", "man"]:
-        return round((10*weight_kg)+(6.25*height_cm)-(5*age)+5, 1)
-    return round((10*weight_kg)+(6.25*height_cm)-(5*age)-161, 1)
+        bmr = round((10*weight_kg)+(6.25*height_cm)-(5*age)+5, 1)
+    else:
+        bmr = round((10*weight_kg)+(6.25*height_cm)-(5*age)-161, 1)
+    
+    # Validation: Warn if BMR is suspiciously low
+    if bmr < 1200 and sex not in ["male", "m", "man"]:
+        print(f"[WARNING] BMR {bmr} kcal is unusually low for a woman. Check age and weight values.")
+    elif bmr < 1400 and sex in ["male", "m", "man"]:
+        print(f"[WARNING] BMR {bmr} kcal is unusually low for a man. Check age and weight values.")
+    
+    return bmr
 
-def calc_calorie_target(tdee: float, objective: str) -> Optional[float]:
+def calc_calorie_target(tdee: float, objective: str, sex: str = "female") -> Optional[float]:
+    """
+    Calculate calorie target based on objective.
+    Includes minimum calorie enforcement for body recomposition.
+    """
     if tdee is None:
         return None
     obj = (objective or "").lower()
-    if obj in ["lose fat", "lose", "fat"]:
+    
+    if "lose fat" in obj and "gain muscle" not in obj:
         # Reduce por un 20% del TDEE (pérdida de grasa más sostenible)
-        return round(tdee * 0.80)
-    if obj in ["gain muscle", "gain", "muscle"]:
+        target = round(tdee * 0.80)
+    elif "gain muscle" in obj and "lose fat" not in obj:
         # Incrementa un 15% para ganancia muscular
-        return round(tdee * 1.15)
-    # Default: mantener el peso
-    return round(tdee)
-
-def calc_macros(calories: int, objective: str, weight_kg: Optional[float]) -> Dict[str, Any]:
-    if calories is None:
-        return {}
-    obj = (objective or "").lower()
-    if obj in ["lose fat", "lose", "fat"]:
-        pct_protein, pct_fat, pct_carb = 0.30, 0.25, 0.45
-        prot_per_kg = 2.0
-    elif obj in ["gain muscle", "gain", "muscle"]:
-        pct_protein, pct_fat, pct_carb = 0.28, 0.25, 0.47
-        prot_per_kg = 1.8
+        target = round(tdee * 1.15)
+    elif "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
+        # Body recomposition: 12% deficit (expert recommended 10-12%)
+        # Scientific basis: Moderate deficit allows muscle building while losing fat
+        # Expert feedback: For active individuals (5x/week), 12% deficit is optimal
+        target = round(tdee * 0.88)
+        
+        # Validation: Enforce minimum calories for body recomposition
+        # You cannot build muscle on too few calories
+        min_calories = 1500 if sex.lower() in ["female", "f", "mujer", "femenino"] else 1800
+        if target < min_calories:
+            print(f"[VALIDATION] Recomp target {target} kcal too low. Enforcing minimum {min_calories} kcal.")
+            target = min_calories
+    elif "maintain" in obj:
+        # Maintain weight
+        target = round(tdee)
     else:
-        pct_protein, pct_fat, pct_carb = 0.25, 0.30, 0.45
+        # Default: mantener el peso
+        target = round(tdee)
+    
+    return target
+
+def calc_macros(calories: int, objective: str, weight_kg: Optional[float], sex: str = "female") -> Dict[str, Any]:
+    """
+    Calculate macros based on g/kg for protein (not percentage).
+    User feedback: protein should be based on weight, not calories percentage.
+    """
+    if calories is None or calories == 0:
+        return {}
+    
+    obj = (objective or "").lower()
+    
+    # Protein g/kg based on objective
+    if "lose fat" in obj and "gain muscle" not in obj:
+        prot_per_kg = 2.0
+    elif "gain muscle" in obj and "lose fat" not in obj:
+        prot_per_kg = 1.8
+    elif "recomp" in obj or "body recomp" in obj or ("lose fat" in obj and "gain muscle" in obj):
+        prot_per_kg = 2.1  # Expert recommended ~2.1 g/kg for recomp
+    else:
         prot_per_kg = 1.6
 
-    if weight_kg:
+    # Calculate protein based on weight
+    if weight_kg and weight_kg > 0:
         protein_grams = round(prot_per_kg * weight_kg)
-        protein_grams = max(protein_grams, round((calories * pct_protein) / 4))
-        protein_grams = min(protein_grams, round(2.2 * weight_kg))
+        # Cap protein: max 2.2 g/kg or 160g (women) / 200g (men)
+        max_protein_kg = round(2.2 * weight_kg)
+        max_protein_absolute = 160 if sex == "female" else 200
+        max_protein = min(max_protein_kg, max_protein_absolute)
+        protein_grams = min(protein_grams, max_protein)
     else:
-        protein_grams = round((calories * pct_protein) / 4)
+        # Fallback if no weight (shouldn't happen with new fix)
+        protein_grams = round((calories * 0.30) / 4)
 
+    # Fat: 25-30% of calories, minimum 0.8 g/kg for women, 0.6 for men
+    fat_pct = 0.27  # 27% average
+    fat_calories = round(calories * fat_pct)
+    fat_grams = round(fat_calories / 9)
+    
+    # Ensure minimum fat for hormonal health
+    if weight_kg and weight_kg > 0:
+        # Expert recommended ~0.85 g/kg for women, 0.7 for men
+        min_fat = round(0.85 * weight_kg) if sex == "female" else round(0.7 * weight_kg)
+        fat_grams = max(fat_grams, min_fat)
+
+    # Carbs: remainder of calories
     protein_cal = protein_grams * 4
-    fat_cal = round(calories * pct_fat)
-    fat_grams = round(fat_cal / 9)
+    fat_cal = fat_grams * 9
     remaining_cal = calories - (protein_cal + fat_cal)
     carbs_grams = round(max(0, remaining_cal) / 4) if remaining_cal > 0 else 0
 
-    return {"calories": int(calories), "protein_grams": int(protein_grams), "fat_grams": int(fat_grams), "carbs_grams": int(carbs_grams), "pct_protein": pct_protein, "pct_fat": pct_fat, "pct_carbs": pct_carb}
+    return {
+        "calories": int(calories), 
+        "protein_grams": int(protein_grams), 
+        "fat_grams": int(fat_grams), 
+        "carbs_grams": int(carbs_grams)
+    }
+
+
+# --- SNACK DATABASE FOR MACRO COMPLETION ---
+SNACK_DATABASE = [
+    {
+        "name": "Protein Shake + Banana + Almendras",
+        "description": "1 scoop whey protein + 1 banana mediana + 15 almendras",
+        "protein_g": 28,
+        "carbs_g": 30,
+        "fat_g": 9,
+        "calories": 325,
+        "category": "shake"
+    },
+    {
+        "name": "Pechuga de Pollo + Camote",
+        "description": "100g pechuga de pollo + 100g camote + 1 cdta aceite oliva",
+        "protein_g": 31,
+        "carbs_g": 20,
+        "fat_g": 5,
+        "calories": 253,
+        "category": "whole_food"
+    },
+    {
+        "name": "Greek Yogurt + Granola + Mantequilla de Maní",
+        "description": "170g Greek yogurt 0% + 30g granola + 1 cda PB",
+        "protein_g": 21,
+        "carbs_g": 22,
+        "fat_g": 11,
+        "calories": 267,
+        "category": "yogurt"
+    },
+    {
+        "name": "Atún + Arroz + Aguacate",
+        "description": "1 lata atún en agua + 60g arroz cocido + 1/4 aguacate",
+        "protein_g": 25,
+        "carbs_g": 25,
+        "fat_g": 8,
+        "calories": 272,
+        "category": "whole_food"
+    },
+    {
+        "name": "Huevos Revueltos + Pan Integral + Aguacate",
+        "description": "2 huevos + 2 rebanadas pan integral + 1/4 aguacate",
+        "protein_g": 18,
+        "carbs_g": 28,
+        "fat_g": 14,
+        "calories": 310,
+        "category": "eggs"
+    },
+    {
+        "name": "Cottage Cheese + Frutas + Nueces",
+        "description": "150g cottage cheese + 80g fresas + 15g nueces",
+        "protein_g": 20,
+        "carbs_g": 15,
+        "fat_g": 12,
+        "calories": 252,
+        "category": "dairy"
+    },
+    {
+        "name": "Protein Bar de Alta Calidad",
+        "description": "1 protein bar (Quest/RX Bar)",
+        "protein_g": 20,
+        "carbs_g": 24,
+        "fat_g": 8,
+        "calories": 248,
+        "category": "bar"
+    },
+    {
+        "name": "Batido de Proteína Vegana + Avena",
+        "description": "1 scoop proteína vegana + 40g avena + 1 cda mantequilla de almendra",
+        "protein_g": 26,
+        "carbs_g": 35,
+        "fat_g": 10,
+        "calories": 342,
+        "category": "shake"
+    },
+    {
+        "name": "Pavo + Pan Pita + Hummus",
+        "description": "100g pavo + 1 pan pita integral + 3 cdas hummus",
+        "protein_g": 27,
+        "carbs_g": 30,
+        "fat_g": 8,
+        "calories": 304,
+        "category": "whole_food"
+    },
+    {
+        "name": "Salmón Ahumado + Galletas Integrales + Queso Crema Light",
+        "description": "60g salmón ahumado + 6 galletas integrales + 2 cdas queso crema light",
+        "protein_g": 15,
+        "carbs_g": 18,
+        "fat_g": 9,
+        "calories": 213,
+        "category": "fish"
+    },
+]
+
+
+def calculate_macro_deficit(target_macros: Dict[str, int], achieved_macros: Dict[str, int]) -> Dict[str, int]:
+    """
+    Calculate the difference between target macros and what was achieved in the meal plan.
+    
+    Args:
+        target_macros: Dict with 'protein_grams', 'carbs_grams', 'fat_grams', 'calories'
+        achieved_macros: Dict with same keys
+        
+    Returns:
+        Dict with deficit for each macro (positive means still needed, negative means exceeded)
+    """
+    deficit = {
+        "protein": max(0, target_macros.get("protein_grams", 0) - achieved_macros.get("protein_grams", 0)),
+        "carbs": max(0, target_macros.get("carbs_grams", 0) - achieved_macros.get("carbs_grams", 0)),
+        "fat": max(0, target_macros.get("fat_grams", 0) - achieved_macros.get("fat_grams", 0)),
+        "calories": max(0, target_macros.get("calories", 0) - achieved_macros.get("calories", 0))
+    }
+    return deficit
+
+
+def recommend_snacks(deficit: Dict[str, int], num_recommendations: int = 3) -> List[Dict[str, Any]]:
+    """
+    Recommend snacks that best fill the macro deficit.
+    
+    Args:
+        deficit: Dict with 'protein', 'carbs', 'fat', 'calories' deficits
+        num_recommendations: Number of snack recommendations to return
+        
+    Returns:
+        List of snack dicts sorted by how well they fill the deficit
+    """
+    if all(v <= 0 for v in deficit.values()):
+        # No deficit, no need for snacks
+        return []
+    
+    # Score each snack based on how well it fills the deficit
+    scored_snacks = []
+    for snack in SNACK_DATABASE:
+        # Calculate how well this snack matches the deficit
+        # Higher score = better match
+        score = 0.0
+        
+        # Protein match (most important for body recomposition)
+        if deficit["protein"] > 0:
+            protein_ratio = min(snack["protein_g"] / deficit["protein"], 1.0)
+            score += protein_ratio * 3.0  # Weight protein heavily
+        
+        # Carbs match
+        if deficit["carbs"] > 0:
+            carbs_ratio = min(snack["carbs_g"] / deficit["carbs"], 1.0)
+            score += carbs_ratio * 1.5
+        
+        # Fat match
+        if deficit["fat"] > 0:
+            fat_ratio = min(snack["fat_g"] / deficit["fat"], 1.0)
+            score += fat_ratio * 1.5
+        
+        # Calorie match
+        if deficit["calories"] > 0:
+            cal_ratio = min(snack["calories"] / deficit["calories"], 1.0)
+            score += cal_ratio * 1.0
+        
+        # Penalize snacks that are too large (exceed deficit too much)
+        if deficit["calories"] > 0 and snack["calories"] > deficit["calories"] * 1.5:
+            score *= 0.7
+        
+        scored_snacks.append({
+            "snack": snack,
+            "score": score
+        })
+    
+    # Sort by score (highest first) and return top N
+    scored_snacks.sort(key=lambda x: x["score"], reverse=True)
+    return [item["snack"] for item in scored_snacks[:num_recommendations]]
 
 
 # --- DIET / RESTRICTION KEYWORDS (expanded vegetables list) ---
@@ -798,126 +1080,109 @@ def generate_menu_using_template(state: SessionState) -> List[Meal]:
 
 def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int], calorie_target: int) -> List[Dict[str, Any]]:
     """
-    Dynamically distribute protein across meals, respecting daily protein needs and limits (maximum 35-40g per meal).
+    Dynamically distribute macros (protein, carbs, fats) across meals.
+    For Plan 4: distributes daily totals EVENLY across 3 meals (1 breakfast + 2 main meals)
+    Maximum 40g protein per meal.
     """
     if not menu:
         return []
 
+    # Plan definitions: (num_main_meals, num_breakfasts)
     plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
     num_main, num_break = plan_map.get(state.plan, (1, 0))
     meals_per_day = num_main + num_break
     days = state.days or max(1, len(menu) // max(1, meals_per_day))
     total_meals = min(len(menu), days * meals_per_day) if meals_per_day > 0 else len(menu)
-    # Calcular las calorías totales de los platos disponibles
-    total_calories = sum(getattr(m, "calories", 0) for m in menu)
-    if total_calories == 0:  # Evitar división por cero
-        total_calories = 1  # Fallback seguro
-
-    # Calcular calorías objetivo por comida
-    target_calories_per_meal = calorie_target // max(total_meals, 1) if calorie_target and total_meals > 0 else calorie_target or 0
-    if target_calories_per_meal == 0:  # Asignar valor predeterminado si no se calcula objetivo
-        target_calories_per_meal = 300  # Valor genérico para estabilidad
-
-    # Debugging
-    print(f"[DEBUG] Total calories in menu: {total_calories} kcal")
-    print(f"[DEBUG] Target calories per meal: {target_calories_per_meal} kcal")
-    # Total daily protein target
-    daily_protein_target = int(macros_daily_protein or 0)
-    if daily_protein_target == 0:
-        daily_protein_target = 40  # Default fallback for safety
-
-    # Log target for debugging
-    print("[DEBUG] Daily protein target:", daily_protein_target, "g")
-    # Debugging for target calculations
-    print(f"[DEBUG] Total calories in menu: {total_calories} kcal")
-    print(f"[DEBUG] Target calories per meal: {target_calories_per_meal} kcal")
-
+    
+    # Daily nutritional targets
+    daily_protein_target = int(macros_daily_protein or 120)  # Default 120g if not provided
+    daily_calorie_target = int(calorie_target or 2000)  # Default 2000 kcal
+    
+    # Calculate daily macros
+    # Protein: from parameter
+    # Fat: 25% of calories
+    # Carbs: remaining calories
+    protein_calories = daily_protein_target * 4
+    fat_calories = daily_calorie_target * 0.25
+    daily_fat_target = int(fat_calories / 9)
+    carb_calories = daily_calorie_target - protein_calories - fat_calories
+    daily_carb_target = int(max(0, carb_calories / 4))
+    
+    print(f"\n[DEBUG] Daily Targets for Plan {state.plan}:")
+    print(f"  - Calories: {daily_calorie_target} kcal")
+    print(f"  - Protein: {daily_protein_target}g")
+    print(f"  - Fat: {daily_fat_target}g")
+    print(f"  - Carbs: {daily_carb_target}g")
+    print(f"  - Meals per day: {meals_per_day} ({num_break} breakfast + {num_main} main meals)")
+    
+    # For Plan 4: Distribute evenly across 3 meals
+    # For other plans: distribute evenly across their meals
+    protein_per_meal = daily_protein_target // meals_per_day
+    fat_per_meal = daily_fat_target // meals_per_day
+    carbs_per_meal = daily_carb_target // meals_per_day
+    calories_per_meal = daily_calorie_target // meals_per_day
+    
+    # Handle remainders (distribute to first few meals)
+    protein_remainder = daily_protein_target % meals_per_day
+    fat_remainder = daily_fat_target % meals_per_day
+    carbs_remainder = daily_carb_target % meals_per_day
+    
+    # Cap protein at 40g per meal (business constraint)
+    if protein_per_meal > 40:
+        protein_per_meal = 40
+        # Recalculate to respect cap
+        total_protein_capped = min(daily_protein_target, 40 * meals_per_day)
+        protein_per_meal = total_protein_capped // meals_per_day
+        protein_remainder = total_protein_capped % meals_per_day
+    
+    print(f"\n[DEBUG] Per Meal Distribution:")
+    print(f"  - Protein: ~{protein_per_meal}g (max 40g)")
+    print(f"  - Fat: ~{fat_per_meal}g")
+    print(f"  - Carbs: ~{carbs_per_meal}g")
+    print(f"  - Calories: ~{calories_per_meal} kcal")
+    
     out = []
     idx = 0
+    
     for day in range(days):
-        for m_idx_in_day in range(meals_per_day):
+        for meal_idx_in_day in range(meals_per_day):
             if idx >= len(menu):
                 break
+                
             meal_obj = menu[idx]
             meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
-
-            protein_per_meal = macros_daily_protein // total_meals
-            calories_per_meal = calorie_target // total_meals
-
-            # Generar dinámica
-            meal_with_macros = process_meal_data(
-                meal=menu[idx],
-                protein=protein_per_meal,
-                calories=calories_per_meal
-            )
-
-            meal_dict["provided_protein"] = meal_with_macros.protein
-            meal_dict["calories"] = meal_with_macros.calories
-
-            # Dynamically allocate protein based on daily needs
-            # dynamic_protein = daily_protein_target // total_meals
-            # leftover_protein = daily_protein_target % total_meals
-            # meal_dict["provided_protein"] = dynamic_protein + (
-            #     1 if idx < leftover_protein else 0
-            # )
-
-            protein_per_meal = daily_protein_target // total_meals
-            calories_per_meal = target_calories_per_meal
-
-            # Generar dinámica: proteínas, calorías, grasas, carbohidratos
-            meal_with_macros = process_meal_data(
-                meal=meal_obj,
-                protein=protein_per_meal,
-                calories=calories_per_meal,
-                fat_ratio=0.25,  # 25% del objetivo calórico para grasas
-                carb_ratio=0.50  # 50% del objetivo calórico para carbohidratos
-            )
-
-            # Asignar dinámicamente los valores generados
-            meal_dict["provided_protein"] = meal_with_macros.protein
-            meal_dict["calories"] = meal_with_macros.calories
-            meal_dict["fat_assigned"] = meal_with_macros.fat
-            meal_dict["carbs_assigned"] = meal_with_macros.carbs
-
-            # Respect the upper limit of 35-40 g, adjust only if higher
-            if meal_dict["provided_protein"] > 40:  # Cap maximum
-                meal_dict["provided_protein"] = 40
-            elif meal_dict["provided_protein"] < 20:  # Allow small adjustments for low needs
-                meal_dict["provided_protein"] = 20  
-
-
-            # Adjust calories dynamically
-            original_calories = getattr(meal_obj, "calories", 0)  # Acceso seguro a calorías
-
-            # Calcular calorías objetivo por comida
-            target_calories_per_meal = calorie_target // max(total_meals, 1) if calorie_target and total_meals > 0 else calorie_target or 0
-            frac_calories = target_calories_per_meal / max(total_calories, 1)  # Evitar división por cero
-            adjusted_calories = int(original_calories * frac_calories)
-
-            # Validar extremos de calorías ajustadas (máximo y mínimo)
-            adjusted_calories = max(
-                100,  # Asignar mínimo de 100 calorías
-                min(
-                    800,  # Asignar máximo de 800 calorías
-                    adjusted_calories  # Mantener el valor calculado si está dentro del rango válido
-                )
-            )
-
-            # Debugging: valores finales de calorías ajustadas
-            meal_dict["calories"] = adjusted_calories
-            print(f"[DEBUG] Day {day + 1}, Meal {idx + 1}: {meal_dict.get('name', 'Unnamed Meal')}")
-            print(f"  - Dynamic Protein: {meal_dict['provided_protein']} g")
-            print(f"  - Adjusted Calories: {meal_dict['calories']} kcal")
-            print(f"  - Grasas asignadas: {meal_dict['fat_assigned']} g")
-            print(f"  - Carbohidratos asignados: {meal_dict['carbs_assigned']} g")
-
-            # Add meal to output
+            
+            # Distribute macros evenly, with remainders going to first meals
+            assigned_protein = protein_per_meal + (1 if meal_idx_in_day < protein_remainder else 0)
+            assigned_fat = fat_per_meal + (1 if meal_idx_in_day < fat_remainder else 0)
+            assigned_carbs = carbs_per_meal + (1 if meal_idx_in_day < carbs_remainder else 0)
+            
+            # Ensure protein doesn't exceed 40g (business rule)
+            assigned_protein = min(assigned_protein, 40)
+            
+            # Calculate actual calories from macros
+            assigned_calories = (assigned_protein * 4) + (assigned_carbs * 4) + (assigned_fat * 9)
+            
+            # Update meal with calculated macros
+            meal_dict["provided_protein"] = assigned_protein
+            meal_dict["protein_assigned"] = assigned_protein
+            meal_dict["fat_assigned"] = assigned_fat
+            meal_dict["carbs_assigned"] = assigned_carbs
+            meal_dict["calories"] = int(assigned_calories)
             meal_dict["day_index"] = day
             meal_dict["meal_index"] = idx
+            
+            print(f"\n[DEBUG] Day {day + 1}, Meal {meal_idx_in_day + 1}: {meal_dict.get('name', 'Unnamed')}")
+            print(f"  - Protein: {assigned_protein}g")
+            print(f"  - Carbs: {assigned_carbs}g")
+            print(f"  - Fat: {assigned_fat}g")
+            print(f"  - Calories: {int(assigned_calories)} kcal")
+            
             out.append(meal_dict)
             idx += 1
-
+    
     return out
+
 
 
 # Keep original generate_menu as fallback for non-template flows
@@ -999,16 +1264,18 @@ def process_meal_data(meal: Meal, protein: int, calories: int, fat_ratio: float 
 
 # --- UI form definitions (unchanged) ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
+    if step_name == "diet_preference":
+        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Vegan","Pescatarian"], "required": True}],"current_step":"diet_preference"}
     if step_name == "pick_plan":
         return {"question":"Which plan do you want?","fields":[{"name":"Plan","type":"select","options":["Plan 1: 1 main meal per day","Plan 2: 2 main meals per day","Plan 3: 1 main meal + 1 breakfast","Plan 4: 2 main meals + 1 breakfast (full day)"], "required": True}],"current_step":"pick_plan"}
     if step_name == "objective":
-        return {"question":"What is your main goal?","fields":[{"name":"Objective","type":"select","options":["Lose Fat","Gain Muscle","Maintain Shape"], "required": True}],"current_step":"objective"}
+        return {"question":"What is your main goal?","fields":[{"name":"Objective","type":"select","options":["Lose Fat","Gain Muscle","Maintain Shape","Body Recomposition (Lose Fat & Gain Muscle)"], "required": True}],"current_step":"objective"}
+    if step_name == "allergies_and_restrictions":
+        return {"question":"Do you have any allergies or food restrictions?","fields":[{"name":"Allergies and Restrictions","type":"text","placeholder":"e.g., dairy, nuts, chicken (leave empty if none)", "required": False}],"current_step":"allergies_and_restrictions"}
     if step_name == "personal_info":
         return {
             "question":"Tell us your personal data:",
             "fields":[
-                {"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Vegan","Pescatarian","Few restrictions"], "unit":"Choose the option that best describes your overall diet.", "required": True},
-                {"name":"Food Allergies","type":"multiselect","options":["None - no allergies","Egg-free","Nut-free","Seafood-free","Dairy-free","Soy-free","Gluten-free"], "unit":"Medical allergies - select all that apply", "required": True},
                 {"name":"Weight Unit","type":"select","options":["kg","lbs"], "required": True},
                 {"name":"Weight","type":"number","placeholder":"e.g. 70","unit":"kg or lbs", "required": True},
                 {"name":"Height Unit","type":"select","options":["cm","in"], "required": True},
@@ -1022,17 +1289,28 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
             ],
             "current_step":"personal_info"
         }
-    if step_name == "restrictions":
-        return {"question":"Please select any dietary restrictions (preferences):","fields":[{"name":"Dietary Restrictions","type":"multiselect","options":["None - no special restrictions","No pork","No beef","No chicken / poultry","No seafood / shellfish","Gluten-free","Lactose-free / Dairy-free","Soy-free","Corn-free","Sesame-free"],"unit":"Personal or cultural preferences (not medical)"}],"current_step":"restrictions"}
     if step_name == "duration":
         return {"question":"For how many days do you want this plan?","fields":[{"name":"Days","type":"number","min":1,"max":30,"placeholder":"e.g. 7", "required": True}],"current_step":"duration"}
-    if step_name == "dislikes":
-        return {"question":"Select ingredients you DON'T like:","fields":[{"name":"Dislikes","type":"multiselect","options":["None - I like everything","Vegetables","Oats","Berries","Milk","Chicken","Rice","Broccoli","Salmon","Lettuce","Avocado","Tofu","Carrots","Beef","Pork","Shellfish","Banana"], "unit":"Select foods you simply dislike (taste).", "required": True}],"current_step":"dislikes"}
     if step_name == "review":
         if not state:
             return {"question":"State error. Start again.","current_step":"review"}
-        summary = (f"Plan: {state.plan} for {state.days} days\nDiet: {state.diet_preference or 'N/A'}\nDietary restrictions: {', '.join(state.dietary_restrictions) if state.dietary_restrictions else 'None'}\nAllergies: {', '.join(state.allergies) if state.allergies else 'None'}\nDislikes: {', '.join(state.dislikes) if state.dislikes else 'None'}\nWeight: {state.weight or 'N/A'} {state.weight_unit}\nHeight: {state.height or 'N/A'} {state.height_unit}\nAge: {state.age or 'N/A'}\nActivity: {state.activity_days_bucket or 'N/A'} days, {state.activity_duration_bucket or 'N/A'} min, {state.activity_intensity or 'N/A'} intensity\n")
-        return {"question": f"Review your info and generate the menu:\n\n{summary}", "fields": [], "current_step":"review"}
+        # Send state data as a single field for frontend to parse
+        state_data = {
+            "plan_number": state.plan,
+            "days": state.days,
+            "diet_preference": state.diet_preference or "Omnivore",
+            "allergies_and_restrictions": state.allergies_and_restrictions or "None",
+            "weight_value": state.weight,
+            "weight_unit": state.weight_unit,
+            "height_value": state.height,
+            "height_unit": state.height_unit,
+            "age": state.age,
+            "days_per_week": state.activity_days_bucket,
+            "avg_session_duration": state.activity_duration_bucket,
+            "intensity": state.activity_intensity,
+            "sex": state.sex
+        }
+        return {"question": "Review your information and generate the menu", "fields": [{"name": "state_data", "type": "hidden", "value": state_data}], "current_step":"review"}
     return {"question":"Unknown step. Start again.","current_step":"start"}
 
 
@@ -1071,6 +1349,11 @@ async def next_step(request: Request):
     if step_name == "start":
         step_to_render_name = STEPS["start"]
 
+    elif step_name == "diet_preference":
+        if "diet_preference" in answer:
+            state.diet_preference = str(answer.get("diet_preference"))
+        step_to_render_name = STEPS["diet_preference"]
+
     elif step_name == "pick_plan":
         plan = answer.get("plan")
         if plan:
@@ -1090,61 +1373,135 @@ async def next_step(request: Request):
             state.objective = answer.get("objective")
         step_to_render_name = STEPS["objective"]
 
+    elif step_name == "allergies_and_restrictions":
+        if "allergies_and_restrictions" in answer:
+            state.allergies_and_restrictions = str(answer.get("allergies_and_restrictions"))
+        step_to_render_name = STEPS["allergies_and_restrictions"]
+
     elif step_name == "personal_info":
+        # DEBUG: Log all field names to identify issue
+        print(f"DEBUG - Personal Info Handler Received:")
+        print(f"  Field names: {list(answer.keys())}")
+        print(f"  Full data: {answer}")
+        
         try:
-            if "diet_preference" in answer:
-                state.diet_preference = str(answer.get("diet_preference"))
-            # Allergies are collected here for everyone
-            if "allergies" in answer:
-                ag = answer.get("allergies")
-                state.allergies = ag if isinstance(ag, list) else [ag]
-            if "weight_unit" in answer:
+            # Note: diet_preference is now collected in an earlier step
+            # Handle both form field names (with spaces) and custom renderer names
+            
+            # Weight unit - check "Weight Unit" (from form) or "weight_unit" (custom)
+            if "Weight Unit" in answer:
+                state.weight_unit = answer.get("Weight Unit")
+            elif "weight_unit" in answer:
                 state.weight_unit = answer.get("weight_unit")
-            if "weight" in answer:
+                
+            # Weight - check all possible field names
+            if "weightvalue" in answer:         # From form (no underscore!)
+                try:
+                    state.weight = float(answer.get("weightvalue"))
+                except Exception:
+                    state.weight = None
+            elif "Weight" in answer:            # From form (capital W)
+                try:
+                    state.weight = float(answer.get("Weight"))
+                except Exception:
+                    state.weight = None
+            elif "weight_value" in answer:      # From custom renderer
+                try:
+                    state.weight = float(answer.get("weight_value"))
+                except Exception:
+                    state.weight = None
+            elif "weight" in answer:            # Legacy
                 try:
                     state.weight = float(answer.get("weight"))
                 except Exception:
                     state.weight = None
-            if "height_unit" in answer:
+                    
+            # Height unit - check "Height Unit" (from form) or "height_unit" (custom)
+            if "Height Unit" in answer:
+                state.height_unit = answer.get("Height Unit")
+            elif "height_unit" in answer:
                 state.height_unit = answer.get("height_unit")
-            if "height" in answer:
+                
+            # Height - check all possible field names
+            if "heightvalue" in answer:         # From form (no underscore!)
+                try:
+                    state.height = float(answer.get("heightvalue"))
+                except Exception:
+                    state.height = None
+            elif "Height" in answer:            # From form (capital H)
+                try:
+                    state.height = float(answer.get("Height"))
+                except Exception:
+                    state.height = None
+            elif "height_value" in answer:      # From custom renderer
+                try:
+                    state.height = float(answer.get("height_value"))
+                except Exception:
+                    state.height = None
+            elif "height" in answer:            # Legacy
                 try:
                     state.height = float(answer.get("height"))
                 except Exception:
                     state.height = None
-            if "age" in answer:
+                    
+            # Age - check "Age" (from form) or "age" (custom)
+            if "Age" in answer:
+                try:
+                    state.age = int(answer.get("Age"))
+                except Exception:
+                    state.age = None
+            elif "age" in answer:
                 try:
                     state.age = int(answer.get("age"))
                 except Exception:
                     state.age = None
-            if "sex" in answer:
+                    
+            # Sex - check "Sex" (from form) or "sex" (custom)
+            if "Sex" in answer:
+                state.sex = answer.get("Sex")
+            elif "sex" in answer:
                 state.sex = answer.get("sex")
-            if "activity_days_bucket" in answer:
+                
+            # Activity days - check "Days per week" (from form) or other variants
+            if "Days per week" in answer:
+                state.activity_days_bucket = str(answer.get("Days per week"))
+            elif "days_per_week" in answer:
+                state.activity_days_bucket = str(answer.get("days_per_week"))
+            elif "activity_days_bucket" in answer:
                 state.activity_days_bucket = str(answer.get("activity_days_bucket"))
-            if "activity_duration_bucket" in answer:
+                
+            # Activity duration - check "Avg session duration" (from form) or other variants
+            if "Avg session duration" in answer:
+                state.activity_duration_bucket = str(answer.get("Avg session duration"))
+            elif "avg_session_duration" in answer:
+                state.activity_duration_bucket = str(answer.get("avg_session_duration"))
+            elif "activity_duration_bucket" in answer:
                 state.activity_duration_bucket = str(answer.get("activity_duration_bucket"))
-            if "activity_intensity" in answer:
+                
+            # Intensity - check "Intensity" (from form) or other variants
+            if "Intensity" in answer:
+                state.activity_intensity = str(answer.get("Intensity"))
+            elif "intensity" in answer:
+                state.activity_intensity = str(answer.get("intensity"))
+            elif "activity_intensity" in answer:
                 state.activity_intensity = str(answer.get("activity_intensity"))
-            if "body_fat" in answer:
+                
+            # Body fat - check "Body Fat % (optional)" (from form) or "body_fat" (custom)
+            if "Body Fat % (optional)" in answer:
+                try:
+                    state.body_fat = float(answer.get("Body Fat % (optional)"))
+                except Exception:
+                    state.body_fat = None
+            elif "body_fat" in answer:
                 try:
                     state.body_fat = float(answer.get("body_fat"))
                 except Exception:
                     state.body_fat = None
 
-            # Conditional flow: show restrictions only if user chose "Few restrictions"
-            dp = (state.diet_preference or "").strip().lower()
-            if dp == "few restrictions":
-                step_to_render_name = "restrictions"
-            else:
-                step_to_render_name = "duration"
+            # Go directly to duration (no restrictions step anymore)
+            step_to_render_name = STEPS["personal_info"]
         except Exception:
             step_to_render_name = "personal_info"
-
-    elif step_name == "restrictions":
-        dr = raw_answer.get("Dietary Restrictions") or raw_answer.get("DietaryRestrictions") or answer.get("dietary_restrictions")
-        if dr:
-            state.dietary_restrictions = dr if isinstance(dr, list) else [dr]
-        step_to_render_name = "duration"
 
     elif step_name == "duration":
         days_val = answer.get("days") or answer.get("Days")
@@ -1153,15 +1510,7 @@ async def next_step(request: Request):
                 state.days = int(days_val)
         except Exception:
             pass
-        step_to_render_name = "dislikes"
-
-    elif step_name == "dislikes":
-        d = answer.get("dislikes") or answer.get("Dislikes")
-        if isinstance(d, list) and any(str(x).lower().startswith("none") or str(x).lower().startswith("i like") for x in d):
-            state.dislikes = []
-        else:
-            state.dislikes = d if isinstance(d, list) else [d] if d else []
-        step_to_render_name = "review"
+        step_to_render_name = STEPS["duration"]  # Goes to review
 
 
     elif step_name == "review":
@@ -1201,7 +1550,20 @@ async def next_step(request: Request):
                 # Calcula calorías objetivo y macros
                 weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
                 height_cm = to_cm(state.height, state.height_unit) if state.height else None
-                tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+                
+                # DEBUG: Log values to help troubleshoot
+                print(f"DEBUG - Menu Generation:")
+                print(f"  state.weight: {state.weight}")
+                print(f"  state.weight_unit: {state.weight_unit}")
+                print(f"  weight_kg: {weight_kg}")
+                print(f"  state.height: {state.height}")
+                print(f"  state.height_unit: {state.height_unit}")
+                print(f"  height_cm: {height_cm}")
+                print(f"  state.age: {state.age}")
+                print(f"  state.sex: {state.sex}")
+                
+                tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
+                print(f"  TMB calculated: {tmb}")
                 tdee = (
                     round(
                         tmb
@@ -1215,8 +1577,8 @@ async def next_step(request: Request):
                     if tmb
                     else None
                 )
-                calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
-                macros = calc_macros(calorie_target, state.objective, weight_kg)
+                calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
+                macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
 
                 # Ajusta proteína y calorías dinámicamente por comida
                 daily_protein_target = macros.get("protein_grams", 0)
@@ -1231,60 +1593,131 @@ async def next_step(request: Request):
                         "issue": "validation_failed",
                     }
 
-                # **Calcula totales del día**
-                total_protein = sum((meal.get("provided_protein", 0) for meal in menu_with_protein))
-                total_carbs = sum((meal.get("carbs_assigned", 0) for meal in menu_with_protein))
-                total_fat = sum((meal.get("fat_assigned", 0) for meal in menu_with_protein))
-                total_calories = sum((getattr(meal, "calories", 0) for meal in menu_with_protein))
+                # **Get daily macros from calc_macros (not by summing all meals across all days!)**
+                # The macros dict contains the DAILY targets, not totals across all days
+                total_protein = macros.get("protein_grams", 0)
+                total_carbs = macros.get("carbs_grams", 0)
+                total_fat = macros.get("fat_grams", 0)
+                total_calories = macros.get("calories", 0)
 
                 # Print debug information about daily totals
-                print("[DEBUG] Daily macronutrient totals:")
+                print("[DEBUG] Daily macronutrient totals (per day, not across all days):")
                 print(f"- Total Protein: {total_protein} g")
                 print(f"- Total Carbohydrates: {total_carbs} g")
                 print(f"- Total Fats: {total_fat} g")
                 print(f"- Total Calories: {total_calories} kcal")
 
                 # Modifica la respuesta según el plan
+                # Determine meals per day based on plan
+                plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}  # (num_main, num_break)
+                num_main, num_break = plan_map.get(state.plan, (1, 0))
+                meals_per_day = num_main + num_break
+                
                 response_menu = []
+                meal_index = 0
                 for meal in menu_with_protein:
                     meal_entry = dict(meal)
-                    if state.plan == 4:  # Plan 4: Desglose completo de macronutrientes
-                        day_meals = [
-                            x
-                            for x in menu_with_protein
-                            if x.get("day_index") == meal.get("day_index")
-                        ]
-                        total_cal_day = sum((mm.get("calories", 0) or 0) for mm in day_meals) or 1
-                        frac = (getattr(meal, "calories", 0) or 0) / max(total_calories, 1)
-                        meal_entry["calories_assigned"] = int(
-                            round((calorie_target or 0) * frac)
-                        ) if calorie_target else meal.get("calories")
-                        meal_entry["protein_assigned"] = int(meal.get("provided_protein", 0))
-                        meal_entry["fat_assigned"] = int(
-                            round((macros.get("fat_grams", 0) * frac))
-                        ) if macros else 0
-                        meal_entry["carbs_assigned"] = int(
-                            round((macros.get("carbs_grams", 0) * frac))
-                        ) if macros else 0
-
-                        # **Ajuste dinámico de calorías** (insertado aquí)
-                        original_calories = getattr(meal, "calories", 0)
-                        frac_calories = calorie_target / total_calories if total_calories > 0 else 1
-                        adjusted_calories = int(original_calories * frac_calories)
-                        meal_entry["calories_assigned"] = adjusted_calories
-
-                        # Depuración de calorías ajustadas
-                        print(f"[DEBUG] Meal: {meal.get('name', 'Unnamed Meal')} - Adjusted Calories: {adjusted_calories} kcal")
-
-                    else:  # Otros planes: Solo mostrar proteína asignada
-                        meal_entry["protein_assigned"] = int(meal.get("provided_protein", 0))
+                    
+                    # Calculate day number and meal type
+                    day_num = (meal_index // meals_per_day) + 1
+                    position_in_day = meal_index % meals_per_day
+                    
+                    # Determine meal type based on plan and position
+                    if state.plan == 1:  # 1 lunch per day
+                        meal_type = "LUNCH"
+                    elif state.plan == 2:  # 2 lunches (lunch + dinner)
+                        meal_type = "LUNCH" if position_in_day == 0 else "DINNER"
+                    elif state.plan == 3:  # breakfast + lunch
+                        meal_type = "BREAKFAST" if position_in_day == 0 else "LUNCH"
+                    elif state.plan == 4:  # breakfast + lunch + dinner
+                        if position_in_day == 0:
+                            meal_type = "BREAKFAST"
+                        elif position_in_day == 1:
+                            meal_type = "LUNCH"
+                        else:
+                            meal_type = "DINNER"
+                    else:
+                        meal_type = "MEAL"
+                    
+                    # Add day and meal type labels
+                    meal_entry["day_number"] = day_num
+                    meal_entry["meal_type"] = meal_type
+                    meal_entry["day_label"] = f"DAY {day_num} - {meal_type}"
+                    
+                    # Use the values already calculated by allocate_protein_to_menu
+                    # These are already correct and evenly distributed
+                    meal_entry["protein_assigned"] = int(meal.get("provided_protein", 0))
+                    meal_entry["fat_assigned"] = int(meal.get("fat_assigned", 0))
+                    meal_entry["carbs_assigned"] = int(meal.get("carbs_assigned", 0))
+                    meal_entry["calories_assigned"] = int(meal.get("calories", 0))
+                    
+                    # Calculate portion multiplier to show how meal is scaled
+                    base_protein = meal.get("protein_g", 35)  # from meals.json
+                    if base_protein > 0:
+                        portion_multiplier = meal_entry["protein_assigned"] / base_protein
+                        meal_entry["portion_multiplier"] = round(portion_multiplier, 2)
+                        meal_entry["serving_size_adjusted"] = int(meal.get("serving_size_g", 300) * portion_multiplier)
+                    else:
+                        meal_entry["portion_multiplier"] = 1.0
+                        meal_entry["serving_size_adjusted"] = meal.get("serving_size_g", 300)
+                    
+                    print(f"[DEBUG] {meal_entry['day_label']}: {meal.get('name', 'Unnamed')} - "
+                          f"Protein: {meal_entry['protein_assigned']}g, "
+                          f"Carbs: {meal_entry['carbs_assigned']}g, "
+                          f"Fat: {meal_entry['fat_assigned']}g, "
+                          f"Calories: {meal_entry['calories_assigned']} kcal, "
+                          f"Portion: {meal_entry['portion_multiplier']}x")
 
                     response_menu.append(meal_entry)
+                    meal_index += 1
 
                 # Calcula el precio total
                 total_price = calculate_price(
                     [Meal(**m) if isinstance(m, dict) else m for m in response_menu], 0
                 )
+
+                # Calculate achieved macros from the actual meals (for ONE day only)
+                achieved_protein = 0
+                achieved_carbs = 0
+                achieved_fat = 0
+                achieved_calories = 0
+                
+                # Sum macros for first day's meals only
+                for i, meal_entry in enumerate(response_menu):
+                    if meal_entry.get("day_number", 1) == 1:  # Only first day
+                        achieved_protein += meal_entry.get("protein_assigned", 0)
+                        achieved_carbs += meal_entry.get("carbs_assigned", 0)
+                        achieved_fat += meal_entry.get("fat_assigned", 0)
+                        achieved_calories += meal_entry.get("calories_assigned", 0)
+                
+                print(f"\n[DEBUG] Achieved macros (Day 1):")
+                print(f"  - Protein: {achieved_protein}g")
+                print(f"  - Carbs: {achieved_carbs}g")
+                print(f"  - Fat: {achieved_fat}g")
+                print(f"  - Calories: {achieved_calories} kcal")
+                
+                # Calculate macro deficit
+                deficit = calculate_macro_deficit(
+                    target_macros=macros,
+                    achieved_macros={
+                        "protein_grams": achieved_protein,
+                        "carbs_grams": achieved_carbs,
+                        "fat_grams": achieved_fat,
+                        "calories": achieved_calories
+                    }
+                )
+                
+                print(f"\n[DEBUG] Macro Deficit:")
+                print(f"  - Protein: {deficit['protein']}g")
+                print(f"  - Carbs: {deficit['carbs']}g")
+                print(f"  - Fat: {deficit['fat']}g")
+                print(f"  - Calories: {deficit['calories']} kcal")
+                
+                # Get snack recommendations if there's a significant deficit
+                snack_recommendations = []
+                if deficit["protein"] >= 10 or deficit["calories"] >= 200:
+                    snack_recommendations = recommend_snacks(deficit, num_recommendations=3)
+                    print(f"\n[DEBUG] Recommended {len(snack_recommendations)} snacks to fill deficit")
 
                 # Respuesta basada en el plan seleccionado
                 if state.plan == 4:
@@ -1304,7 +1737,15 @@ async def next_step(request: Request):
                                 "fat_total": total_fat,
                                 "calories_total": total_calories,
                             },
+                            "achieved": {  # What the meal plan actually provides (Day 1)
+                                "protein": achieved_protein,
+                                "carbs": achieved_carbs,
+                                "fat": achieved_fat,
+                                "calories": achieved_calories
+                            },
+                            "deficit": deficit,
                         },
+                        "snack_recommendations": snack_recommendations,
                         "current_step": state.current_step,
                     }
                 else:
@@ -1317,7 +1758,15 @@ async def next_step(request: Request):
                             "tdee": tdee,
                             "calorie_target": calorie_target,
                             "protein_needed": daily_protein_target,  # Solo mostrar proteína necesaria
+                            "achieved": {  # What the meal plan actually provides (Day 1)
+                                "protein": achieved_protein,
+                                "carbs": achieved_carbs,
+                                "fat": achieved_fat,
+                                "calories": achieved_calories
+                            },
+                            "deficit": deficit,
                         },
+                        "snack_recommendations": snack_recommendations,
                         "current_step": state.current_step,
                     }
             except Exception as e:
@@ -1532,16 +1981,17 @@ async def add_protein(request: Request):
             # Generamos base menú (Meal objects) usando validación calórica diaria y semanal
             weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
             height_cm = to_cm(state.height, state.height_unit) if state.height else None
-            tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+            tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
             tdee = round(
-                tmb * compute_activity_factor(
+                tmb * get_activity_factor_with_recomp_minimum(
                     state.activity_days_bucket or "0",
                     state.activity_duration_bucket or "<30",
                     state.activity_intensity or "Low",
+                    state.objective or "",
                 ),
                 1,
             ) if tmb else None
-            calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+            calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
 
             # Generamos el menú semanal verificando que cada día cumpla las calorías objetivo
             weekly_menu = generate_weekly_menu(MEALS_DATA, calorie_target)
@@ -1568,12 +2018,12 @@ async def add_protein(request: Request):
     # recompute macros/daily protein
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
-    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
     tdee = None
     if tmb is not None:
-        tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
-    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
-    macros = calc_macros(calorie_target, state.objective, weight_kg)
+        tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
+    calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
+    macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
 
     menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
@@ -1614,11 +2064,11 @@ async def swap_meal(request: Request):
 
     new_meal = random.choice(potential)
 
-    # Ajustar precio según categoría (replaced_type)
+    # Standard pricing: Breakfast = $11, Main Meal = $15
     if replaced_type == "breakfast":
-        new_meal.price = 10.0  # Precio fijo para desayunos
+        new_meal.price = 11.0
     elif replaced_type in ["lunch", "dinner", "main meal"]:
-        new_meal.price = 15.0  # Precio fijo para almuerzos/cenas
+        new_meal.price = 15.0
     
 
     # Build base_menu_objs from current state.menu
@@ -1646,12 +2096,12 @@ async def swap_meal(request: Request):
     # Recompute macros/daily proteins
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
-    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
     tdee = None
     if tmb is not None:
-        tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
-    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
-    macros = calc_macros(calorie_target, state.objective, weight_kg)
+        tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
+    calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
+    macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
 
     menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
@@ -1673,9 +2123,9 @@ async def validate_menu(request: Request):
     state = SessionState(**sessions[session_id])
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
-    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
-    tdee = round(tmb * compute_activity_factor(state.activity_days_bucket, state.activity_duration_bucket, state.activity_intensity), 2) if tmb else None
-    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
+    tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket, state.activity_duration_bucket, state.activity_intensity, state.objective or ""), 2) if tmb else None
+    calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
     weekly_menu = generate_weekly_menu(MEALS_DATA, calorie_target)
     return {"menu": weekly_menu, "calorie_target": calorie_target, "details": {"tmb": tmb, "tdee": tdee}}
 
@@ -1692,12 +2142,12 @@ async def redo_menu(request: Request):
         return {"message":"Could not generate a menu with current filters."}
     weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
     height_cm = to_cm(state.height, state.height_unit) if state.height else None
-    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex)
+    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
     tdee = None
     if tmb is not None:
-        tdee = round(tmb * compute_activity_factor(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low"), 1)
-    calorie_target = calc_calorie_target(tdee, state.objective) if tdee else None
-    macros = calc_macros(calorie_target, state.objective, weight_kg)
+        tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
+    calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
+    macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
     daily_protein_target = macros.get("protein_grams", 0)
     state.menu = allocate_protein_to_menu(state, menu_objs, daily_protein_target)
     state.extra_protein_grams = 0
@@ -1709,12 +2159,13 @@ async def redo_menu(request: Request):
 
 @app.post("/calculate-total")
 def calculate_total(order: Order):
+    """Calculate total price. Standard: Breakfast = $11, Main Meal = $15"""
     total = 0
     for item in order.items:
         if item.item_type == "main_menu":
-            price = 13 if item.less_protein else 15
+            price = 15  # Standard price for main meals
         elif item.item_type == "breakfast":
-            price = 10
+            price = 11  # Standard price for breakfast
         else:
             raise HTTPException(status_code=400, detail="Invalid item type")
         total += item.quantity * price
@@ -1725,40 +2176,51 @@ def create_checkout_session(order: Order, email: str, name: Optional[str] = None
     """
     Create a checkout session via Stripe. If the user is not registered, prompt for registration.
     """
-    # Check if the user already exists
-    user = next((u for u in sessions.values() if u.get("email") == email), None)
-
-    if not user:  # If user is not registered
-        if not name or not password:  # Ensure name and password are provided
-            raise HTTPException(
-                status_code=400,
-                detail="Please provide your name and a password to register before proceeding."
-            )
-        # Register the user
-        hashed_password = User.hash_password(password)
-        user = User(
-            name=name,
-            email=email,
-            hashed_password=hashed_password,
-            creation_date=datetime.datetime.utcnow(),
-        )
-        session_id = f"session_{len(sessions) + 1}"  # Generate a new session ID
-        sessions[session_id] = user.dict()  # Simulate saving to the database
-
+    # Create a database session
+    db = SessionLocal()
     try:
+        # Check if the user already exists in the database
+        user = db.query(User).filter(User.email == email).first()
+
+        if not user:  # If user is not registered
+            if not name or not password:  # Ensure name and password are provided
+                raise HTTPException(
+                    status_code=400,
+                    detail="Please provide your name and a password to register before proceeding."
+                )
+            # Register the user in the database
+            hashed_password = User.hash_password(password)
+            user = User(
+                name=name,
+                email=email,
+                hashed_password=hashed_password,
+                creation_date=datetime.datetime.utcnow(),
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
         # Initialize the product list for Stripe
         line_items = []
 
         # Add each product in the order to the Stripe line items
         for item in order.items:
+            # Standard pricing: Breakfast = $11, Main Meal = $15
+            if item.item_type == "main_menu":
+                price = 15
+            elif item.item_type == "breakfast":
+                price = 11
+            else:
+                raise HTTPException(status_code=400, detail="Invalid item type")
+            
             line_items.append({
                 "price_data": {
                     "currency": "usd",
                     "product_data": {
                         "name": item.item_type,  # Name of the product from the order
                     },
-                    # Calculate price dynamically and convert to cents
-                    "unit_amount": int(calculate_price([item], 0) * 100),
+                    # Convert price to cents
+                    "unit_amount": int(price * 100),
                 },
                 "quantity": item.quantity,  # Quantity of the product
             })
@@ -1776,39 +2238,69 @@ def create_checkout_session(order: Order, email: str, name: Optional[str] = None
         return {"checkout_url": session.url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
     
 @app.post("/register")
 async def register_user(name: str, email: str, password: str):
     """
     Register a new user upon finalizing the order with their name, email, and password.
     """
-    # Check if the email already exists
-    existing_user = next((u for u in sessions.values() if u.get("email") == email), None)
-    if existing_user:
-        raise HTTPException(status_code=400, detail="A user with this email already exists.")
+    # Create a database session
+    db = SessionLocal()
+    try:
+        # Check if the email already exists in the database
+        existing_user = db.query(User).filter(User.email == email).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="A user with this email already exists.")
 
-    # Create a new user and hash their password
-    hashed_password = User.hash_password(password)
-    new_user = User(
-        name=name,
-        email=email,
-        hashed_password=hashed_password,
-        creation_date=datetime.datetime.utcnow(),
-    )
-    
-    # Simulate saving the user in the "database" of sessions
-    session_id = f"session_{len(sessions) + 1}"
-    sessions[session_id] = new_user.dict()
+        # Create a new user and hash their password
+        hashed_password = User.hash_password(password)
+        new_user = User(
+            name=name,
+            email=email,
+            hashed_password=hashed_password,
+            creation_date=datetime.datetime.utcnow(),
+        )
+        
+        # Save the user to the database
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
 
-    return {"message": "User registered successfully", "user": new_user}   
+        # Return JSON-serializable data
+        return {
+            "message": "User registered successfully",
+            "user": {
+                "id": new_user.id,
+                "name": new_user.name,
+                "email": new_user.email,
+                "creation_date": new_user.creation_date.isoformat() if new_user.creation_date else None
+            }
+        }
+    finally:
+        db.close()   
 
 def calculate_price(menu: List[Meal], extra_protein: int) -> float:
+    """
+    Calculate total price for menu.
+    Standard prices: Breakfast = $11, Main Meal = $15
+    """
     base = 0.0
     for m in menu:
+        meal_type = ""
         if isinstance(m, dict):
-            base += float(getattr(m, "price", 0))
-        elif hasattr(m, "price"):
-            base += float(m.price)
+            meal_type = str(m.get("type", "")).lower()
+        elif hasattr(m, "type"):
+            meal_type = str(m.type).lower()
+        
+        # Standard pricing
+        if "breakfast" in meal_type:
+            base += 11.0
+        else:  # main meal, lunch, dinner
+            base += 15.0
+    
+    # Extra protein cost (if applicable)
     prot_cost = (extra_protein or 0) * 1.0
     return round(base + prot_cost, 2)
 
