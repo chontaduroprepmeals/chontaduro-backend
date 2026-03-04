@@ -1611,6 +1611,20 @@ html.in-iframe .app-card {
       });
 
       html += `</div>`;
+
+      // Snack Recommendations Section
+      html += `<div id="snack-recommendations" style="display: none;">
+        <div style="background: #fff9e6; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0; border-radius: 8px;">
+          <h3 style="color: #f59e0b; font-size: 1.4em; margin-bottom: 15px;">
+            🍫 Recommended Snacks
+          </h3>
+          <p style="margin-bottom: 15px; color: #666;">
+            To help you meet your daily macro targets, consider adding:
+          </p>
+          <div id="snack-list"></div>
+        </div>
+      </div>`;
+
       html += `<div class="mt-4 flex gap-3 justify-center flex-wrap">
           <button onclick="redoMenu()" class="px-3 py-2 bg-blue-600 text-white rounded">Regenerate Full Menu</button>
           <button onclick="proceedToCheckout()" class="px-4 py-3 bg-green-600 text-white rounded font-bold text-lg">🛒 Place Order</button>
@@ -1634,6 +1648,34 @@ html.in-iframe .app-card {
 
       // Store menu data globally for checkout
       window.currentMenuData = data;
+
+      // Populate snack recommendations if present
+      if (data.snack_recommendations && data.snack_recommendations.length > 0) {
+        const snackContainer = document.getElementById('snack-recommendations');
+        const snackList = document.getElementById('snack-list');
+        const escapeHtml = (str) => String(str)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        let snackHTML = '';
+        data.snack_recommendations.forEach((snack, index) => {
+          snackHTML += `
+            <div style="background: white; padding: 15px; margin-bottom: 12px; border-radius: 6px; border: 1px solid #fbbf24;">
+              <div style="font-weight: 600; font-size: 1.1em; margin-bottom: 8px;">
+                ${index + 1}. ${escapeHtml(snack.name)}
+              </div>
+              <div style="display: flex; gap: 15px; flex-wrap: wrap; color: #666; font-size: 0.95em;">
+                <span>🥩 Protein: ${escapeHtml(snack.protein)}g</span>
+                <span>🍞 Carbs: ${escapeHtml(snack.carbs)}g</span>
+                <span>🥑 Fat: ${escapeHtml(snack.fat)}g</span>
+                <span>⚡ ${escapeHtml(snack.calories)} kcal</span>
+              </div>
+            </div>`;
+        });
+        snackList.innerHTML = snackHTML;
+        snackContainer.style.display = 'block';
+      } else {
+        document.getElementById('snack-recommendations').style.display = 'none';
+      }
 
       document.getElementById("addProteinBtn").onclick = async () => {
         const val = Number(document.getElementById("extraProteinInput").value) || 0;
