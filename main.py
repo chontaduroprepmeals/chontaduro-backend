@@ -308,11 +308,41 @@ def to_cm(height: float, unit: str) -> Optional[float]:
         return round(float(height) * 2.54, 1)
     return float(height)
 
+def normalize_days_bucket(days_val) -> str:
+    """Convert a raw days value (numeric string or bucket string) to a standard bucket string.
+    
+    Handles both numeric inputs from the HTML frontend (e.g. "5") and
+    already-bucketed strings from the API form (e.g. "5-7").
+    
+    Mapping: 0 → "0", 1-2 → "1-2", 3-4 → "3-4", 5-7 → "5-7"
+    Days per week range is 0–7; values above 4 all map to the highest bucket.
+    """
+    if days_val is None:
+        return "0"
+    s = str(days_val).strip()
+    # Already a bucket string — pass through
+    if s in ("0", "1-2", "3-4", "5-7"):
+        return s
+    # Numeric string — map to bucket (valid range is 0–7 days/week)
+    try:
+        n = int(s)
+        if n <= 0:
+            return "0"
+        elif n <= 2:
+            return "1-2"
+        elif n <= 4:
+            return "3-4"
+        else:  # 5, 6, or 7 days/week
+            return "5-7"
+    except (ValueError, TypeError):
+        return "0"
+
+
 def compute_activity_factor(days_bucket: str, duration_bucket: str, intensity: str) -> float:
     # Updated base values to match scientific PAL standards and expert recommendations
     # For 5x/week training, should result in factor ~1.50-1.55
     days_map = {"0":1.2, "1-2":1.375, "3-4":1.50, "5-7":1.55}
-    base = days_map.get(str(days_bucket), 1.2)
+    base = days_map.get(normalize_days_bucket(days_bucket), 1.2)
     # Simplified duration/intensity adjustments
     dur_map = {"<30":0.0, "30-60":0.0, "60-120":0.05}
     dur = dur_map.get(str(duration_bucket), 0.0)
@@ -333,13 +363,14 @@ def get_activity_factor_with_recomp_minimum(days_bucket: str, duration_bucket: s
     """
     base_factor = compute_activity_factor(days_bucket, duration_bucket, intensity)
     obj = (objective or "").lower()
+    normalized_bucket = normalize_days_bucket(days_bucket)
     
     # UNIVERSAL MINIMUM based on training frequency
     # If training 3+ days/week, CANNOT be sedentary regardless of goal
-    if days_bucket in ["3-4", "5-7"]:
+    if normalized_bucket in ["3-4", "5-7"]:
         min_factor = 1.45  # Moderately active minimum
         if base_factor < min_factor:
-            print(f"[ACTIVITY] Training {days_bucket} days/week but factor {base_factor:.2f} too low. Enforcing minimum {min_factor}.")
+            print(f"[ACTIVITY] Training {normalized_bucket} days/week but factor {base_factor:.2f} too low. Enforcing minimum {min_factor}.")
             base_factor = max(base_factor, min_factor)
     
     # EXTRA MINIMUM for body recomposition
@@ -640,9 +671,19 @@ def recommend_snacks(deficit: Dict[str, int], num_recommendations: int = 3) -> L
             "score": score
         })
     
-    # Sort by score (highest first) and return top N
+    # Sort by score (highest first) and return top N with frontend-expected key names
     scored_snacks.sort(key=lambda x: x["score"], reverse=True)
-    return [item["snack"] for item in scored_snacks[:num_recommendations]]
+    recommendations = []
+    for item in scored_snacks[:num_recommendations]:
+        snack = item["snack"]
+        recommendations.append({
+            "name": snack["name"],
+            "protein": snack["protein_g"],
+            "carbs": snack["carbs_g"],
+            "fat": snack["fat_g"],
+            "calories": snack["calories"]
+        })
+    return recommendations
 
 
 # --- DIET / RESTRICTION KEYWORDS (expanded vegetables list) ---
