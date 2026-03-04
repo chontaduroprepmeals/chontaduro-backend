@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 import random, json, traceback, datetime, math, hashlib
 from typing import List, Dict, Any, Optional
 from delivery_allowed_api import register_delivery_routes
+from ingredients_database import INGREDIENT_DATABASE, find_ingredient
 from fastapi.responses import JSONResponse
 import stripe
 from dotenv import load_dotenv
@@ -684,6 +685,194 @@ def recommend_snacks(deficit: Dict[str, int], num_recommendations: int = 3) -> L
             "calories": snack["calories"]
         })
     return recommendations
+
+
+# --- DYNAMIC MACRO CALCULATION from ingredient database ---
+
+def calculate_meal_macros_from_ingredients(ingredients: List[str]) -> Dict[str, Any]:
+    """
+    Calculate real macros based on ingredient database (USDA data).
+    Returns macros + ingredient breakdown.
+    """
+    total_protein = 0.0
+    total_carbs = 0.0
+    total_fat = 0.0
+    total_calories = 0.0
+    total_weight_g = 0.0
+
+    ingredient_details = []
+    missing_ingredients = []
+
+    for ingredient_str in ingredients:
+        canonical_name = find_ingredient(ingredient_str)
+
+        if not canonical_name:
+            print(f"[WARNING] Ingredient '{ingredient_str}' not found in database")
+            missing_ingredients.append(ingredient_str)
+            continue
+
+        ingredient_data = INGREDIENT_DATABASE[canonical_name]
+        serving_size = (
+            ingredient_data["typical_serving_g"]
+            if ingredient_data["unit"] == "g"
+            else ingredient_data["typical_serving_ml"]
+        )
+
+        # Calculate macros for typical serving
+        if ingredient_data["unit"] == "ml":
+            protein = (ingredient_data["protein_per_100ml"] / 100) * serving_size
+            carbs = (ingredient_data["carbs_per_100ml"] / 100) * serving_size
+            fat = (ingredient_data["fat_per_100ml"] / 100) * serving_size
+            calories = (ingredient_data["calories_per_100ml"] / 100) * serving_size
+        else:
+            protein = (ingredient_data["protein_per_100g"] / 100) * serving_size
+            carbs = (ingredient_data["carbs_per_100g"] / 100) * serving_size
+            fat = (ingredient_data["fat_per_100g"] / 100) * serving_size
+            calories = (ingredient_data["calories_per_100g"] / 100) * serving_size
+
+        total_protein += protein
+        total_carbs += carbs
+        total_fat += fat
+        total_calories += calories
+        total_weight_g += serving_size
+
+        ingredient_details.append({
+            "name": canonical_name,
+            "amount": serving_size,
+            "unit": ingredient_data["unit"],
+            "protein": round(protein, 1),
+            "carbs": round(carbs, 1),
+            "fat": round(fat, 1),
+            "calories": round(calories)
+        })
+
+    return {
+        "protein_g": round(total_protein, 1),
+        "carbs_g": round(total_carbs, 1),
+        "fat_g": round(total_fat, 1),
+        "calories": round(total_calories),
+        "total_weight_g": round(total_weight_g),
+        "ingredient_breakdown": ingredient_details,
+        "missing_ingredients": missing_ingredients
+    }
+
+
+def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: float) -> Dict[str, Any]:
+    """
+    Adjust meal to meet protein target by adding protein-rich supplements.
+    Returns base_macros, modifications, and final_macros.
+    """
+    base_macros = calculate_meal_macros_from_ingredients(meal_data.get("ingredients", []))
+
+    protein_deficit = target_protein_per_meal - base_macros["protein_g"]
+
+    modifications = []
+    final_macros = base_macros.copy()
+
+    # Only adjust if deficit is significant (>8g)
+    if protein_deficit > 8:
+        ingredients_lower = [i.lower() for i in meal_data.get("ingredients", [])]
+
+        # Strategy 1: Add protein powder (for oatmeal, smoothies, yogurt-based meals)
+        if any(x in ingredients_lower for x in ["oats", "oatmeal", "greek yogurt", "yogurt", "smoothie"]):
+            scoops_needed = max(1, math.ceil(protein_deficit / 24))  # 1 scoop ≈ 24g protein
+            protein_powder_data = INGREDIENT_DATABASE["protein powder"]
+            amount_g = scoops_needed * 30
+
+            added_protein = (protein_powder_data["protein_per_100g"] / 100) * amount_g
+            added_carbs = (protein_powder_data["carbs_per_100g"] / 100) * amount_g
+            added_fat = (protein_powder_data["fat_per_100g"] / 100) * amount_g
+            added_calories = (protein_powder_data["calories_per_100g"] / 100) * amount_g
+
+            modifications.append({
+                "type": "add",
+                "ingredient": "protein powder",
+                "amount": amount_g,
+                "unit": "g",
+                "display": f"{scoops_needed} scoop{'s' if scoops_needed > 1 else ''} protein powder ({amount_g}g)",
+                "macros": {
+                    "protein": round(added_protein, 1),
+                    "carbs": round(added_carbs, 1),
+                    "fat": round(added_fat, 1),
+                    "calories": round(added_calories)
+                }
+            })
+
+            final_macros["protein_g"] += added_protein
+            final_macros["carbs_g"] += added_carbs
+            final_macros["fat_g"] += added_fat
+            final_macros["calories"] += added_calories
+
+        # Strategy 2: Add extra eggs (for egg-based breakfasts)
+        elif any(x in ingredients_lower for x in ["eggs", "scrambled", "omelette"]):
+            extra_eggs = max(1, math.ceil(protein_deficit / 6))  # 1 egg ≈ 6g protein
+            egg_data = INGREDIENT_DATABASE["eggs"]
+            amount_g = extra_eggs * 50
+
+            added_protein = (egg_data["protein_per_100g"] / 100) * amount_g
+            added_carbs = (egg_data["carbs_per_100g"] / 100) * amount_g
+            added_fat = (egg_data["fat_per_100g"] / 100) * amount_g
+            added_calories = (egg_data["calories_per_100g"] / 100) * amount_g
+
+            modifications.append({
+                "type": "increase",
+                "ingredient": "eggs",
+                "amount": amount_g,
+                "unit": "g",
+                "display": f"+{extra_eggs} extra egg{'s' if extra_eggs > 1 else ''}",
+                "macros": {
+                    "protein": round(added_protein, 1),
+                    "carbs": round(added_carbs, 1),
+                    "fat": round(added_fat, 1),
+                    "calories": round(added_calories)
+                }
+            })
+
+            final_macros["protein_g"] += added_protein
+            final_macros["carbs_g"] += added_carbs
+            final_macros["fat_g"] += added_fat
+            final_macros["calories"] += added_calories
+
+        # Strategy 3: Add Greek yogurt (fallback for all other meals)
+        else:
+            yogurt_g = max(100, round((protein_deficit / 10) * 100))
+            yogurt_data = INGREDIENT_DATABASE["greek yogurt"]
+
+            added_protein = (yogurt_data["protein_per_100g"] / 100) * yogurt_g
+            added_carbs = (yogurt_data["carbs_per_100g"] / 100) * yogurt_g
+            added_fat = (yogurt_data["fat_per_100g"] / 100) * yogurt_g
+            added_calories = (yogurt_data["calories_per_100g"] / 100) * yogurt_g
+
+            modifications.append({
+                "type": "add",
+                "ingredient": "greek yogurt",
+                "amount": yogurt_g,
+                "unit": "g",
+                "display": f"{yogurt_g}g Greek yogurt",
+                "macros": {
+                    "protein": round(added_protein, 1),
+                    "carbs": round(added_carbs, 1),
+                    "fat": round(added_fat, 1),
+                    "calories": round(added_calories)
+                }
+            })
+
+            final_macros["protein_g"] += added_protein
+            final_macros["carbs_g"] += added_carbs
+            final_macros["fat_g"] += added_fat
+            final_macros["calories"] += added_calories
+
+    # Round final macros
+    final_macros["protein_g"] = round(final_macros["protein_g"], 1)
+    final_macros["carbs_g"] = round(final_macros["carbs_g"], 1)
+    final_macros["fat_g"] = round(final_macros["fat_g"], 1)
+    final_macros["calories"] = round(final_macros["calories"])
+
+    return {
+        "base_macros": base_macros,
+        "modifications": modifications,
+        "final_macros": final_macros
+    }
 
 
 # --- DIET / RESTRICTION KEYWORDS (expanded vegetables list) ---
@@ -1691,9 +1880,17 @@ async def next_step(request: Request):
                     meal_entry["fat_assigned"] = int(meal.get("fat_assigned", 0))
                     meal_entry["carbs_assigned"] = int(meal.get("carbs_assigned", 0))
                     meal_entry["calories_assigned"] = int(meal.get("calories", 0))
-                    
-                    # Calculate portion multiplier to show how meal is scaled
-                    base_protein = meal.get("protein_g", 35)  # from meals.json
+
+                    # Calculate real ingredient-based macros (dynamic calculation)
+                    protein_target_for_meal = meal_entry["protein_assigned"]
+                    adjusted = adjust_meal_for_protein_target(meal, protein_target_for_meal)
+                    meal_entry["base_macros"] = adjusted["base_macros"]
+                    meal_entry["modifications"] = adjusted["modifications"]
+                    meal_entry["final_macros"] = adjusted["final_macros"]
+
+                    # Calculate portion multiplier using real ingredient-based protein
+                    # (replaces the previous use of hardcoded protein_g from meals.json)
+                    base_protein = adjusted["base_macros"]["protein_g"]
                     if base_protein > 0:
                         portion_multiplier = meal_entry["protein_assigned"] / base_protein
                         meal_entry["portion_multiplier"] = round(portion_multiplier, 2)
