@@ -1527,14 +1527,15 @@ html.in-iframe .app-card {
       dayKeys.forEach(dayNum => {
         const dayMeals = mealsByDay[dayNum];
         
-        // Calculate day totals
+        // Calculate day totals (prefer final_macros when available)
         let dayProtein = 0, dayCarbs = 0, dayFat = 0, dayCalories = 0;
         dayMeals.forEach(m => {
-          dayProtein += m.protein_assigned || 0;
-          dayCarbs += m.carbs_assigned || 0;
-          dayFat += m.fat_assigned || 0;
-          dayCalories += m.calories_assigned || m.calories || 0;
+          dayProtein  += m.final_macros ? m.final_macros.protein_g : (m.protein_assigned || 0);
+          dayCarbs    += m.final_macros ? m.final_macros.carbs_g   : (m.carbs_assigned || 0);
+          dayFat      += m.final_macros ? m.final_macros.fat_g     : (m.fat_assigned || 0);
+          dayCalories += m.final_macros ? m.final_macros.calories  : (m.calories_assigned || m.calories || 0);
         });
+        dayCalories = Math.round(dayCalories);
         
         // Day header
         html += `<div class="mb-6 bg-white p-4 rounded-lg border-2 border-orange-200 shadow-sm">
@@ -1547,36 +1548,69 @@ html.in-iframe .app-card {
         html += `<div class="space-y-3">`;
         
         dayMeals.forEach(m => {
-          const ing = (m.ingredients || []).join(", ");
           const safeName = (m.name || "").replace(/'/g, "\\'");
-          const protein = m.protein_assigned || m.provided_protein || 0;
-          const carbs = m.carbs_assigned || 0;
-          const fat = m.fat_assigned || 0;
-          const calories = m.calories_assigned || m.calories || 0;
-          const portionMultiplier = m.portion_multiplier || 1.0;
-          const servingSize = m.serving_size_adjusted || m.serving_size_g || 0;
           const mealType = m.meal_type || 'MEAL';
-          
+
+          // Use final_macros when available, otherwise fall back to assigned values
+          const displayProtein = m.final_macros ? m.final_macros.protein_g : (m.protein_assigned || m.provided_protein || 0);
+          const displayCarbs   = m.final_macros ? m.final_macros.carbs_g   : (m.carbs_assigned || 0);
+          const displayFat     = m.final_macros ? m.final_macros.fat_g     : (m.fat_assigned || 0);
+          const displayCalories = m.final_macros ? m.final_macros.calories : (m.calories_assigned || m.calories || 0);
+
           // Meal type emoji
           let mealTypeEmoji = '🍽️';
           if (mealType === 'BREAKFAST') mealTypeEmoji = '🌅';
           else if (mealType === 'DINNER') mealTypeEmoji = '🌙';
-          
-          // Build macro info display
-          let perMealInfo = `<div class="text-sm text-gray-700 mt-2">
-            <strong>Macros:</strong>
-            <span class="inline-block mr-3">🥩 <strong>${protein}g</strong></span>
-            <span class="inline-block mr-3">🍞 <strong>${carbs}g</strong></span>
-            <span class="inline-block mr-3">🥑 <strong>${fat}g</strong></span>
-          </div>`;
-          
-          // Show portion information if it's scaled
+
+          // Portion info — show scaled notice when multiplier is not 1
+          const portionMultiplier = m.portion_multiplier || 1.0;
           let portionInfo = '';
           if (portionMultiplier !== 1.0) {
-            portionInfo = `<div class="text-xs text-blue-600 mt-1">
-              📏 Portion: ${portionMultiplier.toFixed(2)}x (${servingSize}g)
-            </div>`;
+            portionInfo = `<div class="text-xs text-blue-600 mt-1">📏 Scaled to meet your needs</div>`;
           }
+
+          // Base ingredients breakdown
+          let ingredientsHTML = '';
+          if (m.base_macros && m.base_macros.ingredient_breakdown && m.base_macros.ingredient_breakdown.length > 0) {
+            ingredientsHTML += '<div style="margin-top: 12px; padding: 10px; background: #f9fafb; border-radius: 6px;">';
+            ingredientsHTML += '<div style="font-weight: 600; margin-bottom: 8px; color: #374151;">Base ingredients:</div>';
+            ingredientsHTML += '<ul style="margin: 0; padding-left: 20px; color: #6b7280;">';
+            m.base_macros.ingredient_breakdown.forEach(ing => {
+              ingredientsHTML += `<li style="margin-bottom: 4px;">${ing.amount}${ing.unit} ${ing.name}`;
+              if (ing.protein > 0) {
+                ingredientsHTML += ` <span style="color: #9ca3af;">(${ing.protein}g protein)</span>`;
+              }
+              ingredientsHTML += `</li>`;
+            });
+            ingredientsHTML += '</ul></div>';
+          } else {
+            // Fallback to simple ingredient list
+            const ing = (m.ingredients || []).join(", ");
+            if (ing) {
+              ingredientsHTML = `<div class="mt-2 text-sm text-gray-700">Ingredients: ${ing}</div>`;
+            }
+          }
+
+          // Modifications section
+          let modificationsHTML = '';
+          if (m.modifications && m.modifications.length > 0) {
+            modificationsHTML += '<div style="margin-top: 12px; padding: 10px; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 6px;">';
+            modificationsHTML += '<div style="font-weight: 600; margin-bottom: 6px; color: #92400e;">✨ Modified to meet your protein target:</div>';
+            modificationsHTML += '<ul style="margin: 0; padding-left: 20px; color: #78350f;">';
+            m.modifications.forEach(mod => {
+              modificationsHTML += `<li style="margin-bottom: 4px;">${mod.display}`;
+              if (mod.macros && mod.macros.protein) {
+                modificationsHTML += ` <span style="color: #a16207;">(+${mod.macros.protein}g protein)</span>`;
+              }
+              modificationsHTML += `</li>`;
+            });
+            modificationsHTML += '</ul></div>';
+          }
+
+          // Final macros display
+          let perMealInfo = `<div style="margin-top: 12px; font-weight: 600;" class="text-sm">`;
+          perMealInfo += `Final macros: 🥩 ${Math.round(displayProtein)}g  🍞 ${Math.round(displayCarbs)}g  🥑 ${Math.round(displayFat)}g  🔥 ${Math.round(displayCalories)} kcal`;
+          perMealInfo += `</div>`;
 
           html += `<div class="p-4 bg-gray-50 rounded border-2 border-gray-200">
             <div class="flex justify-between items-start">
@@ -1588,9 +1622,10 @@ html.in-iframe .app-card {
                     <div class="text-lg font-semibold">${m.name}</div>
                   </div>
                 </div>
-                <div class="text-sm text-gray-600">${m.type} • ${calories} kcal • $${(m.price||0).toFixed(2)}</div>
+                <div class="text-sm text-gray-600">${m.type} • ${Math.round(displayCalories)} kcal • $${(m.price||0).toFixed(2)}</div>
                 ${portionInfo}
-                <div class="mt-2 text-sm text-gray-700">Ingredients: ${ing}</div>
+                ${ingredientsHTML}
+                ${modificationsHTML}
                 ${perMealInfo}
               </div>
               <div class="flex flex-col items-end gap-2 ml-4">
