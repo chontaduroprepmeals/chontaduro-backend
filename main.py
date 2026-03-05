@@ -855,7 +855,13 @@ def select_meal_for_protein_target(available_meals: List[Dict], target_protein: 
         })
 
     scored_meals.sort(key=lambda x: x["score"], reverse=True)
-    return scored_meals[0]["meal"] if scored_meals else available_meals[0]
+    selected = scored_meals[0]["meal"] if scored_meals else available_meals[0]
+    print(f"[SELECTION] {len(available_meals)} meals available for target {target_protein}g protein, {target_calories} kcal")
+    if scored_meals:
+        print(f"[SELECTION] Selected: {selected.get('name', 'unknown')} (score: {scored_meals[0]['score']:.1f})")
+    else:
+        print(f"[SELECTION] Selected: {selected.get('name', 'unknown')} (fallback, no scored meals)")
+    return selected
 
 
 # --- DYNAMIC MACRO CALCULATION from ingredient database ---
@@ -1605,7 +1611,16 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
 
 
 # Keep original generate_menu as fallback for non-template flows
-def generate_menu(state: SessionState, protein_per_meal: Optional[int] = None, calories_per_meal: Optional[int] = None) -> List[Meal]:
+def generate_menu(state: SessionState, protein_per_meal: Optional[int] = None, calories_per_meal: Optional[int] = None, variety_window: int = 3) -> List[Meal]:
+    """
+    Generate menu with meal variety tracking.
+
+    Args:
+        state: Current session state.
+        protein_per_meal: Target protein grams per meal slot.
+        calories_per_meal: Target calories per meal slot.
+        variety_window: Don't repeat meals within this many days (default 3).
+    """
     if state.template_id:
         # if a template is set, prefer template-driven generation
         return generate_menu_using_template(state)
@@ -1618,25 +1633,65 @@ def generate_menu(state: SessionState, protein_per_meal: Optional[int] = None, c
         return []
     mains = [m for m in available if m.type.lower() == "main meal"]
     breakfasts = [m for m in available if m.type.lower() == "breakfast"]
+
+    # Variety tracking: keep names of recently selected meals across days
+    recently_used_meals: List[str] = []
+    max_recent = variety_window * (num_main + num_break)
+
     menu = []
-    for _ in range(state.days):
+    for day_idx in range(state.days):
         day_items = []
+        meals_used_today: List[str] = []
+
+        def pick_meal(pool: List[Meal]) -> Optional[Meal]:
+            """Select a meal from pool, honouring variety constraints."""
+            if not pool:
+                return None
+
+            pool_dicts = [m.model_dump() if hasattr(m, "model_dump") else dict(m) for m in pool]
+
+            # Filter out meals used today and recently across days
+            unique_dicts = [
+                m for m in pool_dicts
+                if m["name"] not in meals_used_today and m["name"] not in recently_used_meals
+            ]
+
+            if not unique_dicts:
+                # Relax to: at least not used today
+                unique_dicts = [m for m in pool_dicts if m["name"] not in meals_used_today]
+
+            if not unique_dicts:
+                # No unique options at all — allow any meal and reset recent tracking
+                print(
+                    f"[VARIETY WARNING] Day {day_idx + 1}: No unique meals available. "
+                    f"Allowing repeats to meet nutritional goals."
+                )
+                recently_used_meals.clear()
+                unique_dicts = pool_dicts
+
+            if protein_per_meal is not None and calories_per_meal is not None:
+                best_dict = select_meal_for_protein_target(unique_dicts, protein_per_meal, calories_per_meal)
+                selected = Meal(**best_dict)
+            else:
+                selected = Meal(**(random.choice(unique_dicts)))
+
+            meals_used_today.append(selected.name)
+            recently_used_meals.append(selected.name)
+            if len(recently_used_meals) > max_recent:
+                recently_used_meals.pop(0)
+            return selected
+
         for _ in range(num_break):
             if breakfasts:
-                if protein_per_meal is not None and calories_per_meal is not None:
-                    meal_dicts = [m.model_dump() if hasattr(m, "model_dump") else dict(m) for m in breakfasts]
-                    best = select_meal_for_protein_target(meal_dicts, protein_per_meal, calories_per_meal)
-                    day_items.append(Meal(**best))
-                else:
-                    day_items.append(random.choice(breakfasts))
+                meal = pick_meal(breakfasts)
+                if meal:
+                    day_items.append(meal)
         for _ in range(num_main):
             if mains:
-                if protein_per_meal is not None and calories_per_meal is not None:
-                    meal_dicts = [m.model_dump() if hasattr(m, "model_dump") else dict(m) for m in mains]
-                    best = select_meal_for_protein_target(meal_dicts, protein_per_meal, calories_per_meal)
-                    day_items.append(Meal(**best))
-                else:
-                    day_items.append(random.choice(mains))
+                meal = pick_meal(mains)
+                if meal:
+                    day_items.append(meal)
+
         if not day_items and available:
             day_items.append(random.choice(available))
         menu.extend(day_items)
@@ -2021,7 +2076,7 @@ async def next_step(request: Request):
                 print(f"  Smart protein distribution: {protein_distribution_pre} (target: {daily_protein_target}g)")
 
                 # Genera el menú base usando smart meal selection
-                base_menu_objs = generate_menu(state, protein_per_meal=protein_per_meal_pre, calories_per_meal=calories_per_meal_pre)
+                base_menu_objs = generate_menu(state, protein_per_meal=protein_per_meal_pre, calories_per_meal=calories_per_meal_pre, variety_window=3)
 
                 # Ajusta proteína y calorías dinámicamente por comida
                 menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target, calorie_target)
