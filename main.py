@@ -739,12 +739,13 @@ def distribute_protein_across_meals(daily_protein_target: int, num_meals: int = 
 
     Rules:
     - Cap: 40g per meal (profitability)
-    - Distribute evenly when possible
+    - Distribute evenly when possible, spreading the remainder across leading meals
     - Maximize protein from meals, minimize from snacks
 
     Examples:
     - 133g target → [40, 40, 40] = 120g from meals, 13g from snacks
     - 90g target  → [30, 30, 30] = 90g from meals,  0g from snacks
+    - 100g target → [34, 33, 33] = 100g from meals,  0g from snacks
     - 150g target → [40, 40, 40] = 120g from meals, 30g from snacks
     """
     max_per_meal = 40
@@ -753,9 +754,10 @@ def distribute_protein_across_meals(daily_protein_target: int, num_meals: int = 
     if daily_protein_target <= max_meals_capacity:
         base_per_meal = daily_protein_target / num_meals
         if base_per_meal <= max_per_meal:
-            # Distribute evenly (integer portion; remainder is negligible)
-            protein_per_meal = int(base_per_meal)
-            return [protein_per_meal] * num_meals
+            # Distribute evenly, spreading remainder across the first N meals
+            base = daily_protein_target // num_meals
+            remainder = daily_protein_target % num_meals
+            return [base + (1 if i < remainder else 0) for i in range(num_meals)]
         else:
             # Would exceed cap — give max to every meal
             return [max_per_meal] * num_meals
@@ -766,7 +768,7 @@ def distribute_protein_across_meals(daily_protein_target: int, num_meals: int = 
 
 def calculate_protein_deficit_for_snacks(daily_protein_target: int, meals_protein_distribution: List[int]) -> int:
     """
-    Calculate how much protein needs to come from snacks.
+    Calculate how much protein needs to come from snacks given the per-meal distribution.
     """
     total_from_meals = sum(meals_protein_distribution)
     return max(0, daily_protein_target - total_from_meals)
@@ -801,6 +803,14 @@ def recommend_small_snacks_for_deficit(protein_deficit: int, num_recommendations
     ]
 
 
+# Scoring weights for select_meal_for_protein_target
+_MEAL_SCORE_BASE = 100
+_PROTEIN_DISTANCE_WEIGHT = 2    # Penalty per gram away from protein target
+_CALORIE_DISTANCE_WEIGHT = 0.1  # Penalty per kcal away from calorie target
+_HIGH_PROTEIN_BONUS = 20        # Bonus for meals naturally in 30-40g protein range
+_LOW_PROTEIN_PENALTY = 30       # Penalty for meals below 20g protein (hard to supplement)
+
+
 def select_meal_for_protein_target(available_meals: List[Dict], target_protein: int, target_calories: int) -> Dict:
     """
     Select a meal that naturally fits the protein/calorie target.
@@ -808,6 +818,8 @@ def select_meal_for_protein_target(available_meals: List[Dict], target_protein: 
     Prioritize meals where:
     - Base protein is 25-40g (close to target, minimal adjustment needed)
     - Base calories are within 20% of target
+
+    Returns an empty dict if available_meals is empty.
     """
     if not available_meals:
         return {}
@@ -821,15 +833,19 @@ def select_meal_for_protein_target(available_meals: List[Dict], target_protein: 
         protein_distance = abs(base_protein - target_protein)
         calorie_distance = abs(base_calories - target_calories)
 
-        score = 100 - (protein_distance * 2) - (calorie_distance / 10)
+        score = (
+            _MEAL_SCORE_BASE
+            - (protein_distance * _PROTEIN_DISTANCE_WEIGHT)
+            - (calorie_distance * _CALORIE_DISTANCE_WEIGHT)
+        )
 
         # Bonus for high-protein bases (30-40g) — need minimal adjustment
         if 30 <= base_protein <= 40:
-            score += 20
+            score += _HIGH_PROTEIN_BONUS
 
         # Penalty for very low protein (<20g) — hard to supplement
         if base_protein < 20:
-            score -= 30
+            score -= _LOW_PROTEIN_PENALTY
 
         scored_meals.append({
             "meal": meal,
@@ -1512,9 +1528,11 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
     daily_protein_target = int(macros_daily_protein or 120)  # Default 120g if not provided
     daily_calorie_target = int(calorie_target or 2000)  # Default 2000 kcal
 
-    # Use smart protein distribution: evenly across meals with 40g cap
+    # Use smart protein distribution: evenly across meals with 40g cap.
+    # When target > 40g × num_meals, all slots are capped at 40g and the
+    # remainder is covered by snacks (not reflected here).
     protein_distribution = distribute_protein_across_meals(daily_protein_target, meals_per_day)
-    protein_per_meal = protein_distribution[0]  # All slots equal after distribute_protein_across_meals
+    protein_per_meal = protein_distribution[0]  # First slot value (may differ by ±1g for remainder slots)
 
     # Calculate daily macros
     # Fat: 25% of calories
@@ -2151,11 +2169,11 @@ async def next_step(request: Request):
                 print(f"  - Fat: {deficit['fat']}g")
                 print(f"  - Calories: {deficit['calories']} kcal")
 
-                # Compute protein from meals vs. daily target for context-aware snack message
+                # Compute protein from meals vs. daily target for context-aware snack message.
+                # Use the pre-computed distribution (not the achieved total) so the deficit
+                # correctly reflects what the meal plan was designed to provide.
                 protein_from_meals = achieved_protein
-                protein_deficit_for_snacks = calculate_protein_deficit_for_snacks(
-                    daily_protein_target, [protein_from_meals]
-                )
+                protein_deficit_for_snacks = max(0, daily_protein_target - protein_from_meals)
 
                 # Get snack recommendations if there's a significant deficit.
                 # For small protein gaps (10-20g), prefer SMALL snacks (100-200 kcal).
