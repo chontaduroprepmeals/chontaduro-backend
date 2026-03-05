@@ -759,10 +759,26 @@ def calculate_meal_macros_from_ingredients(ingredients: List[str]) -> Dict[str, 
 
 def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: float) -> Dict[str, Any]:
     """
-    Adjust meal to meet protein target by adding protein-rich supplements.
-    Returns base_macros, modifications, and final_macros.
+    Adjust meal to meet protein target SMARTLY.
+
+    Rules:
+    1. Cap target at 40g (profitability)
+    2. Only add supplements to compatible meals (oatmeal, yogurt, smoothies)
+    3. NEVER add supplements to soups, meats, beans, traditional cooked meals
+    4. If meal already has 30g+ protein, don't modify
     """
+    # CAP at 40g for profitability
+    target_protein_per_meal = min(target_protein_per_meal, 40)
+
     base_macros = calculate_meal_macros_from_ingredients(meal_data.get("ingredients", []))
+
+    # If meal already has 30-40g protein, it's in the target range — don't modify
+    if base_macros["protein_g"] >= 30:
+        return {
+            "base_macros": base_macros,
+            "modifications": [],
+            "final_macros": base_macros
+        }
 
     protein_deficit = target_protein_per_meal - base_macros["protein_g"]
 
@@ -773,9 +789,21 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
     if protein_deficit > 8:
         ingredients_lower = [i.lower() for i in meal_data.get("ingredients", [])]
 
-        # Strategy 1: Add protein powder (for oatmeal, smoothies, yogurt-based meals)
-        if any(x in ingredients_lower for x in ["oats", "oatmeal", "greek yogurt", "yogurt", "smoothie"]):
-            scoops_needed = max(1, math.ceil(protein_deficit / 24))  # 1 scoop ≈ 24g protein
+        # Meals where protein powder is acceptable
+        powder_compatible = any(x in ingredients_lower for x in
+            ["oats", "oatmeal", "greek yogurt", "yogurt", "smoothie", "milk shake"])
+
+        # Meals where supplements should NEVER be added
+        no_supplement = any(x in ingredients_lower for x in
+            ["chicken", "beef", "turkey", "fish", "tuna", "salmon",
+             "lentil", "soup", "beans", "chickpeas", "burrito", "bowl",
+             "stew", "egg whites", "cottage cheese", "rice", "pasta",
+             "salad", "pork", "lamb", "shrimp"])
+
+        # Strategy 1: Add protein powder (oatmeal, smoothies, yogurt-based meals only)
+        if powder_compatible and not no_supplement:
+            # Max 1 scoop (30g) to avoid over-supplementing
+            scoops_needed = 1
             protein_powder_data = INGREDIENT_DATABASE["protein powder"]
             amount_g = scoops_needed * 30
 
@@ -789,7 +817,7 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
                 "ingredient": "protein powder",
                 "amount": amount_g,
                 "unit": "g",
-                "display": f"{scoops_needed} scoop{'s' if scoops_needed > 1 else ''} protein powder ({amount_g}g)",
+                "display": f"1 scoop protein powder ({amount_g}g)",
                 "macros": {
                     "protein": round(added_protein, 1),
                     "carbs": round(added_carbs, 1),
@@ -803,8 +831,8 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
             final_macros["fat_g"] += added_fat
             final_macros["calories"] += added_calories
 
-        # Strategy 2: Add extra eggs (for egg-based breakfasts)
-        elif any(x in ingredients_lower for x in ["eggs", "scrambled", "omelette"]):
+        # Strategy 2: Add extra eggs (for egg-based breakfasts, only if not in no_supplement list)
+        elif not no_supplement and any(x in ingredients_lower for x in ["eggs", "scrambled", "omelette"]):
             extra_eggs = max(1, math.ceil(protein_deficit / 6))  # 1 egg ≈ 6g protein
             egg_data = INGREDIENT_DATABASE["eggs"]
             amount_g = extra_eggs * 50
@@ -833,34 +861,8 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
             final_macros["fat_g"] += added_fat
             final_macros["calories"] += added_calories
 
-        # Strategy 3: Add Greek yogurt (fallback for all other meals)
-        else:
-            yogurt_g = max(100, round((protein_deficit / 10) * 100))
-            yogurt_data = INGREDIENT_DATABASE["greek yogurt"]
-
-            added_protein = (yogurt_data["protein_per_100g"] / 100) * yogurt_g
-            added_carbs = (yogurt_data["carbs_per_100g"] / 100) * yogurt_g
-            added_fat = (yogurt_data["fat_per_100g"] / 100) * yogurt_g
-            added_calories = (yogurt_data["calories_per_100g"] / 100) * yogurt_g
-
-            modifications.append({
-                "type": "add",
-                "ingredient": "greek yogurt",
-                "amount": yogurt_g,
-                "unit": "g",
-                "display": f"{yogurt_g}g Greek yogurt",
-                "macros": {
-                    "protein": round(added_protein, 1),
-                    "carbs": round(added_carbs, 1),
-                    "fat": round(added_fat, 1),
-                    "calories": round(added_calories)
-                }
-            })
-
-            final_macros["protein_g"] += added_protein
-            final_macros["carbs_g"] += added_carbs
-            final_macros["fat_g"] += added_fat
-            final_macros["calories"] += added_calories
+        # For incompatible meals (meats, soups, beans, etc.), accept the protein as-is.
+        # The 30-40g range is a target; 20-30g is acceptable for these meal types.
 
     # Round final macros
     final_macros["protein_g"] = round(final_macros["protein_g"], 1)
@@ -873,6 +875,34 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
         "modifications": modifications,
         "final_macros": final_macros
     }
+
+
+def validate_daily_calories(daily_menu: List[Dict], target_daily_calories: int) -> List[Dict]:
+    """
+    Ensures daily total doesn't exceed target by more than 5%.
+    If over, proportionally scales down macros for all meals in the day.
+    """
+    total_calories = sum(meal.get("final_macros", {}).get("calories", 0) for meal in daily_menu)
+
+    if total_calories <= 0:
+        return daily_menu
+
+    max_allowed = target_daily_calories * 1.05
+
+    if total_calories > max_allowed:
+        scale_factor = target_daily_calories / total_calories
+
+        for meal in daily_menu:
+            if "final_macros" in meal:
+                meal["final_macros"]["calories"] = round(meal["final_macros"]["calories"] * scale_factor)
+                meal["final_macros"]["protein_g"] = round(meal["final_macros"]["protein_g"] * scale_factor, 1)
+                meal["final_macros"]["carbs_g"] = round(meal["final_macros"]["carbs_g"] * scale_factor, 1)
+                meal["final_macros"]["fat_g"] = round(meal["final_macros"]["fat_g"] * scale_factor, 1)
+
+            if "portion_multiplier" in meal:
+                meal["portion_multiplier"] = round(meal["portion_multiplier"] * scale_factor, 2)
+
+    return daily_menu
 
 
 # --- DIET / RESTRICTION KEYWORDS (expanded vegetables list) ---
@@ -1908,6 +1938,12 @@ async def next_step(request: Request):
 
                     response_menu.append(meal_entry)
                     meal_index += 1
+
+                # Apply per-day calorie validation: scale down meals if daily total exceeds target by >5%
+                days_in_menu = set(m.get("day_number", 1) for m in response_menu)
+                for day_num in days_in_menu:
+                    day_meals = [m for m in response_menu if m.get("day_number", 1) == day_num]
+                    validate_daily_calories(day_meals, calorie_target)
 
                 # Calcula el precio total
                 total_price = calculate_price(
