@@ -61,6 +61,16 @@ class TestAdjustMealForProteinTarget:
             types = [m["type"] for m in result["modifications"]]
             assert "reduce_portion" in types
 
+    def test_reduce_portion_modification_has_display_field(self):
+        """The 'reduce_portion' modification must include a 'display' field (not undefined)."""
+        meal = _meal_with_ingredients(["chicken", "chicken"])
+        result = adjust_meal_for_protein_target(meal, target_protein_per_meal=40)
+        for mod in result["modifications"]:
+            if mod["type"] == "reduce_portion":
+                assert "display" in mod, "reduce_portion modification is missing 'display' field"
+                assert mod["display"], "reduce_portion 'display' field must not be empty"
+                assert "%" in mod["display"], "reduce_portion 'display' should include percentage"
+
     def test_meal_in_30_to_40_range_not_modified(self):
         """A meal already in the 30–40 g range must be returned as-is (no modifications)."""
         # Greek yogurt + moderate protein ingredients should be in range with a
