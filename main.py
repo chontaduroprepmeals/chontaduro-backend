@@ -942,22 +942,62 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
     1. Cap target at 40g (profitability)
     2. Only add supplements to compatible meals (oatmeal, yogurt, smoothies)
     3. NEVER add supplements to soups, meats, beans, traditional cooked meals
-    4. If meal already has 30g+ protein, don't modify
+    4. If meal already has 30-40g protein, don't modify
+    5. If meal naturally exceeds 40g protein, scale down portions to enforce the cap
     """
+    MAX_PROTEIN_PER_MEAL = 40
+
     # CAP at 40g for profitability
-    target_protein_per_meal = min(target_protein_per_meal, 40)
+    if target_protein_per_meal > MAX_PROTEIN_PER_MEAL:
+        print(f"[PROTEIN CAP] Reducing target from {target_protein_per_meal}g to {MAX_PROTEIN_PER_MEAL}g")
+        target_protein_per_meal = MAX_PROTEIN_PER_MEAL
 
     base_macros = calculate_meal_macros_from_ingredients(meal_data.get("ingredients", []))
+    base_protein = base_macros["protein_g"]
+
+    # If meal naturally exceeds 40g protein, scale down portions to enforce the cap
+    if base_protein > MAX_PROTEIN_PER_MEAL:
+        print(f"[PROTEIN CAP] Meal has {base_protein}g protein, reducing to {MAX_PROTEIN_PER_MEAL}g")
+        scale_factor = MAX_PROTEIN_PER_MEAL / base_protein
+        final_macros = {
+            "protein_g": round(MAX_PROTEIN_PER_MEAL, 1),
+            "carbs_g": round(base_macros["carbs_g"] * scale_factor, 1),
+            "fat_g": round(base_macros["fat_g"] * scale_factor, 1),
+            "calories": round(base_macros["calories"] * scale_factor),
+            "total_weight_g": round(base_macros.get("total_weight_g", 0) * scale_factor),
+            "ingredient_breakdown": [
+                {
+                    **ing,
+                    "amount": round(ing["amount"] * scale_factor, 1),
+                    "protein": round(ing["protein"] * scale_factor, 1),
+                    "carbs": round(ing["carbs"] * scale_factor, 1),
+                    "fat": round(ing["fat"] * scale_factor, 1),
+                    "calories": round(ing["calories"] * scale_factor)
+                }
+                for ing in base_macros.get("ingredient_breakdown", [])
+            ],
+            "missing_ingredients": base_macros.get("missing_ingredients", [])
+        }
+        return {
+            "base_macros": base_macros,
+            "modifications": [
+                {
+                    "type": "reduce_portion",
+                    "note": f"Reduced portion by {int((1 - scale_factor) * 100)}% to cap protein at 40g"
+                }
+            ],
+            "final_macros": final_macros
+        }
 
     # If meal already has 30-40g protein, it's in the target range — don't modify
-    if base_macros["protein_g"] >= 30:
+    if base_protein >= 30:
         return {
             "base_macros": base_macros,
             "modifications": [],
             "final_macros": base_macros
         }
 
-    protein_deficit = target_protein_per_meal - base_macros["protein_g"]
+    protein_deficit = target_protein_per_meal - base_protein
 
     modifications = []
     final_macros = base_macros.copy()
@@ -979,10 +1019,12 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
 
         # Strategy 1: Add protein powder (oatmeal, smoothies, yogurt-based meals only)
         if powder_compatible and not no_supplement:
-            # Max 1 scoop (30g) to avoid over-supplementing
-            scoops_needed = 1
+            # Max 1 scoop (30g) to avoid over-supplementing, but cap to not exceed 40g
             protein_powder_data = INGREDIENT_DATABASE["protein powder"]
-            amount_g = scoops_needed * 30
+            protein_powder_per_g = protein_powder_data["protein_per_100g"] / 100
+            max_protein_to_add = MAX_PROTEIN_PER_MEAL - base_protein
+            amount_g = min(30, max_protein_to_add / protein_powder_per_g) if protein_powder_per_g > 0 else 30
+            amount_g = round(amount_g, 1)
 
             added_protein = (protein_powder_data["protein_per_100g"] / 100) * amount_g
             added_carbs = (protein_powder_data["carbs_per_100g"] / 100) * amount_g
@@ -1010,8 +1052,11 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
 
         # Strategy 2: Add extra eggs (for egg-based breakfasts, only if not in no_supplement list)
         elif not no_supplement and any(x in ingredients_lower for x in ["eggs", "scrambled", "omelette"]):
-            extra_eggs = max(1, math.ceil(protein_deficit / 6))  # 1 egg ≈ 6g protein
             egg_data = INGREDIENT_DATABASE["eggs"]
+            egg_protein_per_50g = (egg_data["protein_per_100g"] / 100) * 50  # protein per egg
+            max_protein_to_add = MAX_PROTEIN_PER_MEAL - base_protein
+            max_eggs = max(1, math.floor(max_protein_to_add / egg_protein_per_50g)) if egg_protein_per_50g > 0 else 1
+            extra_eggs = min(max(1, math.ceil(protein_deficit / 6)), max_eggs)  # 1 egg ≈ 6g protein
             amount_g = extra_eggs * 50
 
             added_protein = (egg_data["protein_per_100g"] / 100) * amount_g
@@ -1082,7 +1127,76 @@ def validate_daily_calories(daily_menu: List[Dict], target_daily_calories: int) 
     return daily_menu
 
 
-# --- DIET / RESTRICTION KEYWORDS (expanded vegetables list) ---
+def validate_daily_macros(
+    daily_menu: List[Dict],
+    target_protein: int,
+    target_carbs: int,
+    target_fat: int,
+    target_calories: int,
+) -> List[Dict]:
+    """
+    Ensures daily totals don't exceed targets for protein, carbs, fat, AND calories.
+    Applies a 5% tolerance; if any macro exceeds its target by more than 5%, all
+    meals are scaled proportionally using the most restrictive (smallest) scale factor.
+    """
+    total_protein = sum(m.get("final_macros", {}).get("protein_g", 0) for m in daily_menu)
+    total_carbs = sum(m.get("final_macros", {}).get("carbs_g", 0) for m in daily_menu)
+    total_fat = sum(m.get("final_macros", {}).get("fat_g", 0) for m in daily_menu)
+    total_calories = sum(m.get("final_macros", {}).get("calories", 0) for m in daily_menu)
+
+    if total_calories <= 0:
+        return daily_menu
+
+    max_protein = target_protein * 1.05
+    max_carbs = target_carbs * 1.05
+    max_fat = target_fat * 1.05
+    max_calories = target_calories * 1.05
+
+    print(f"[VALIDATION] Daily totals: {total_protein}g P, {total_carbs}g C, {total_fat}g F, {total_calories} kcal")
+    print(f"[VALIDATION] Targets (max): {max_protein}g P, {max_carbs}g C, {max_fat}g F, {max_calories} kcal")
+
+    scale_factors = []
+
+    if total_protein > max_protein:
+        factor = target_protein / total_protein
+        scale_factors.append(factor)
+        print(f"[VALIDATION] Protein exceeds: {total_protein}g > {max_protein}g, scale factor: {factor:.3f}")
+
+    if total_carbs > max_carbs:
+        factor = target_carbs / total_carbs
+        scale_factors.append(factor)
+        print(f"[VALIDATION] Carbs exceed: {total_carbs}g > {max_carbs}g, scale factor: {factor:.3f}")
+
+    if total_fat > max_fat:
+        factor = target_fat / total_fat
+        scale_factors.append(factor)
+        print(f"[VALIDATION] Fat exceeds: {total_fat}g > {max_fat}g, scale factor: {factor:.3f}")
+
+    if total_calories > max_calories:
+        factor = target_calories / total_calories
+        scale_factors.append(factor)
+        print(f"[VALIDATION] Calories exceed: {total_calories} > {max_calories}, scale factor: {factor:.3f}")
+
+    if scale_factors:
+        scale_factor = min(scale_factors)
+        print(f"[VALIDATION] Applying scale factor: {scale_factor:.3f} to all meals")
+
+        for meal in daily_menu:
+            if "final_macros" in meal:
+                meal["final_macros"]["protein_g"] = round(meal["final_macros"]["protein_g"] * scale_factor, 1)
+                meal["final_macros"]["carbs_g"] = round(meal["final_macros"]["carbs_g"] * scale_factor, 1)
+                meal["final_macros"]["fat_g"] = round(meal["final_macros"]["fat_g"] * scale_factor, 1)
+                meal["final_macros"]["calories"] = round(meal["final_macros"]["calories"] * scale_factor)
+
+            if "portion_multiplier" in meal:
+                meal["portion_multiplier"] = round(meal["portion_multiplier"] * scale_factor, 2)
+    else:
+        print(f"[VALIDATION] All macros within targets, no scaling needed")
+
+    return daily_menu
+
+
+
 MEAT_KEYWORDS = {"chicken","beef","pork","turkey","lamb","bacon","ham","steak"}
 FISH_KEYWORDS = {"salmon","shrimp","fish","tuna","trout","cod","shellfish","prawns"}
 DAIRY_KEYWORDS = {"milk","yogurt","cheese","butter","cream"}
@@ -2176,11 +2290,17 @@ async def next_step(request: Request):
                     response_menu.append(meal_entry)
                     meal_index += 1
 
-                # Apply per-day calorie validation: scale down meals if daily total exceeds target by >5%
+                # Apply per-day macro validation: scale down meals if any daily total exceeds target by >5%
                 days_in_menu = set(m.get("day_number", 1) for m in response_menu)
                 for day_num in days_in_menu:
                     day_meals = [m for m in response_menu if m.get("day_number", 1) == day_num]
-                    validate_daily_calories(day_meals, calorie_target)
+                    validate_daily_macros(
+                        daily_menu=day_meals,
+                        target_protein=macros.get("protein_grams", 0),
+                        target_carbs=macros.get("carbs_grams", 0),
+                        target_fat=macros.get("fat_grams", 0),
+                        target_calories=calorie_target,
+                    )
 
                 # Calcula el precio total
                 total_price = calculate_price(
