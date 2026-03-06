@@ -983,7 +983,8 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
             "modifications": [
                 {
                     "type": "reduce_portion",
-                    "note": f"Reduced portion by {int((1 - scale_factor) * 100)}% to cap protein at 40g"
+                    "display": f"Portion reduced by {int((1 - scale_factor) * 100)}% to meet 40g protein cap",
+                    "note": f"Capped at {MAX_PROTEIN_PER_MEAL}g protein for profitability"
                 }
             ],
             "final_macros": final_macros
