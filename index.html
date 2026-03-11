@@ -1662,6 +1662,9 @@ html.in-iframe .app-card {
         </div>
       </div>`;
 
+      // Daily Summary placeholder (populated after innerHTML is set)
+      html += `<div id="daily-summary-section"></div>`;
+
       html += `<div class="mt-4 flex gap-3 justify-center flex-wrap">
           <button onclick="redoMenu()" class="px-3 py-2 bg-blue-600 text-white rounded">Regenerate Full Menu</button>
           <button onclick="proceedToCheckout()" class="px-4 py-3 bg-green-600 text-white rounded font-bold text-lg">🛒 Place Order</button>
@@ -1694,6 +1697,44 @@ html.in-iframe .app-card {
       const escapeHtml = (str) => String(str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+      // Populate daily summary if present (Plan 4)
+      const summarySection = document.getElementById('daily-summary-section');
+      if (data.daily_summary && summarySection) {
+        const ds = data.daily_summary;
+        const mo = ds.meals_only || {};
+        const sc = ds.snack_contribution || {};
+        const ft = ds.final_total_estimate || {};
+        summarySection.innerHTML = `
+          <div style="background: #f0fdf4; border: 2px solid #22c55e; padding: 20px; margin: 30px 0; border-radius: 10px;">
+            <h3 style="color: #15803d; font-size: 1.4em; margin-bottom: 15px; font-weight: 700;">📊 Complete Day Summary</h3>
+            <div style="margin-bottom: 10px; padding: 12px; background: white; border-radius: 6px; border-left: 3px solid #22c55e;">
+              <strong>🍽️ Meals (3):</strong>
+              ${escapeHtml(String(mo.protein || 0))}g protein &nbsp;·&nbsp;
+              ${escapeHtml(String(mo.carbs || 0))}g carbs &nbsp;·&nbsp;
+              ${escapeHtml(String(mo.fat || 0))}g fat &nbsp;·&nbsp;
+              ${escapeHtml(String(mo.calories || 0))} kcal
+            </div>
+            <div style="margin-bottom: 10px; padding: 12px; background: white; border-radius: 6px; border-left: 3px solid #f59e0b;">
+              <strong>🍫 Recommended snack:</strong>
+              ${escapeHtml(sc.protein || '')} protein &nbsp;·&nbsp;
+              ${escapeHtml(sc.carbs || '')} carbs &nbsp;·&nbsp;
+              ${escapeHtml(sc.calories || '')}
+            </div>
+            <div style="padding: 14px; background: #dcfce7; border-radius: 6px; border-left: 4px solid #16a34a;">
+              <div style="font-weight: 700; color: #15803d; margin-bottom: 6px;">FINAL TOTAL:</div>
+              <div style="color: #166534; line-height: 1.7;">
+                ${escapeHtml(ft.protein || '')} protein &nbsp;·&nbsp;
+                ${escapeHtml(ft.carbs || '')} carbs &nbsp;·&nbsp;
+                ${escapeHtml(ft.fat || '')} fat &nbsp;·&nbsp;
+                ${escapeHtml(ft.calories || '')}
+              </div>
+            </div>
+            <div style="margin-top: 14px; font-size: 1.1em; text-align: center; color: #15803d; font-weight: 600;">
+              ${escapeHtml(ds.message || '')}
+            </div>
+          </div>`;
+      }
 
       if (data.snack_flexible && data.snack_flexible.show_snacks) {
         // Flexible range message (Plan 4 with small protein gap)
