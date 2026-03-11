@@ -990,21 +990,13 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
             "final_macros": final_macros
         }
 
-    # If meal already has 30-40g protein, it's in the target range — don't modify
-    if base_protein >= 30:
-        return {
-            "base_macros": base_macros,
-            "modifications": [],
-            "final_macros": base_macros
-        }
-
     protein_deficit = target_protein_per_meal - base_protein
 
     modifications = []
     final_macros = base_macros.copy()
 
-    # Only adjust if deficit is significant (>8g)
-    if protein_deficit > 8:
+    # Supplement or scale up to reach exactly 40g for any meaningful deficit (>0.5g tolerance)
+    if protein_deficit > 0.5:
         ingredients_lower = [i.lower() for i in meal_data.get("ingredients", [])]
 
         # Meals where protein powder is acceptable
@@ -1084,8 +1076,15 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
             final_macros["fat_g"] += added_fat
             final_macros["calories"] += added_calories
 
-        # For incompatible meals (meats, soups, beans, etc.), accept the protein as-is.
-        # The 30-40g range is a target; 20-30g is acceptable for these meal types.
+        else:
+            # For incompatible meals (meats, soups, beans, etc.) that cannot be supplemented,
+            # scale up all ingredient portions proportionally to reach exactly 40g protein.
+            if base_protein > 0:
+                scale_factor = MAX_PROTEIN_PER_MEAL / base_protein
+                final_macros["protein_g"] = MAX_PROTEIN_PER_MEAL
+                final_macros["carbs_g"] = round(base_macros["carbs_g"] * scale_factor, 1)
+                final_macros["fat_g"] = round(base_macros["fat_g"] * scale_factor, 1)
+                final_macros["calories"] = round(base_macros["calories"] * scale_factor)
 
     # Round final macros
     final_macros["protein_g"] = round(final_macros["protein_g"], 1)
@@ -1153,14 +1152,30 @@ def validate_daily_macros(
     max_carbs = target_carbs * 1.05
     max_fat = target_fat * 1.05
     max_calories = target_calories * 1.05
+    min_calories = target_calories * 0.95
 
     total_protein = sum(m.get("final_macros", {}).get("protein_g", 0) for m in daily_menu)
     print(f"[VALIDATION] Daily totals: {total_protein}g P (not scaled), {total_carbs}g C, {total_fat}g F, {total_calories} kcal")
-    print(f"[VALIDATION] Targets (max): {target_carbs * 1.05}g C, {max_fat}g F, {max_calories} kcal")
+    print(f"[VALIDATION] Targets: {target_carbs}g C, {max_fat}g F, {min_calories}-{max_calories} kcal")
+
+    # Scale UP if total calories are too low (< 95% of meal calorie target).
+    # Only carbs/fat/calories are scaled; protein is already enforced at ~40g per meal.
+    if total_calories < min_calories:
+        scale_factor = target_calories / total_calories
+        print(f"[VALIDATION] Calories too low ({total_calories} < {min_calories}), scaling UP by {scale_factor:.3f}")
+        for meal in daily_menu:
+            if "final_macros" in meal:
+                meal["final_macros"]["carbs_g"] = round(meal["final_macros"]["carbs_g"] * scale_factor, 1)
+                meal["final_macros"]["fat_g"] = round(meal["final_macros"]["fat_g"] * scale_factor, 1)
+                meal["final_macros"]["calories"] = round(meal["final_macros"]["calories"] * scale_factor)
+                # protein_g intentionally left unchanged
+            if "portion_multiplier" in meal:
+                meal["portion_multiplier"] = round(meal["portion_multiplier"] * scale_factor, 2)
+        return daily_menu
 
     scale_factors = []
 
-    # Only check carbs, fat, calories (NOT protein — already capped at 30-40g per meal)
+    # Only check carbs, fat, calories (NOT protein — already capped at ~40g per meal)
     if total_carbs > max_carbs:
         factor = target_carbs / total_carbs
         scale_factors.append(factor)
@@ -1971,7 +1986,7 @@ def generate_flexible_snack_message(protein_gap: int, carbs_gap: int, fat_gap: i
     protein_max = protein_gap + _PROTEIN_RANGE_DELTA
 
     carbs_min = max(_MIN_CARBS_G, carbs_gap - _CARBS_RANGE_DELTA)
-    carbs_max = carbs_gap + _CARBS_RANGE_DELTA
+    carbs_max = max(_MIN_CARBS_G + _CARBS_RANGE_DELTA, carbs_gap + _CARBS_RANGE_DELTA)
 
     cal_min = max(_MIN_CAL, calories_gap - _CAL_RANGE_DELTA)
     cal_max = calories_gap + _CAL_RANGE_DELTA
@@ -2474,8 +2489,9 @@ async def next_step(request: Request):
                     response_menu.append(meal_entry)
                     meal_index += 1
 
-                # Apply per-day macro validation: scale down carbs/fat/calories if any daily total
-                # exceeds target by >5%. Protein is NOT scaled (already capped at 30-40g per meal).
+                # Apply per-day macro validation: scale down or up carbs/fat/calories so each
+                # day's total is within 5% of the meal calorie target.
+                # Protein is NOT scaled (already enforced at ~40g per meal).
                 days_in_menu = set(m.get("day_number", 1) for m in response_menu)
                 for day_num in days_in_menu:
                     day_meals = [m for m in response_menu if m.get("day_number", 1) == day_num]
@@ -2486,6 +2502,13 @@ async def next_step(request: Request):
                         target_fat=macros.get("fat_grams", 0),
                         target_calories=calorie_dist["total_meal_calories"],
                     )
+
+                # Compute Day 1 meal totals from final_macros (post-adjustment values)
+                day1_meals = [m for m in response_menu if m.get("day_number", 1) == 1]
+                day1_meal_protein = round(sum(m["final_macros"]["protein_g"] for m in day1_meals), 1)
+                day1_meal_carbs = round(sum(m["final_macros"]["carbs_g"] for m in day1_meals), 1)
+                day1_meal_fat = round(sum(m["final_macros"]["fat_g"] for m in day1_meals), 1)
+                day1_meal_calories = round(sum(m["final_macros"]["calories"] for m in day1_meals))
 
                 # Calcula el precio total
                 total_price = calculate_price(
@@ -2572,6 +2595,26 @@ async def next_step(request: Request):
 
                 # Respuesta basada en el plan seleccionado
                 if state.plan == 4:
+                    # Build daily summary for Plan 4
+                    daily_summary = {
+                        "meals_only": {
+                            "protein_g": day1_meal_protein,
+                            "carbs_g": day1_meal_carbs,
+                            "fat_g": day1_meal_fat,
+                            "calories": day1_meal_calories,
+                        },
+                        "snack_contribution": {
+                            "protein": f"{protein_deficit_for_snacks}g",
+                            "calories": f"~{calorie_dist['snack_calories_reserved']} kcal",
+                        },
+                        "final_total_range": {
+                            "protein": f"~{round(day1_meal_protein + protein_deficit_for_snacks)}g",
+                            "carbs": snack_flexible_info.get("carbs_range", f"~{day1_meal_carbs}g+") if snack_flexible_info else f"~{day1_meal_carbs}g+",
+                            "fat": f"~{day1_meal_fat}g+",
+                            "calories": f"~{day1_meal_calories + calorie_dist['snack_calories_reserved']} kcal",
+                        },
+                        "message": "✨ Perfect balance for your body recomposition goals!",
+                    }
                     return {
                         "menu": response_menu,
                         "price": total_price,
@@ -2600,6 +2643,7 @@ async def next_step(request: Request):
                         "snack_flexible": snack_flexible_info,
                         "snack_message": snack_message,
                         "plan_validation": plan_validation,
+                        "daily_summary": daily_summary,
                         "current_step": state.current_step,
                     }
                 else:
