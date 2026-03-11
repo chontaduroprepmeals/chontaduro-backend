@@ -1875,7 +1875,8 @@ def validate_plan_for_protein_goal(num_meals: int, daily_protein_target: int) ->
                 "snack_burden": "medium",
             }
         else:
-            plan4_gap = max(0, daily_protein_target - (3 * MAX_PROTEIN_PER_MEAL))
+            plan4_protein_from_meals = 3 * MAX_PROTEIN_PER_MEAL
+            plan4_gap = max(0, daily_protein_target - plan4_protein_from_meals)
             return {
                 "valid": False,
                 "protein_from_meals": protein_from_meals,
@@ -1883,11 +1884,11 @@ def validate_plan_for_protein_goal(num_meals: int, daily_protein_target: int) ->
                 "message": f"⚠️ With 2 meals/day, you'd need {protein_gap}g protein from snacks (difficult to manage).",
                 "recommendation": "upgrade_to_plan_4",
                 "upgrade_message": (
-                    f"💡 Plan 4 (3 meals/day) provides {3 * MAX_PROTEIN_PER_MEAL}g protein from meals. "
+                    f"💡 Plan 4 (3 meals/day) provides {plan4_protein_from_meals}g protein from meals. "
                     f"You'd only need ~{plan4_gap}g from snacks!"
                 ),
                 "upgrade_benefits": [
-                    f"{3 * MAX_PROTEIN_PER_MEAL}g protein from meals (vs {protein_from_meals}g)",
+                    f"{plan4_protein_from_meals}g protein from meals (vs {protein_from_meals}g)",
                     f"Only ~{plan4_gap}g from snacks (vs {protein_gap}g)",
                     "Easier to follow",
                     "Better compliance",
@@ -1925,9 +1926,16 @@ def calculate_meal_calorie_distribution(daily_calories: int, num_meals: int, pro
     for snacks so meals don't consume the entire daily budget. Other plans use
     all calories in meals.
     """
+    # ~10 kcal reserved per gram of protein gap (snack needs ~10 kcal/g of protein)
+    _SNACK_KCAL_PER_GRAM_PROTEIN = 10
+    _MIN_SNACK_RESERVE_KCAL = 100
+    _MAX_SNACK_RESERVE_KCAL = 200
+
     if num_meals == 3 and protein_gap <= 25:
-        # Reserve snack calories proportional to the protein gap (~10 kcal per gram)
-        snack_calorie_reserve = min(200, max(100, protein_gap * 10))
+        snack_calorie_reserve = min(
+            _MAX_SNACK_RESERVE_KCAL,
+            max(_MIN_SNACK_RESERVE_KCAL, protein_gap * _SNACK_KCAL_PER_GRAM_PROTEIN),
+        )
         meal_calories_total = daily_calories - snack_calorie_reserve
         calories_per_meal = round(meal_calories_total / num_meals)
         return {
@@ -1951,14 +1959,22 @@ def generate_flexible_snack_message(protein_gap: int, carbs_gap: int, fat_gap: i
     Generates flexible snack guidance with nutrient ranges instead of exact values.
     Only used for Plan 4 when the protein gap is small (<=25g).
     """
-    protein_min = max(10, protein_gap - 5)
-    protein_max = protein_gap + 5
+    # Range half-widths: allow ±5g protein, ±10g carbs, ±30 kcal flexibility
+    _PROTEIN_RANGE_DELTA = 5
+    _CARBS_RANGE_DELTA = 10
+    _CAL_RANGE_DELTA = 30
+    _MIN_PROTEIN_G = 10
+    _MIN_CARBS_G = 10
+    _MIN_CAL = 100
 
-    carbs_min = max(10, carbs_gap - 10)
-    carbs_max = carbs_gap + 10
+    protein_min = max(_MIN_PROTEIN_G, protein_gap - _PROTEIN_RANGE_DELTA)
+    protein_max = protein_gap + _PROTEIN_RANGE_DELTA
 
-    cal_min = max(100, calories_gap - 30)
-    cal_max = calories_gap + 30
+    carbs_min = max(_MIN_CARBS_G, carbs_gap - _CARBS_RANGE_DELTA)
+    carbs_max = carbs_gap + _CARBS_RANGE_DELTA
+
+    cal_min = max(_MIN_CAL, calories_gap - _CAL_RANGE_DELTA)
+    cal_max = calories_gap + _CAL_RANGE_DELTA
 
     message = (
         f"Complete your day with a snack containing:\n"
@@ -2357,7 +2373,7 @@ async def next_step(request: Request):
                 print(f"  Smart protein distribution: {protein_distribution_pre} (target: {daily_protein_target}g)")
                 print(f"  Calorie distribution: {calorie_dist['message']}")
 
-                # Genera el menú base usando smart meal selection
+                # Generate the base menu using smart meal selection
                 base_menu_objs = generate_menu(state, protein_per_meal=protein_per_meal_pre, calories_per_meal=calories_per_meal_pre, variety_window=3)
 
                 # Ajusta proteína y calorías dinámicamente por comida
