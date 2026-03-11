@@ -1191,6 +1191,12 @@ html.in-iframe .app-card {
       const daysOptions = [1, 2, 3, 4, 5, 6, 7];
       
       let html = `<form id="f">
+        <div class="mb-4">
+          <button type="button" onclick="step({}, 'back')" 
+                  class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">
+            ← Back
+          </button>
+        </div>
         <div class="space-y-6">
           <div class="text-center mb-6">
             <h2 class="text-2xl font-bold text-gray-800 mb-2">📅 How many days of meal prep?</h2>
