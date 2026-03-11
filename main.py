@@ -1172,8 +1172,13 @@ def validate_daily_macros(
 ) -> List[Dict]:
     """
     Validates daily totals for carbs, fat, and calories only.
-    Applies a 5% tolerance; if carbs, fat, or calories exceed their target by more than 5%,
-    all meals are scaled proportionally using the most restrictive (smallest) scale factor.
+    Uses SINGLE scaling operation to prevent calorie oscillation:
+    1. Collects ALL required scale factors BEFORE applying any
+    2. Chooses the MOST CONSERVATIVE factor (closest to 1.0)
+    3. Applies that factor ONCE and ONLY ONCE — never re-validates or re-scales
+
+    Uses wider tolerances (88%–108%) to reduce unnecessary scaling that can trigger
+    oscillation when macros are only slightly outside target.
 
     CRITICAL: Does NOT scale protein. Protein is already enforced at 30-40g per meal by
     adjust_meal_for_protein_target(). Scaling protein here would cause a double reduction.
@@ -1185,53 +1190,55 @@ def validate_daily_macros(
     if total_calories <= 0:
         return daily_menu
 
-    # Use 10% tolerance for carbs/fat to avoid over-aggressive scaling that can
-    # collapse daily calories when macros are only slightly over target.
+    # Wider calorie tolerances (12% under / 8% over) to reduce over-aggressive scaling that
+    # can collapse daily calories and trigger a corrective scale-up on the next pass.
+    # Carbs and fat use a separate 10% over-tolerance.
     max_carbs = target_carbs * 1.10
     max_fat = target_fat * 1.10
-    max_calories = target_calories * 1.05
-    min_calories = target_calories * 0.95
+    min_calories = target_calories * 0.88
+    max_calories = target_calories * 1.08
 
     total_protein = sum(m.get("final_macros", {}).get("protein_g", 0) for m in daily_menu)
     print(f"[VALIDATION] Daily totals: {total_protein}g P (not scaled), {total_carbs}g C, {total_fat}g F, {total_calories} kcal")
     print(f"[VALIDATION] Targets: {target_carbs}g C (max {max_carbs:.1f}g), {target_fat}g F (max {max_fat:.1f}g), {min_calories:.0f}-{max_calories:.0f} kcal")
 
-    # Scale UP if total calories are too low (< 95% of meal calorie target).
-    # Only carbs/fat/calories are scaled; protein is already enforced at ~40g per meal.
-    if total_calories < min_calories:
-        scale_factor = target_calories / total_calories
-        print(f"[VALIDATION] Calories too low ({total_calories} < {min_calories}), scaling UP by {scale_factor:.3f}")
-        for meal in daily_menu:
-            if "final_macros" in meal:
-                meal["final_macros"]["carbs_g"] = round(meal["final_macros"]["carbs_g"] * scale_factor, 1)
-                meal["final_macros"]["fat_g"] = round(meal["final_macros"]["fat_g"] * scale_factor, 1)
-                meal["final_macros"]["calories"] = round(meal["final_macros"]["calories"] * scale_factor)
-                # protein_g intentionally left unchanged
-            if "portion_multiplier" in meal:
-                meal["portion_multiplier"] = round(meal["portion_multiplier"] * scale_factor, 2)
-        return daily_menu
-
+    # STEP 1: Collect ALL potential scale factors WITHOUT applying any.
+    # Calorie and fat factors are added when outside tolerance; carbs are informational only.
     scale_factors = []
+    reasons = []
 
-    # Only check carbs, fat, calories (NOT protein — already capped at ~40g per meal)
-    if total_carbs > max_carbs:
-        factor = target_carbs / total_carbs
+    # Check calories (most important): collect scale-up or scale-down factor as needed.
+    if total_calories < min_calories:
+        factor = target_calories / total_calories
         scale_factors.append(factor)
-        print(f"[VALIDATION] Carbs exceed: {total_carbs}g > {max_carbs}g, scale factor: {factor:.3f}")
+        reasons.append(f"calories LOW ({total_calories} < {min_calories:.0f})")
+        print(f"[VALIDATION] Would need factor {factor:.3f} to fix low calories")
+    elif total_calories > max_calories:
+        factor = target_calories / total_calories
+        scale_factors.append(factor)
+        reasons.append(f"calories HIGH ({total_calories} > {max_calories:.0f})")
+        print(f"[VALIDATION] Would need factor {factor:.3f} to fix high calories")
 
+    # Check fat (10% tolerance).
     if total_fat > max_fat:
         factor = target_fat / total_fat
         scale_factors.append(factor)
-        print(f"[VALIDATION] Fat exceeds: {total_fat}g > {max_fat}g, scale factor: {factor:.3f}")
+        reasons.append(f"fat HIGH ({total_fat:.1f}g > {max_fat:.1f}g)")
+        print(f"[VALIDATION] Would need factor {factor:.3f} to fix high fat")
 
-    if total_calories > max_calories:
-        factor = target_calories / total_calories
-        scale_factors.append(factor)
-        print(f"[VALIDATION] Calories exceed: {total_calories} > {max_calories}, scale factor: {factor:.3f}")
+    # Carbs: informational only — usually self-correct when calories/fat are fixed.
+    if total_carbs > max_carbs:
+        print(f"[VALIDATION] INFO: Carbs high ({total_carbs:.1f}g > {max_carbs:.1f}g), will likely fix with other adjustments")
 
+    # STEP 2: Choose MOST CONSERVATIVE factor (closest to 1.0) and apply ONCE.
     if scale_factors:
-        scale_factor = min(scale_factors)
-        print(f"[VALIDATION] Applying scale factor: {scale_factor:.3f} to carbs/fat/calories (protein unchanged)")
+        scale_factor = min(scale_factors, key=lambda x: abs(1.0 - x))
+        chosen_reason = reasons[scale_factors.index(scale_factor)]
+        other_factors = [f for f in scale_factors if f != scale_factor]
+
+        print(f"[VALIDATION] Applying SINGLE scale factor: {scale_factor:.3f} ({chosen_reason})")
+        if other_factors:
+            print(f"[VALIDATION] Other factors considered but NOT applied: {[f'{f:.3f}' for f in other_factors]}")
 
         for meal in daily_menu:
             if "final_macros" in meal:
@@ -1243,6 +1250,19 @@ def validate_daily_macros(
 
             if "portion_multiplier" in meal:
                 meal["portion_multiplier"] = round(meal["portion_multiplier"] * scale_factor, 2)
+
+        # STEP 3: Verify results (logging only — DO NOT re-scale to prevent oscillation).
+        new_total_calories = sum(m["final_macros"]["calories"] for m in daily_menu)
+        new_total_fat = sum(m["final_macros"]["fat_g"] for m in daily_menu)
+        new_total_carbs = sum(m["final_macros"]["carbs_g"] for m in daily_menu)
+        print(f"[VALIDATION] Result after scaling: {new_total_calories} kcal, {new_total_carbs:.1f}g C, {new_total_fat:.1f}g F")
+
+        if new_total_calories < min_calories:
+            print(f"[VALIDATION] WARNING: Still {min_calories - new_total_calories:.0f} kcal below minimum, but NOT re-scaling to prevent oscillation")
+        elif new_total_calories > max_calories:
+            print(f"[VALIDATION] WARNING: Still {new_total_calories - max_calories:.0f} kcal above maximum, but NOT re-scaling to prevent oscillation")
+        else:
+            print(f"[VALIDATION] ✓ Result within acceptable calorie range")
     else:
         print(f"[VALIDATION] All macros within targets, no scaling needed")
 

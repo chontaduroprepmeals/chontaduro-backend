@@ -140,8 +140,17 @@ class TestValidateDailyMacros:
             assert meal["final_macros"]["protein_g"] == original_protein[i]
 
     def test_fat_exceeds_target_triggers_scaling(self):
-        """When daily fat exceeds target+5%, all meals should be scaled down."""
-        # 3 meals × 30g fat = 90g total fat; target = 55g → exceeds 55*1.05=57.75g
+        """When daily fat exceeds 110% of target, scaling is triggered.
+
+        With the single-pass conservative approach, the MOST CONSERVATIVE factor
+        (closest to 1.0) is applied once.  When calories are ALSO over target, the
+        calorie factor is more conservative than the fat factor, so it is chosen.
+        Calories are brought within range; fat is reduced but may not fully reach the
+        fat-specific limit in a single pass — that is intentional to prevent oscillation.
+        """
+        # 3 meals × 30g fat = 90g total fat; target = 55g → total 90g exceeds max allowed 60.5g (110%)
+        # 3 meals × 680 kcal = 2040 total; target = 1820 → also exceeds max allowed 1965.6 kcal (108%)
+        # Conservative factor: calorie factor 0.892 vs fat factor 0.611 → 0.892 applied
         menu = [
             _meal_entry_with_macros(protein=40, carbs=60, fat=30, calories=680),
             _meal_entry_with_macros(protein=40, carbs=60, fat=30, calories=680),
@@ -149,7 +158,11 @@ class TestValidateDailyMacros:
         ]
         result = validate_daily_macros(menu, target_protein=133, target_carbs=198, target_fat=55, target_calories=1820)
         total_fat = sum(m["final_macros"]["fat_g"] for m in result)
-        assert total_fat <= 55 * 1.05 + 0.5  # allow tiny rounding error
+        total_calories = sum(m["final_macros"]["calories"] for m in result)
+        # Fat must be reduced from the original 90g (some scaling occurred)
+        assert total_fat < 90, f"Expected fat to be reduced from 90g, got {total_fat:.1f}g"
+        # Calories must be within the acceptable range after the single-pass scaling
+        assert total_calories <= 1820 * 1.08 + 5, f"Expected calories ≤ {1820 * 1.08 + 5:.0f}, got {total_calories}"
 
     def test_protein_not_scaled_even_when_exceeding_target(self):
         """Protein must NOT be scaled down even when it exceeds target.
