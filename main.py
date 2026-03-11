@@ -983,8 +983,8 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
             "modifications": [
                 {
                     "type": "reduce_portion",
-                    "display": f"Portion reduced by {int((1 - scale_factor) * 100)}% to meet 40g protein cap",
-                    "note": f"Capped at {MAX_PROTEIN_PER_MEAL}g protein for profitability"
+                    "internal": True,
+                    "note": f"Internal adjustment: capped at {MAX_PROTEIN_PER_MEAL}g protein"
                 }
             ],
             "final_macros": final_macros
@@ -1136,11 +1136,13 @@ def validate_daily_macros(
     target_calories: int,
 ) -> List[Dict]:
     """
-    Ensures daily totals don't exceed targets for protein, carbs, fat, AND calories.
-    Applies a 5% tolerance; if any macro exceeds its target by more than 5%, all
-    meals are scaled proportionally using the most restrictive (smallest) scale factor.
+    Validates daily totals for carbs, fat, and calories only.
+    Applies a 5% tolerance; if carbs, fat, or calories exceed their target by more than 5%,
+    all meals are scaled proportionally using the most restrictive (smallest) scale factor.
+
+    CRITICAL: Does NOT scale protein. Protein is already enforced at 30-40g per meal by
+    adjust_meal_for_protein_target(). Scaling protein here would cause a double reduction.
     """
-    total_protein = sum(m.get("final_macros", {}).get("protein_g", 0) for m in daily_menu)
     total_carbs = sum(m.get("final_macros", {}).get("carbs_g", 0) for m in daily_menu)
     total_fat = sum(m.get("final_macros", {}).get("fat_g", 0) for m in daily_menu)
     total_calories = sum(m.get("final_macros", {}).get("calories", 0) for m in daily_menu)
@@ -1148,21 +1150,17 @@ def validate_daily_macros(
     if total_calories <= 0:
         return daily_menu
 
-    max_protein = target_protein * 1.05
     max_carbs = target_carbs * 1.05
     max_fat = target_fat * 1.05
     max_calories = target_calories * 1.05
 
-    print(f"[VALIDATION] Daily totals: {total_protein}g P, {total_carbs}g C, {total_fat}g F, {total_calories} kcal")
-    print(f"[VALIDATION] Targets (max): {max_protein}g P, {max_carbs}g C, {max_fat}g F, {max_calories} kcal")
+    total_protein = sum(m.get("final_macros", {}).get("protein_g", 0) for m in daily_menu)
+    print(f"[VALIDATION] Daily totals: {total_protein}g P (not scaled), {total_carbs}g C, {total_fat}g F, {total_calories} kcal")
+    print(f"[VALIDATION] Targets (max): {target_carbs * 1.05}g C, {max_fat}g F, {max_calories} kcal")
 
     scale_factors = []
 
-    if total_protein > max_protein:
-        factor = target_protein / total_protein
-        scale_factors.append(factor)
-        print(f"[VALIDATION] Protein exceeds: {total_protein}g > {max_protein}g, scale factor: {factor:.3f}")
-
+    # Only check carbs, fat, calories (NOT protein — already capped at 30-40g per meal)
     if total_carbs > max_carbs:
         factor = target_carbs / total_carbs
         scale_factors.append(factor)
@@ -1180,14 +1178,15 @@ def validate_daily_macros(
 
     if scale_factors:
         scale_factor = min(scale_factors)
-        print(f"[VALIDATION] Applying scale factor: {scale_factor:.3f} to all meals")
+        print(f"[VALIDATION] Applying scale factor: {scale_factor:.3f} to carbs/fat/calories (protein unchanged)")
 
         for meal in daily_menu:
             if "final_macros" in meal:
-                meal["final_macros"]["protein_g"] = round(meal["final_macros"]["protein_g"] * scale_factor, 1)
+                # Scale carbs, fat, calories — DO NOT scale protein
                 meal["final_macros"]["carbs_g"] = round(meal["final_macros"]["carbs_g"] * scale_factor, 1)
                 meal["final_macros"]["fat_g"] = round(meal["final_macros"]["fat_g"] * scale_factor, 1)
                 meal["final_macros"]["calories"] = round(meal["final_macros"]["calories"] * scale_factor)
+                # protein_g intentionally left unchanged
 
             if "portion_multiplier" in meal:
                 meal["portion_multiplier"] = round(meal["portion_multiplier"] * scale_factor, 2)
@@ -1832,6 +1831,156 @@ def assess_menu_possibility(state: SessionState) -> Dict[str, Any]:
         return {"ok": False, "reason":"not_enough_breakfasts", "message":"Not enough Breakfast options.", "details": details}
     return {"ok": True, "details": details}
 
+
+def validate_plan_for_protein_goal(num_meals: int, daily_protein_target: int) -> Dict[str, Any]:
+    """
+    Validates if selected plan can meet protein goal with a reasonable snack burden.
+
+    Returns a validation result with messages for the frontend. Plans that require
+    too much protein from snacks are flagged so users can be guided to upgrade.
+    """
+    MAX_PROTEIN_PER_MEAL = 40
+
+    protein_from_meals = num_meals * MAX_PROTEIN_PER_MEAL
+    protein_gap = max(0, daily_protein_target - protein_from_meals)
+
+    # Plan 4 (3 meals): Always optimal for high protein
+    if num_meals == 3:
+        if protein_gap <= 20:
+            message = (
+                f"Perfect! Our 3 meals provide {protein_from_meals}g protein. "
+                f"You only need ~{protein_gap}g from a simple snack."
+            )
+        else:
+            message = (
+                f"Our 3 meals provide {protein_from_meals}g protein (maximum we can offer). "
+                f"You'll need ~{protein_gap}g from snacks to reach your {daily_protein_target}g goal."
+            )
+        return {
+            "valid": True,
+            "protein_from_meals": protein_from_meals,
+            "protein_gap": protein_gap,
+            "message": message,
+            "snack_burden": "low",
+        }
+
+    # Plan 2 (2 meals): Validate gap
+    elif num_meals == 2:
+        if protein_gap <= 30:
+            return {
+                "valid": True,
+                "protein_from_meals": protein_from_meals,
+                "protein_gap": protein_gap,
+                "message": f"Our 2 meals provide {protein_from_meals}g protein. You'll need ~{protein_gap}g from snacks.",
+                "snack_burden": "medium",
+            }
+        else:
+            plan4_gap = max(0, daily_protein_target - (3 * MAX_PROTEIN_PER_MEAL))
+            return {
+                "valid": False,
+                "protein_from_meals": protein_from_meals,
+                "protein_gap": protein_gap,
+                "message": f"⚠️ With 2 meals/day, you'd need {protein_gap}g protein from snacks (difficult to manage).",
+                "recommendation": "upgrade_to_plan_4",
+                "upgrade_message": (
+                    f"💡 Plan 4 (3 meals/day) provides {3 * MAX_PROTEIN_PER_MEAL}g protein from meals. "
+                    f"You'd only need ~{plan4_gap}g from snacks!"
+                ),
+                "upgrade_benefits": [
+                    f"{3 * MAX_PROTEIN_PER_MEAL}g protein from meals (vs {protein_from_meals}g)",
+                    f"Only ~{plan4_gap}g from snacks (vs {protein_gap}g)",
+                    "Easier to follow",
+                    "Better compliance",
+                ],
+            }
+
+    # Plan 1 (1 meal): Only valid for low protein targets
+    elif num_meals == 1:
+        if daily_protein_target <= 80:
+            return {
+                "valid": True,
+                "protein_from_meals": protein_from_meals,
+                "protein_gap": protein_gap,
+                "message": f"Our meal provides {protein_from_meals}g protein. You'll need ~{protein_gap}g from snacks.",
+                "snack_burden": "high",
+            }
+        else:
+            return {
+                "valid": False,
+                "protein_from_meals": protein_from_meals,
+                "protein_gap": protein_gap,
+                "message": f"❌ Your protein goal ({daily_protein_target}g) requires at least 2-3 meals/day.",
+                "recommendation": "upgrade_required",
+                "minimum_plan": 4 if daily_protein_target > 110 else 2,
+            }
+
+    return {"valid": False, "message": "Invalid plan selection"}
+
+
+def calculate_meal_calorie_distribution(daily_calories: int, num_meals: int, protein_gap: int) -> Dict[str, Any]:
+    """
+    Calculates how to distribute calories between meals and snacks.
+
+    For Plan 4 (3 meals) with a small protein gap (<=25g), reserves 100-200 kcal
+    for snacks so meals don't consume the entire daily budget. Other plans use
+    all calories in meals.
+    """
+    if num_meals == 3 and protein_gap <= 25:
+        # Reserve snack calories proportional to the protein gap (~10 kcal per gram)
+        snack_calorie_reserve = min(200, max(100, protein_gap * 10))
+        meal_calories_total = daily_calories - snack_calorie_reserve
+        calories_per_meal = round(meal_calories_total / num_meals)
+        return {
+            "calories_per_meal": calories_per_meal,
+            "total_meal_calories": meal_calories_total,
+            "snack_calories_reserved": snack_calorie_reserve,
+            "message": f"Meals designed for {meal_calories_total} kcal, leaving {snack_calorie_reserve} kcal for snacks",
+        }
+    else:
+        calories_per_meal = round(daily_calories / num_meals)
+        return {
+            "calories_per_meal": calories_per_meal,
+            "total_meal_calories": daily_calories,
+            "snack_calories_reserved": 0,
+            "message": f"All {daily_calories} kcal distributed across {num_meals} meals",
+        }
+
+
+def generate_flexible_snack_message(protein_gap: int, carbs_gap: int, fat_gap: int, calories_gap: int) -> Dict[str, Any]:
+    """
+    Generates flexible snack guidance with nutrient ranges instead of exact values.
+    Only used for Plan 4 when the protein gap is small (<=25g).
+    """
+    protein_min = max(10, protein_gap - 5)
+    protein_max = protein_gap + 5
+
+    carbs_min = max(10, carbs_gap - 10)
+    carbs_max = carbs_gap + 10
+
+    cal_min = max(100, calories_gap - 30)
+    cal_max = calories_gap + 30
+
+    message = (
+        f"Complete your day with a snack containing:\n"
+        f"• {protein_min}-{protein_max}g protein\n"
+        f"• {carbs_min}-{carbs_max}g carbs\n"
+        f"• {cal_min}-{cal_max} calories\n\n"
+        f"💡 Ideas:\n"
+        f"• Greek yogurt (170g) - ~17g protein, 100 kcal\n"
+        f"• Cottage cheese (100g) + fruit - ~11g protein, 140 kcal\n"
+        f"• Hard boiled eggs (2) + berries - ~12g protein, 180 kcal\n"
+        f"• Protein shake - ~20g protein, 120 kcal\n"
+        f"• Almonds (28g) + apple - ~6g protein, 200 kcal"
+    )
+
+    return {
+        "show_snacks": True,
+        "message": message,
+        "protein_range": f"{protein_min}-{protein_max}g",
+        "carbs_range": f"{carbs_min}-{carbs_max}g",
+        "calories_range": f"{cal_min}-{cal_max} kcal",
+    }
+
 def process_meal_data(meal: Meal, protein: int, calories: int, fat_ratio: float = 0.25, carb_ratio: float = 0.50) -> Meal:
     """
     Procesar dinámicamente las macros (calorías, proteínas, grasas y carbohidratos) para cada comida.
@@ -2186,9 +2335,27 @@ async def next_step(request: Request):
                 meals_per_day_pre = num_main_pre + num_break_pre
                 protein_distribution_pre = distribute_protein_across_meals(daily_protein_target, meals_per_day_pre)
                 protein_per_meal_pre = protein_distribution_pre[0]
-                calories_per_meal_pre = int((calorie_target or 2000) / max(1, meals_per_day_pre))
+
+                # Validate plan against protein goal and calculate calorie distribution
+                plan_validation = validate_plan_for_protein_goal(meals_per_day_pre, daily_protein_target)
+                if not plan_validation["valid"]:
+                    return {
+                        "question": plan_validation["message"],
+                        "fields": [],
+                        "current_step": state.current_step,
+                        "issue": "plan_protein_mismatch",
+                        "plan_validation": plan_validation,
+                    }
+
+                calorie_dist = calculate_meal_calorie_distribution(
+                    daily_calories=int(calorie_target or 2000),
+                    num_meals=meals_per_day_pre,
+                    protein_gap=plan_validation["protein_gap"],
+                )
+                calories_per_meal_pre = calorie_dist["calories_per_meal"]
 
                 print(f"  Smart protein distribution: {protein_distribution_pre} (target: {daily_protein_target}g)")
+                print(f"  Calorie distribution: {calorie_dist['message']}")
 
                 # Genera el menú base usando smart meal selection
                 base_menu_objs = generate_menu(state, protein_per_meal=protein_per_meal_pre, calories_per_meal=calories_per_meal_pre, variety_window=3)
@@ -2291,7 +2458,8 @@ async def next_step(request: Request):
                     response_menu.append(meal_entry)
                     meal_index += 1
 
-                # Apply per-day macro validation: scale down meals if any daily total exceeds target by >5%
+                # Apply per-day macro validation: scale down carbs/fat/calories if any daily total
+                # exceeds target by >5%. Protein is NOT scaled (already capped at 30-40g per meal).
                 days_in_menu = set(m.get("day_number", 1) for m in response_menu)
                 for day_num in days_in_menu:
                     day_meals = [m for m in response_menu if m.get("day_number", 1) == day_num]
@@ -2300,7 +2468,7 @@ async def next_step(request: Request):
                         target_protein=macros.get("protein_grams", 0),
                         target_carbs=macros.get("carbs_grams", 0),
                         target_fat=macros.get("fat_grams", 0),
-                        target_calories=calorie_target,
+                        target_calories=calorie_dist["total_meal_calories"],
                     )
 
                 # Calcula el precio total
@@ -2349,13 +2517,24 @@ async def next_step(request: Request):
                 # Use the pre-computed distribution (not the achieved total) so the deficit
                 # correctly reflects what the meal plan was designed to provide.
                 protein_from_meals = achieved_protein
-                protein_deficit_for_snacks = max(0, daily_protein_target - protein_from_meals)
+                protein_deficit_for_snacks = plan_validation["protein_gap"]
 
-                # Get snack recommendations if there's a significant deficit.
-                # For small protein gaps (10-20g), prefer SMALL snacks (100-200 kcal).
-                # For larger deficits, use the full snack database.
+                # Build snack info: flexible range message for Plan 4 with small gap,
+                # individual recommendations for other cases.
+                snack_flexible_info = None
                 snack_recommendations = []
-                if protein_deficit_for_snacks > 0 and protein_deficit_for_snacks <= 25:
+                if state.plan == 4 and protein_deficit_for_snacks <= 25:
+                    # Plan 4 with small protein gap: show flexible snack guidance (ranges)
+                    carbs_deficit = max(0, macros.get("carbs_grams", 0) - achieved_carbs)
+                    fat_deficit = max(0, macros.get("fat_grams", 0) - achieved_fat)
+                    snack_flexible_info = generate_flexible_snack_message(
+                        protein_gap=protein_deficit_for_snacks,
+                        carbs_gap=carbs_deficit,
+                        fat_gap=fat_deficit,
+                        calories_gap=calorie_dist["snack_calories_reserved"],
+                    )
+                    print(f"\n[DEBUG] Plan 4 flexible snack guidance: {protein_deficit_for_snacks}g protein gap")
+                elif protein_deficit_for_snacks > 0 and protein_deficit_for_snacks <= 25:
                     # Small deficit — recommend compact, low-calorie snacks
                     snack_recommendations = recommend_small_snacks_for_deficit(
                         protein_deficit_for_snacks, num_recommendations=3
@@ -2402,7 +2581,9 @@ async def next_step(request: Request):
                             "deficit": deficit,
                         },
                         "snack_recommendations": snack_recommendations,
+                        "snack_flexible": snack_flexible_info,
                         "snack_message": snack_message,
+                        "plan_validation": plan_validation,
                         "current_step": state.current_step,
                     }
                 else:
@@ -2424,7 +2605,9 @@ async def next_step(request: Request):
                             "deficit": deficit,
                         },
                         "snack_recommendations": snack_recommendations,
+                        "snack_flexible": snack_flexible_info,
                         "snack_message": snack_message,
+                        "plan_validation": plan_validation,
                         "current_step": state.current_step,
                     }
             except Exception as e:
