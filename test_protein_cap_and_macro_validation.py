@@ -61,15 +61,15 @@ class TestAdjustMealForProteinTarget:
             types = [m["type"] for m in result["modifications"]]
             assert "reduce_portion" in types
 
-    def test_reduce_portion_modification_has_display_field(self):
-        """The 'reduce_portion' modification must include a 'display' field (not undefined)."""
+    def test_reduce_portion_modification_is_internal(self):
+        """The 'reduce_portion' modification must be internal (no 'display' field shown to customer)."""
         meal = _meal_with_ingredients(["chicken", "chicken"])
         result = adjust_meal_for_protein_target(meal, target_protein_per_meal=40)
         for mod in result["modifications"]:
             if mod["type"] == "reduce_portion":
-                assert "display" in mod, "reduce_portion modification is missing 'display' field"
-                assert mod["display"], "reduce_portion 'display' field must not be empty"
-                assert "%" in mod["display"], "reduce_portion 'display' should include percentage"
+                assert "display" not in mod, "reduce_portion must not have a 'display' field (internal only)"
+                assert mod.get("internal") is True, "reduce_portion must have internal=True"
+                assert "note" in mod, "reduce_portion must have a 'note' field for backend logging"
 
     def test_meal_in_30_to_40_range_not_modified(self):
         """A meal already in the 30–40 g range must be returned as-is (no modifications)."""
@@ -134,9 +134,11 @@ class TestValidateDailyMacros:
         total_fat = sum(m["final_macros"]["fat_g"] for m in result)
         assert total_fat <= 55 * 1.05 + 0.5  # allow tiny rounding error
 
-    def test_protein_exceeds_target_triggers_scaling(self):
-        """When daily protein exceeds target+5%, all meals should be scaled down."""
-        # 3 meals × 50g protein = 150g; target = 133g → 150 > 133*1.05=139.65g
+    def test_protein_not_scaled_even_when_exceeding_target(self):
+        """Protein must NOT be scaled down even when it exceeds target.
+        Protein is already enforced at 30-40g per meal by adjust_meal_for_protein_target.
+        Double-scaling would violate Issue 2 requirements."""
+        # 3 meals × 50g protein = 150g; target = 133g → would trigger scaling in old code
         menu = [
             _meal_entry_with_macros(protein=50, carbs=60, fat=18, calories=600),
             _meal_entry_with_macros(protein=50, carbs=60, fat=18, calories=600),
@@ -144,7 +146,8 @@ class TestValidateDailyMacros:
         ]
         result = validate_daily_macros(menu, target_protein=133, target_carbs=198, target_fat=55, target_calories=1820)
         total_protein = sum(m["final_macros"]["protein_g"] for m in result)
-        assert total_protein <= 133 * 1.05 + 0.5
+        # Protein should NOT be reduced regardless of whether it exceeds target
+        assert total_protein == 150, f"Protein was unexpectedly scaled: got {total_protein}g instead of 150g"
 
     def test_calories_exceed_target_triggers_scaling(self):
         """When daily calories exceed target+5%, all meals should be scaled down."""
@@ -157,11 +160,10 @@ class TestValidateDailyMacros:
         total_calories = sum(m["final_macros"]["calories"] for m in result)
         assert total_calories <= 1820 * 1.05 + 5
 
-    def test_most_restrictive_scale_factor_used(self):
-        """When multiple macros exceed targets, the smallest (most restrictive) factor is applied."""
+    def test_most_restrictive_scale_factor_used_for_fat(self):
+        """When fat exceeds target, the scale factor is applied to fat/carbs/calories (NOT protein)."""
         # fat: 90g vs 55g target → factor 55/90 ≈ 0.611
-        # protein: 150g vs 133g target → factor 133/150 ≈ 0.887
-        # most restrictive = 0.611
+        # protein stays unchanged (no protein scaling)
         menu = [
             _meal_entry_with_macros(protein=50, carbs=60, fat=30, calories=700),
             _meal_entry_with_macros(protein=50, carbs=60, fat=30, calories=700),
@@ -170,8 +172,10 @@ class TestValidateDailyMacros:
         result = validate_daily_macros(menu, target_protein=133, target_carbs=198, target_fat=55, target_calories=2100)
         total_fat = sum(m["final_macros"]["fat_g"] for m in result)
         total_protein = sum(m["final_macros"]["protein_g"] for m in result)
+        # Fat should be scaled down
         assert total_fat <= 55 * 1.05 + 0.5
-        assert total_protein <= 133 * 1.05 + 0.5
+        # Protein must NOT be scaled (stays at original 150g)
+        assert total_protein == 150, f"Protein was unexpectedly scaled: got {total_protein}g"
 
     def test_portion_multiplier_scaled_proportionally(self):
         """portion_multiplier must be scaled by the same factor as macros."""

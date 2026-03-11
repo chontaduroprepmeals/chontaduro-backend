@@ -1591,13 +1591,14 @@ html.in-iframe .app-card {
             }
           }
 
-          // Modifications section
+          // Modifications section (only show modifications with a visible display label)
           let modificationsHTML = '';
-          if (m.modifications && m.modifications.length > 0) {
+          const visibleMods = (m.modifications || []).filter(mod => mod.display);
+          if (visibleMods.length > 0) {
             modificationsHTML += '<div style="margin-top: 12px; padding: 10px; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 6px;">';
             modificationsHTML += '<div style="font-weight: 600; margin-bottom: 6px; color: #92400e;">✨ Modified to meet your protein target:</div>';
             modificationsHTML += '<ul style="margin: 0; padding-left: 20px; color: #78350f;">';
-            m.modifications.forEach(mod => {
+            visibleMods.forEach(mod => {
               modificationsHTML += `<li style="margin-bottom: 4px;">${mod.display}`;
               if (mod.macros && mod.macros.protein) {
                 modificationsHTML += ` <span style="color: #a16207;">(+${mod.macros.protein}g protein)</span>`;
@@ -1651,9 +1652,10 @@ html.in-iframe .app-card {
       html += `<div id="snack-recommendations" style="display: none;">
         <div style="background: #fff9e6; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0; border-radius: 8px;">
           <h3 style="color: #f59e0b; font-size: 1.4em; margin-bottom: 15px;">
-            🍫 Recommended Snacks
+            🍫 Snack Guidance
           </h3>
-          <p style="margin-bottom: 15px; color: #666;">
+          <div id="snack-flexible-message" style="display: none; white-space: pre-line; color: #555; margin-bottom: 15px; line-height: 1.7;"></div>
+          <p id="snack-intro" style="margin-bottom: 15px; color: #666; display: none;">
             To help you meet your daily macro targets, consider adding:
           </p>
           <div id="snack-list"></div>
@@ -1685,12 +1687,22 @@ html.in-iframe .app-card {
       window.currentMenuData = data;
 
       // Populate snack recommendations if present
-      if (data.snack_recommendations && data.snack_recommendations.length > 0) {
-        const snackContainer = document.getElementById('snack-recommendations');
-        const snackList = document.getElementById('snack-list');
-        const escapeHtml = (str) => String(str)
-          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      const snackContainer = document.getElementById('snack-recommendations');
+      const snackList = document.getElementById('snack-list');
+      const snackFlexibleDiv = document.getElementById('snack-flexible-message');
+      const snackIntro = document.getElementById('snack-intro');
+      const escapeHtml = (str) => String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+      if (data.snack_flexible && data.snack_flexible.show_snacks) {
+        // Flexible range message (Plan 4 with small protein gap)
+        snackFlexibleDiv.textContent = data.snack_flexible.message;
+        snackFlexibleDiv.style.display = 'block';
+        snackIntro.style.display = 'none';
+        snackContainer.style.display = 'block';
+      } else if (data.snack_recommendations && data.snack_recommendations.length > 0) {
+        snackIntro.style.display = 'block';
         let snackHTML = '';
         data.snack_recommendations.forEach((snack, index) => {
           snackHTML += `
@@ -1709,7 +1721,7 @@ html.in-iframe .app-card {
         snackList.innerHTML = snackHTML;
         snackContainer.style.display = 'block';
       } else {
-        document.getElementById('snack-recommendations').style.display = 'none';
+        snackContainer.style.display = 'none';
       }
 
       document.getElementById("addProteinBtn").onclick = async () => {
