@@ -1,10 +1,11 @@
 """
 Unit tests for:
-1. adjust_meal_for_protein_target() – 40g protein cap enforcement
+1. adjust_meal_for_protein_target() – 40g protein cap/floor enforcement
 2. validate_daily_macros() – comprehensive macro validation (protein, carbs, fat, calories)
+3. generate_flexible_snack_message() – snack guidance carb range
 """
 import pytest
-from main import adjust_meal_for_protein_target, validate_daily_macros
+from main import adjust_meal_for_protein_target, validate_daily_macros, generate_flexible_snack_message
 
 
 # ---------------------------------------------------------------------------
@@ -71,16 +72,32 @@ class TestAdjustMealForProteinTarget:
                 assert mod.get("internal") is True, "reduce_portion must have internal=True"
                 assert "note" in mod, "reduce_portion must have a 'note' field for backend logging"
 
-    def test_meal_in_30_to_40_range_not_modified(self):
-        """A meal already in the 30–40 g range must be returned as-is (no modifications)."""
-        # Greek yogurt + moderate protein ingredients should be in range with a
-        # single serving. We mock by using a meal that already reports 30-40g.
-        meal = _meal_with_ingredients(["greek yogurt", "oats"])
-        result = adjust_meal_for_protein_target(meal, target_protein_per_meal=35)
+    def test_meal_near_40g_but_under_is_supplemented(self):
+        """A supplement-compatible meal with 30-39g protein must be supplemented toward 40g."""
+        # greek yogurt + oats + eggs gives ~36g protein (supplement-compatible, no no_supplement ingredients)
+        meal = _meal_with_ingredients(["greek yogurt", "oats", "eggs"])
+        result = adjust_meal_for_protein_target(meal, target_protein_per_meal=40)
         base_protein = result["base_macros"]["protein_g"]
-        if 30 <= base_protein <= 40:
-            assert result["modifications"] == []
-            assert result["final_macros"]["protein_g"] == base_protein
+        if 30 <= base_protein < 40:
+            # Should have been supplemented — modifications non-empty or protein increased
+            assert (
+                len(result["modifications"]) > 0
+                or result["final_macros"]["protein_g"] > base_protein
+            ), f"Expected supplement for {base_protein}g meal; got {result['final_macros']['protein_g']}g"
+
+    def test_incompatible_meal_under_40g_scaled_up(self):
+        """An incompatible meal (tuna+rice) with <40g protein must be scaled up to 40g internally."""
+        # tuna + rice gives ~34g protein; tuna is in the no_supplement list
+        meal = _meal_with_ingredients(["tuna", "rice"])
+        result = adjust_meal_for_protein_target(meal, target_protein_per_meal=40)
+        base_protein = result["base_macros"]["protein_g"]
+        if base_protein < 40:
+            assert result["final_macros"]["protein_g"] == 40.0, (
+                f"Expected 40g after scale-up of {base_protein}g incompatible meal; "
+                f"got {result['final_macros']['protein_g']}g"
+            )
+            # No visible display modifications (internal portion adjustment only)
+            assert not any(m.get("display") for m in result["modifications"])
 
     def test_final_protein_never_exceeds_40g(self):
         """Regardless of input, final_macros protein must always be ≤ 40g."""
@@ -178,15 +195,52 @@ class TestValidateDailyMacros:
         assert total_protein == 150, f"Protein was unexpectedly scaled: got {total_protein}g"
 
     def test_portion_multiplier_scaled_proportionally(self):
-        """portion_multiplier must be scaled by the same factor as macros."""
-        # 2 meals × 35g fat = 70g total fat; target = 55g → 70 > 55*1.05=57.75g → triggers scaling
+        """portion_multiplier must be scaled by the same factor as macros when scaling DOWN."""
+        # 2 meals × 35g fat = 70g total fat; target = 55g → 70 > 55*1.05=57.75g → triggers scale-down
+        # Use calories = ~1000 kcal/meal so total (2000) is within the calorie target range (2000±5%)
         menu = [
-            _meal_entry_with_macros(protein=40, carbs=60, fat=35, calories=700, portion_multiplier=1.0),
-            _meal_entry_with_macros(protein=40, carbs=60, fat=35, calories=700, portion_multiplier=1.0),
+            _meal_entry_with_macros(protein=40, carbs=131, fat=35, calories=1000, portion_multiplier=1.0),
+            _meal_entry_with_macros(protein=40, carbs=131, fat=35, calories=1000, portion_multiplier=1.0),
         ]
         result = validate_daily_macros(menu, target_protein=133, target_carbs=198, target_fat=55, target_calories=2000)
         for meal in result:
             assert meal["portion_multiplier"] < 1.0
+
+    def test_calories_too_low_triggers_scale_up(self):
+        """When daily calories are below 95% of target, meals must be scaled UP."""
+        # 3 meals × 360 kcal = 1080 kcal; target = 1650 → way below → scale up
+        menu = [
+            _meal_entry_with_macros(protein=40, carbs=30, fat=10, calories=360, portion_multiplier=0.8),
+            _meal_entry_with_macros(protein=40, carbs=30, fat=10, calories=360, portion_multiplier=0.8),
+            _meal_entry_with_macros(protein=40, carbs=30, fat=10, calories=360, portion_multiplier=0.8),
+        ]
+        result = validate_daily_macros(menu, target_protein=133, target_carbs=198, target_fat=55, target_calories=1650)
+        total_calories = sum(m["final_macros"]["calories"] for m in result)
+        # After scaling up, calories should be at or near target (within 5%)
+        assert total_calories >= 1650 * 0.95 - 5, f"Expected ~1650 kcal, got {total_calories}"
+
+    def test_scale_up_does_not_touch_protein(self):
+        """When scaling up for low calories, protein must NOT be increased."""
+        menu = [
+            _meal_entry_with_macros(protein=40, carbs=20, fat=8, calories=300),
+            _meal_entry_with_macros(protein=40, carbs=20, fat=8, calories=300),
+            _meal_entry_with_macros(protein=40, carbs=20, fat=8, calories=300),
+        ]
+        result = validate_daily_macros(menu, target_protein=133, target_carbs=198, target_fat=55, target_calories=1650)
+        total_protein = sum(m["final_macros"]["protein_g"] for m in result)
+        # Protein must NOT be scaled up (stays at original 120g)
+        assert total_protein == 120, f"Protein was unexpectedly scaled: got {total_protein}g"
+
+    def test_portion_multiplier_scaled_up_proportionally(self):
+        """portion_multiplier must be scaled UP by the same factor when calories are too low."""
+        menu = [
+            _meal_entry_with_macros(protein=40, carbs=20, fat=8, calories=300, portion_multiplier=0.7),
+            _meal_entry_with_macros(protein=40, carbs=20, fat=8, calories=300, portion_multiplier=0.7),
+            _meal_entry_with_macros(protein=40, carbs=20, fat=8, calories=300, portion_multiplier=0.7),
+        ]
+        result = validate_daily_macros(menu, target_protein=133, target_carbs=198, target_fat=55, target_calories=1650)
+        for meal in result:
+            assert meal["portion_multiplier"] > 0.7
 
     def test_empty_menu_returns_unchanged(self):
         """Empty menu list must be returned without error."""
@@ -198,3 +252,46 @@ class TestValidateDailyMacros:
         menu = [_meal_entry_with_macros(protein=0, carbs=0, fat=0, calories=0)]
         result = validate_daily_macros(menu, target_protein=133, target_carbs=198, target_fat=55, target_calories=1820)
         assert result[0]["final_macros"]["calories"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: generate_flexible_snack_message
+# ---------------------------------------------------------------------------
+
+class TestGenerateFlexibleSnackMessage:
+    """Tests for proper snack guidance ranges, especially carb range."""
+
+    def test_carb_range_always_shows_spread_when_gap_is_zero(self):
+        """When carbs_gap is 0, carbs_max must still be greater than carbs_min."""
+        result = generate_flexible_snack_message(
+            protein_gap=13, carbs_gap=0, fat_gap=0, calories_gap=170
+        )
+        carbs_range = result["carbs_range"]  # e.g. "10-20g"
+        parts = carbs_range.replace("g", "").split("-")
+        carbs_min = int(parts[0])
+        carbs_max = int(parts[1])
+        assert carbs_max > carbs_min, (
+            f"Expected carbs_max > carbs_min when gap=0, got '{carbs_range}'"
+        )
+
+    def test_carb_range_never_shows_equal_min_max(self):
+        """Carb range must never show 'X-Xg' (min == max)."""
+        for gap in [0, 5, 10, 15, 20]:
+            result = generate_flexible_snack_message(
+                protein_gap=13, carbs_gap=gap, fat_gap=3, calories_gap=170
+            )
+            parts = result["carbs_range"].replace("g", "").split("-")
+            carbs_min = int(parts[0])
+            carbs_max = int(parts[1])
+            assert carbs_max > carbs_min, (
+                f"carbs_gap={gap}: expected spread, got '{result['carbs_range']}'"
+            )
+
+    def test_carb_range_reasonable_when_gap_is_normal(self):
+        """With a normal carbs_gap (e.g. 15g), the range should span at least 10g."""
+        result = generate_flexible_snack_message(
+            protein_gap=13, carbs_gap=15, fat_gap=5, calories_gap=170
+        )
+        parts = result["carbs_range"].replace("g", "").split("-")
+        spread = int(parts[1]) - int(parts[0])
+        assert spread >= 10, f"Expected ≥10g spread, got {spread}g"
