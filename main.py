@@ -2805,11 +2805,23 @@ async def next_step(request: Request):
 # --- Additional endpoints (templates, scheduling, feedback, orders) ---
 
 @app.get("/health")
-async def health():
+async def health_check():
     """
-    Healthcheck simple (200) para pings externos / warmup.
+    Lightweight health check endpoint for uptime monitoring.
+
+    Returns a simple JSON response indicating the service is alive.
+    This endpoint is optimized for fast response times and is used by
+    external monitoring services like UptimeRobot to keep the Render.com
+    free tier instance awake.
+
+    Returns:
+        dict: Status information with service name
     """
-    return JSONResponse({"status": "ok"})
+    return {
+        "status": "ok",
+        "service": "chontaduro-backend",
+        "version": "2.1"
+    }
 
 @app.get("/weekly-templates")
 async def weekly_templates():
