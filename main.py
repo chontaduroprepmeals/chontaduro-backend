@@ -1029,7 +1029,7 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
                 "ingredient": "protein powder",
                 "amount": amount_g,
                 "unit": "g",
-                "display": f"1 scoop protein powder ({amount_g}g)",
+                "internal": True,
                 "macros": {
                     "protein": round(added_protein, 1),
                     "carbs": round(added_carbs, 1),
@@ -1047,34 +1047,67 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
         elif not no_supplement and any(x in ingredients_lower for x in ["eggs", "scrambled", "omelette"]):
             egg_data = INGREDIENT_DATABASE["eggs"]
             egg_protein_per_50g = (egg_data["protein_per_100g"] / 100) * 50  # protein per egg
-            max_protein_to_add = MAX_PROTEIN_PER_MEAL - base_protein
-            max_eggs = max(1, math.floor(max_protein_to_add / egg_protein_per_50g)) if egg_protein_per_50g > 0 else 1
-            extra_eggs = min(max(1, math.ceil(protein_deficit / 6)), max_eggs)  # 1 egg ≈ 6g protein
-            amount_g = extra_eggs * 50
 
-            added_protein = (egg_data["protein_per_100g"] / 100) * amount_g
-            added_carbs = (egg_data["carbs_per_100g"] / 100) * amount_g
-            added_fat = (egg_data["fat_per_100g"] / 100) * amount_g
-            added_calories = (egg_data["calories_per_100g"] / 100) * amount_g
+            # For large deficits (>=15g), prefer protein powder to keep calories lower
+            if protein_deficit >= 15:
+                protein_powder_data = INGREDIENT_DATABASE["protein powder"]
+                protein_powder_per_g = protein_powder_data["protein_per_100g"] / 100
+                max_protein_to_add = MAX_PROTEIN_PER_MEAL - base_protein
+                amount_g = min(30, max_protein_to_add / protein_powder_per_g) if protein_powder_per_g > 0 else 30
+                amount_g = round(amount_g, 1)
 
-            modifications.append({
-                "type": "increase",
-                "ingredient": "eggs",
-                "amount": amount_g,
-                "unit": "g",
-                "display": f"+{extra_eggs} extra egg{'s' if extra_eggs > 1 else ''}",
-                "macros": {
-                    "protein": round(added_protein, 1),
-                    "carbs": round(added_carbs, 1),
-                    "fat": round(added_fat, 1),
-                    "calories": round(added_calories)
-                }
-            })
+                added_protein = (protein_powder_data["protein_per_100g"] / 100) * amount_g
+                added_carbs = (protein_powder_data["carbs_per_100g"] / 100) * amount_g
+                added_fat = (protein_powder_data["fat_per_100g"] / 100) * amount_g
+                added_calories = (protein_powder_data["calories_per_100g"] / 100) * amount_g
 
-            final_macros["protein_g"] += added_protein
-            final_macros["carbs_g"] += added_carbs
-            final_macros["fat_g"] += added_fat
-            final_macros["calories"] += added_calories
+                modifications.append({
+                    "type": "add",
+                    "ingredient": "protein powder",
+                    "amount": amount_g,
+                    "unit": "g",
+                    "internal": True,
+                    "macros": {
+                        "protein": round(added_protein, 1),
+                        "carbs": round(added_carbs, 1),
+                        "fat": round(added_fat, 1),
+                        "calories": round(added_calories)
+                    }
+                })
+
+                final_macros["protein_g"] += added_protein
+                final_macros["carbs_g"] += added_carbs
+                final_macros["fat_g"] += added_fat
+                final_macros["calories"] += added_calories
+
+            else:
+                # Small-to-medium deficit: add eggs using ceil to reach target
+                extra_eggs = max(1, math.ceil(protein_deficit / egg_protein_per_50g)) if egg_protein_per_50g > 0 else 1
+                amount_g = extra_eggs * 50
+
+                added_protein = (egg_data["protein_per_100g"] / 100) * amount_g
+                added_carbs = (egg_data["carbs_per_100g"] / 100) * amount_g
+                added_fat = (egg_data["fat_per_100g"] / 100) * amount_g
+                added_calories = (egg_data["calories_per_100g"] / 100) * amount_g
+
+                modifications.append({
+                    "type": "increase",
+                    "ingredient": "eggs",
+                    "amount": amount_g,
+                    "unit": "g",
+                    "internal": True,
+                    "macros": {
+                        "protein": round(added_protein, 1),
+                        "carbs": round(added_carbs, 1),
+                        "fat": round(added_fat, 1),
+                        "calories": round(added_calories)
+                    }
+                })
+
+                final_macros["protein_g"] += added_protein
+                final_macros["carbs_g"] += added_carbs
+                final_macros["fat_g"] += added_fat
+                final_macros["calories"] += added_calories
 
         else:
             # For incompatible meals (meats, soups, beans, etc.) that cannot be supplemented,
@@ -1085,6 +1118,9 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
                 final_macros["carbs_g"] = round(base_macros["carbs_g"] * scale_factor, 1)
                 final_macros["fat_g"] = round(base_macros["fat_g"] * scale_factor, 1)
                 final_macros["calories"] = round(base_macros["calories"] * scale_factor)
+
+        # Force protein to exactly 40.0g regardless of supplementation path
+        final_macros["protein_g"] = MAX_PROTEIN_PER_MEAL
 
     # Round final macros
     final_macros["protein_g"] = round(final_macros["protein_g"], 1)
@@ -1149,14 +1185,16 @@ def validate_daily_macros(
     if total_calories <= 0:
         return daily_menu
 
-    max_carbs = target_carbs * 1.05
-    max_fat = target_fat * 1.05
+    # Use 10% tolerance for carbs/fat to avoid over-aggressive scaling that can
+    # collapse daily calories when macros are only slightly over target.
+    max_carbs = target_carbs * 1.10
+    max_fat = target_fat * 1.10
     max_calories = target_calories * 1.05
     min_calories = target_calories * 0.95
 
     total_protein = sum(m.get("final_macros", {}).get("protein_g", 0) for m in daily_menu)
     print(f"[VALIDATION] Daily totals: {total_protein}g P (not scaled), {total_carbs}g C, {total_fat}g F, {total_calories} kcal")
-    print(f"[VALIDATION] Targets: {target_carbs}g C, {max_fat}g F, {min_calories}-{max_calories} kcal")
+    print(f"[VALIDATION] Targets: {target_carbs}g C (max {max_carbs:.1f}g), {target_fat}g F (max {max_fat:.1f}g), {min_calories:.0f}-{max_calories:.0f} kcal")
 
     # Scale UP if total calories are too low (< 95% of meal calorie target).
     # Only carbs/fat/calories are scaled; protein is already enforced at ~40g per meal.
@@ -2596,22 +2634,28 @@ async def next_step(request: Request):
                 # Respuesta basada en el plan seleccionado
                 if state.plan == 4:
                     # Build daily summary for Plan 4
+                    # Carbs remaining for the snack after meals contribute their share
+                    remaining_carbs_for_snacks = max(0, macros.get("carbs_grams", 0) - day1_meal_carbs)
+                    # Snack protein range: ±5g around the deficit, with a minimum of 10g
+                    _snack_protein_floor = 10
+                    _snack_range_variance = 5
                     daily_summary = {
                         "meals_only": {
-                            "protein_g": day1_meal_protein,
-                            "carbs_g": day1_meal_carbs,
-                            "fat_g": day1_meal_fat,
-                            "calories": day1_meal_calories,
+                            "protein": round(day1_meal_protein, 1),
+                            "carbs": round(day1_meal_carbs, 1),
+                            "fat": round(day1_meal_fat, 1),
+                            "calories": round(day1_meal_calories),
                         },
                         "snack_contribution": {
-                            "protein": f"{protein_deficit_for_snacks}g",
+                            "protein": f"{max(_snack_protein_floor, protein_deficit_for_snacks - _snack_range_variance)}-{protein_deficit_for_snacks + _snack_range_variance}g",
+                            "carbs": snack_flexible_info.get("carbs_range", "15-25g") if snack_flexible_info else "15-25g",
                             "calories": f"~{calorie_dist['snack_calories_reserved']} kcal",
                         },
-                        "final_total_range": {
-                            "protein": f"~{round(day1_meal_protein + protein_deficit_for_snacks)}g",
-                            "carbs": snack_flexible_info.get("carbs_range", f"~{day1_meal_carbs}g+") if snack_flexible_info else f"~{day1_meal_carbs}g+",
-                            "fat": f"~{day1_meal_fat}g+",
-                            "calories": f"~{day1_meal_calories + calorie_dist['snack_calories_reserved']} kcal",
+                        "final_total_estimate": {
+                            "protein": f"~{round(day1_meal_protein + protein_deficit_for_snacks - _snack_range_variance)}-{round(day1_meal_protein + protein_deficit_for_snacks + _snack_range_variance)}g",
+                            "carbs": f"~{round(day1_meal_carbs + max(0, remaining_carbs_for_snacks - _snack_range_variance))}-{round(day1_meal_carbs + remaining_carbs_for_snacks + 10)}g",
+                            "fat": f"~{round(day1_meal_fat)}-{round(day1_meal_fat + 5)}g",
+                            "calories": f"~{round(day1_meal_calories + calorie_dist['snack_calories_reserved'] - 30)}-{round(day1_meal_calories + calorie_dist['snack_calories_reserved'] + 30)} kcal",
                         },
                         "message": "✨ Perfect balance for your body recomposition goals!",
                     }
