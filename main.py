@@ -2805,6 +2805,7 @@ async def next_step(request: Request):
 # --- Additional endpoints (templates, scheduling, feedback, orders) ---
 
 @app.get("/health")
+@app.head("/health")
 async def health_check():
     """
     Lightweight health check endpoint for uptime monitoring.
