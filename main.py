@@ -3009,41 +3009,13 @@ async def add_protein(request: Request):
                 }
                 base_menu_objs.append(Meal(**partial))
     else:
-            # Generamos base menú (Meal objects) usando validación calórica diaria y semanal
-            weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
-            height_cm = to_cm(state.height, state.height_unit) if state.height else None
-            tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
-            tdee = round(
-                tmb * get_activity_factor_with_recomp_minimum(
-                    state.activity_days_bucket or "0",
-                    state.activity_duration_bucket or "<30",
-                    state.activity_intensity or "Low",
-                    state.objective or "",
-                ),
-                1,
-            ) if tmb else None
-            calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
-
-            # Generamos el menú semanal verificando que cada día cumpla las calorías objetivo
-            weekly_menu = generate_weekly_menu(MEALS_DATA, calorie_target)
-            if not weekly_menu:
-                return {
-                    "message": "No se pudo generar un menú con las calorías objetivo. Intenta ajustes en tus preferencias.",
-                }
-
-            # Asigna el menú generado a la sesión actual
-            state.menu = weekly_menu
-            sessions[session_id] = state.model_dump()
-
+        # No existing menu in session — generate a fresh base menu using current state filters
+        base_menu_objs = generate_menu(state)
+        if not base_menu_objs:
             return {
-                "menu": weekly_menu,
-                "nutrition": {
-                    "tmb": tmb,
-                    "tdee": tdee,
-                    "calorie_target": calorie_target,
-                },
-                "current_step": state.current_step,
-                "message": "Tu menú se generó correctamente.",
+                "message": "No se pudo generar un menú con las calorías objetivo. Intenta ajustes en tus preferencias.",
+                "menu": [],
+                "price": 0.0
             }
 
     # recompute macros/daily protein
@@ -3157,8 +3129,9 @@ async def validate_menu(request: Request):
     tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
     tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket, state.activity_duration_bucket, state.activity_intensity, state.objective or ""), 2) if tmb else None
     calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
-    weekly_menu = generate_weekly_menu(MEALS_DATA, calorie_target)
-    return {"menu": weekly_menu, "calorie_target": calorie_target, "details": {"tmb": tmb, "tdee": tdee}}
+    menu_objs = generate_menu(state)
+    menu_dicts = [m.model_dump() if hasattr(m, "model_dump") else dict(m) for m in menu_objs]
+    return {"menu": menu_dicts, "calorie_target": calorie_target, "details": {"tmb": tmb, "tdee": tdee}}
 
 
 @app.post("/redo-menu")
