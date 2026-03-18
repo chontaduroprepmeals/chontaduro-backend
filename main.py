@@ -2952,37 +2952,141 @@ async def add_protein(request: Request):
         // optional: meal_index (int) to apply to that meal; otherwise global add
       }
     """
-    payload = await request.json()
-    sid = payload.get("session_id") or payload.get("sessionId")
-    extra = payload.get("extra_protein_grams") or payload.get("extraProtein") or 0
-    meal_index = payload.get("meal_index")
     try:
-        extra = int(extra)
-    except Exception:
-        return JSONResponse(status_code=422, content={"detail":"extra_protein_grams must be integer."})
-    if not sid or sid not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found.")
-    state = SessionState(**sessions[sid])
-    if meal_index is not None:
+        payload = await request.json()
+        sid = payload.get("session_id") or payload.get("sessionId")
+        extra = payload.get("extra_protein_grams") or payload.get("extraProtein") or 0
+        meal_index = payload.get("meal_index")
         try:
-            mi = int(meal_index)
+            extra = int(extra)
         except Exception:
-            return JSONResponse(status_code=422, content={"detail":"meal_index must be integer."})
-        state.extra_protein_map[mi] = int(state.extra_protein_map.get(mi, 0)) + extra
-    else:
-        # add global extra and it WILL be distributed in allocation below
-        state.extra_protein_grams = int(state.extra_protein_grams or 0) + extra
+            return JSONResponse(status_code=422, content={"detail":"extra_protein_grams must be integer."})
+        if not sid or sid not in sessions:
+            raise HTTPException(status_code=404, detail="Session not found.")
+        state = SessionState(**sessions[sid])
+        if meal_index is not None:
+            try:
+                mi = int(meal_index)
+            except Exception:
+                return JSONResponse(status_code=422, content={"detail":"meal_index must be integer."})
+            state.extra_protein_map[mi] = int(state.extra_protein_map.get(mi, 0)) + extra
+        else:
+            # add global extra and it WILL be distributed in allocation below
+            state.extra_protein_grams = int(state.extra_protein_grams or 0) + extra
 
-    # Recompute using the current session menu as base (if present) to avoid regenerating different menu
-    # Build base_menu_objs from current state.menu if available, else generate one
-    base_menu_objs: List[Meal] = []
-    if state.menu:
+        # Recompute using the current session menu as base (if present) to avoid regenerating different menu
+        # Build base_menu_objs from current state.menu if available, else generate one
+        base_menu_objs: List[Meal] = []
+        if state.menu:
+            for m in state.menu:
+                found = next((x for x in MEALS_DATA if str(x.get("name")).strip() == str(m.get("name")).strip()), None)
+                if found:
+                    base_menu_objs.append(Meal(**found))
+                else:
+                    # fallback: reconstruct minimal Meal
+                    partial = {
+                        "name": m.get("name"),
+                        "type": m.get("type", "Main Meal"),
+                        "ingredients": m.get("ingredients", []),
+                        "calories": int(m.get("calories") or 0),
+                        "price": float(m.get("price") or 0.0),
+                        "image_url": m.get("image_url")
+                    }
+                    base_menu_objs.append(Meal(**partial))
+        else:
+            # No existing menu in session — generate a fresh base menu using current state filters
+            base_menu_objs = generate_menu(state)
+            if not base_menu_objs:
+                return {
+                    "message": "No se pudo generar un menú con las calorías objetivo. Intenta ajustes en tus preferencias.",
+                    "menu": [],
+                    "price": 0.0
+                }
+
+        # recompute macros/daily protein
+        weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
+        height_cm = to_cm(state.height, state.height_unit) if state.height else None
+        tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
+        tdee = None
+        if tmb is not None:
+            tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
+        calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
+        macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
+        daily_protein_target = macros.get("protein_grams", 0)
+
+        menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
+        state.menu = menu_with_protein
+        sessions[sid] = state.model_dump()
+        extra_total = sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)
+        total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], extra_total)
+        return {"menu": state.menu, "price": total_price, "message": f"Added {extra}g extra protein.", "extra_total": extra_total, "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] /add-protein failed: {str(e)}")
+        print(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": f"Error adding protein: {str(e)}",
+                "menu": getattr(state, 'menu', []) if 'state' in locals() else [],
+                "price": 0.0
+            }
+        )
+
+
+@app.post("/swap-meal")
+async def swap_meal(request: Request):
+    """
+    Swap a single meal in the current menu by name. Recompute allocations,
+    but keep other meals unchanged.
+    """
+    try:
+        payload = await request.json()
+        sid = payload.get("session_id") or payload.get("sessionId")
+        meal_to_swap = payload.get("meal_to_swap") or payload.get("mealToSwap")
+        if not sid or sid not in sessions:
+            raise HTTPException(status_code=404, detail="Session not found.")
+        state = SessionState(**sessions[sid])
+
+        target_idx = next((i for i, m in enumerate(state.menu) if m.get("name") == meal_to_swap), None)
+        if target_idx is None:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "detail": "Meal not in current menu.",
+                    "menu": state.menu,
+                    "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], 0)
+                }
+            )
+
+        replaced_meal = state.menu[target_idx]
+        replaced_type = (replaced_meal.get("type") or "").lower()
+
+        avail = filter_meals(state.dislikes, state.allergies, state.dietary_restrictions, state.diet_preference)
+        current_names = [m.get("name") for m in state.menu]
+        potential = [m for m in avail if m.name not in current_names and m.type.lower() == replaced_type]
+        if not potential:
+            potential = [m for m in avail if m.name not in current_names]
+        if not potential:
+            return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)), "message": "No replacements available."}
+
+        new_meal = random.choice(potential)
+
+        # Standard pricing: Breakfast = $11, Main Meal = $15
+        if replaced_type == "breakfast":
+            new_meal.price = 11.0
+        elif replaced_type in ["lunch", "dinner", "main meal"]:
+            new_meal.price = 15.0
+
+
+        # Build base_menu_objs from current state.menu
+        base_menu_objs: List[Meal] = []
         for m in state.menu:
             found = next((x for x in MEALS_DATA if str(x.get("name")).strip() == str(m.get("name")).strip()), None)
             if found:
                 base_menu_objs.append(Meal(**found))
             else:
-                # fallback: reconstruct minimal Meal
                 partial = {
                     "name": m.get("name"),
                     "type": m.get("type", "Main Meal"),
@@ -2992,114 +3096,45 @@ async def add_protein(request: Request):
                     "image_url": m.get("image_url")
                 }
                 base_menu_objs.append(Meal(**partial))
-    else:
-        # No existing menu in session — generate a fresh base menu using current state filters
-        base_menu_objs = generate_menu(state)
-        if not base_menu_objs:
-            return {
-                "message": "No se pudo generar un menú con las calorías objetivo. Intenta ajustes en tus preferencias.",
-                "menu": [],
+
+        if target_idx < len(base_menu_objs):
+            base_menu_objs[target_idx] = new_meal
+        else:
+            base_menu_objs.append(new_meal)
+
+        # Recompute macros/daily proteins
+        weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
+        height_cm = to_cm(state.height, state.height_unit) if state.height else None
+        tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
+        tdee = None
+        if tmb is not None:
+            tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
+        calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
+        macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
+        daily_protein_target = macros.get("protein_grams", 0)
+
+        menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
+        state.menu = menu_with_protein
+        sessions[sid] = state.model_dump()
+
+        # Cálculo de precio total con lógica de envío gratis
+        precio_menu = sum(m.get("price", 0.0) for m in state.menu)
+        envio = 0.0 if precio_menu >= 100.0 else 10.0  # Envío gratis si precio total supera $100
+        total_price = precio_menu + envio
+        return {"menu": state.menu, "price": total_price, "message": f"Swapped '{meal_to_swap}' -> '{new_meal.name}'.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] /swap-meal failed: {str(e)}")
+        print(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": f"Error swapping meal: {str(e)}",
+                "menu": getattr(state, 'menu', []) if 'state' in locals() else [],
                 "price": 0.0
             }
-
-    # recompute macros/daily protein
-    weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
-    height_cm = to_cm(state.height, state.height_unit) if state.height else None
-    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
-    tdee = None
-    if tmb is not None:
-        tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
-    calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
-    macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
-    daily_protein_target = macros.get("protein_grams", 0)
-
-    menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
-    state.menu = menu_with_protein
-    sessions[sid] = state.model_dump()
-    extra_total = sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)
-    total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], extra_total)
-    return {"menu": state.menu, "price": total_price, "message": f"Added {extra} g extra protein.", "extra_total": extra_total, "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
-
-
-@app.post("/swap-meal")
-async def swap_meal(request: Request):
-    """
-    Swap a single meal in the current menu by name. Recompute allocations,
-    but keep other meals unchanged.
-    """
-    payload = await request.json()
-    sid = payload.get("session_id") or payload.get("sessionId")
-    meal_to_swap = payload.get("meal_to_swap") or payload.get("mealToSwap")
-    if not sid or sid not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found.")
-    state = SessionState(**sessions[sid])
-
-    target_idx = next((i for i, m in enumerate(state.menu) if m.get("name") == meal_to_swap), None)
-    if target_idx is None:
-        raise HTTPException(status_code=404, detail="Meal not in current menu.")
-
-    replaced_meal = state.menu[target_idx]
-    replaced_type = (replaced_meal.get("type") or "").lower()
-
-    avail = filter_meals(state.dislikes, state.allergies, state.dietary_restrictions, state.diet_preference)
-    current_names = [m.get("name") for m in state.menu]
-    potential = [m for m in avail if m.name not in current_names and m.type.lower() == replaced_type]
-    if not potential:
-        potential = [m for m in avail if m.name not in current_names]
-    if not potential:
-        return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)), "message": "No replacements available."}
-
-    new_meal = random.choice(potential)
-
-    # Standard pricing: Breakfast = $11, Main Meal = $15
-    if replaced_type == "breakfast":
-        new_meal.price = 11.0
-    elif replaced_type in ["lunch", "dinner", "main meal"]:
-        new_meal.price = 15.0
-    
-
-    # Build base_menu_objs from current state.menu
-    base_menu_objs: List[Meal] = []
-    for m in state.menu:
-        found = next((x for x in MEALS_DATA if str(x.get("name")).strip() == str(m.get("name")).strip()), None)
-        if found:
-            base_menu_objs.append(Meal(**found))
-        else:
-            partial = {
-                "name": m.get("name"),
-                "type": m.get("type", "Main Meal"),
-                "ingredients": m.get("ingredients", []),
-                "calories": int(m.get("calories") or 0),
-                "price": float(m.get("price") or 0.0),
-                "image_url": m.get("image_url")
-            }
-            base_menu_objs.append(Meal(**partial))
-
-    if target_idx < len(base_menu_objs):
-        base_menu_objs[target_idx] = new_meal
-    else:
-        base_menu_objs.append(new_meal)
-
-    # Recompute macros/daily proteins
-    weight_kg = to_kg(state.weight, state.weight_unit) if state.weight else None
-    height_cm = to_cm(state.height, state.height_unit) if state.height else None
-    tmb = calc_tmb_mifflin(weight_kg, height_cm, state.age, state.sex, state.objective or "")
-    tdee = None
-    if tmb is not None:
-        tdee = round(tmb * get_activity_factor_with_recomp_minimum(state.activity_days_bucket or "0", state.activity_duration_bucket or "<30", state.activity_intensity or "Low", state.objective or ""), 1)
-    calorie_target = calc_calorie_target(tdee, state.objective, state.sex or "female") if tdee else None
-    macros = calc_macros(calorie_target, state.objective, weight_kg, state.sex)
-    daily_protein_target = macros.get("protein_grams", 0)
-
-    menu_with_protein = allocate_protein_to_menu(state, base_menu_objs, daily_protein_target)
-    state.menu = menu_with_protein
-    sessions[sid] = state.model_dump()
-
-    # Cálculo de precio total con lógica de envío gratis
-    precio_menu = sum(m.get("price", 0.0) for m in state.menu)
-    envio = 0.0 if precio_menu >= 100.0 else 10.0  # Envío gratis si precio total supera $100
-    total_price = precio_menu + envio
-    return {"menu": state.menu, "price": total_price, "message": f"Swapped '{meal_to_swap}' -> '{new_meal.name}'.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
+        )
 
 @app.post("/validate-menu")
 async def validate_menu(request: Request):
