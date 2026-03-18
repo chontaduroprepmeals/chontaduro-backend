@@ -1352,9 +1352,6 @@ def is_meal_compatible_with_diet(ingredients: List[str], diet: Optional[str]) ->
         return not any(any(mk in ing for mk in MEAT_KEYWORDS) for ing in ings)
     if d == "vegetarian":
         return not any(any(mk in ing for mk in (MEAT_KEYWORDS | FISH_KEYWORDS)) for ing in ings)
-    if d == "vegan":
-        forbidden = MEAT_KEYWORDS | FISH_KEYWORDS | DAIRY_KEYWORDS | EGG_KEYWORDS | {"honey"}
-        return not any(any(fk in ing for fk in forbidden) for ing in ings)
     if d == "few restrictions":
         return True
     return True
@@ -2157,7 +2154,7 @@ def process_meal_data(meal: Meal, protein: int, calories: int, fat_ratio: float 
 # --- UI form definitions (unchanged) ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "diet_preference":
-        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Vegan","Pescatarian"], "required": True}],"current_step":"diet_preference"}
+        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Pescatarian"], "required": True}],"current_step":"diet_preference"}
     if step_name == "pick_plan":
         return {"question":"Which plan do you want?","fields":[{"name":"Plan","type":"select","options":["Plan 1: 1 main meal per day","Plan 2: 2 main meals per day","Plan 3: 1 main meal + 1 breakfast","Plan 4: 2 main meals + 1 breakfast (full day)"], "required": True}],"current_step":"pick_plan"}
     if step_name == "objective":
@@ -2176,8 +2173,7 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
                 {"name":"Sex","type":"select","options":["Male","Female"], "required": True},
                 {"name":"Days per week","type":"select","options":["0","1-2","3-4","5-7"], "unit":"How many days do you exercise on average?", "required": True},
                 {"name":"Avg session duration","type":"select","options":["<30","30-60","60-120"], "unit":"Typical session length (minutes)", "required": True},
-                {"name":"Intensity","type":"select","options":["Low","Moderate","High"], "unit":"Select intensity (Low/Moderate/High).", "required": True},
-                {"name":"Body Fat % (optional)","type":"number","placeholder":"e.g. 18","required": False}
+                {"name":"Intensity","type":"select","options":["Low","Moderate","High"], "unit":"Select intensity (Low/Moderate/High).", "required": True}
             ],
             "current_step":"personal_info"
         }
@@ -2378,18 +2374,6 @@ async def next_step(request: Request):
             elif "activity_intensity" in answer:
                 state.activity_intensity = str(answer.get("activity_intensity"))
                 
-            # Body fat - check "Body Fat % (optional)" (from form) or "body_fat" (custom)
-            if "Body Fat % (optional)" in answer:
-                try:
-                    state.body_fat = float(answer.get("Body Fat % (optional)"))
-                except Exception:
-                    state.body_fat = None
-            elif "body_fat" in answer:
-                try:
-                    state.body_fat = float(answer.get("body_fat"))
-                except Exception:
-                    state.body_fat = None
-
             # Go directly to duration (no restrictions step anymore)
             step_to_render_name = STEPS["personal_info"]
         except Exception:
