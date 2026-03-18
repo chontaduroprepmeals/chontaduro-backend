@@ -514,6 +514,7 @@ html.in-iframe .app-card {
     function renderDietPreference(question, field) {
       const diets = [
         { value: "Omnivore", emoji: "🍖", desc: "Eat everything including meat and vegetables" },
+        { value: "No Red Meat", emoji: "🐔", desc: "Chicken & fish OK — no beef, lamb, or steak" },
         { value: "Vegetarian", emoji: "🥗", desc: "No meat or poultry, but dairy/eggs OK" },
         { value: "Pescatarian", emoji: "🐟", desc: "No meat, but fish/seafood is included" }
       ];
@@ -1508,12 +1509,7 @@ html.in-iframe .app-card {
         </div>`;
       }
 
-      // Global add-protein control
-      html += `<div class="mb-4 flex items-center justify-center gap-2">
-        <label class="text-sm font-medium">Add extra protein (g):</label>
-        <input id="extraProteinInput" type="number" min="0" value="0" class="w-24 p-2 border rounded" />
-        <button id="addProteinBtn" class="px-3 py-2 bg-orange-500 text-white rounded">Add Protein (global)</button>
-      </div>`;
+      // Global add-protein control removed — protein gap handled via snack suggestions below
 
       html += `<div class="space-y-3">`;
       // Group meals by day
@@ -1630,10 +1626,6 @@ html.in-iframe .app-card {
               </div>
               <div class="flex flex-col items-end gap-2 ml-4">
                 <button onclick="swapMeal('${safeName}')" class="px-3 py-1 bg-yellow-400 rounded text-xs font-medium hover:bg-yellow-500">Swap</button>
-                <div class="flex items-center gap-1">
-                  <input id="p-${globalIdx}" type="number" min="0" placeholder="g" class="w-16 p-1 border rounded text-sm" />
-                  <button onclick="addProteinToMeal(${globalIdx})" class="px-2 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600">+Protein</button>
-                </div>
               </div>
             </div>
           </div>`;
@@ -1650,9 +1642,12 @@ html.in-iframe .app-card {
       // Snack Recommendations Section
       html += `<div id="snack-recommendations" style="display: none;">
         <div style="background: #fff9e6; border-left: 4px solid #f59e0b; padding: 20px; margin: 30px 0; border-radius: 8px;">
-          <h3 style="color: #f59e0b; font-size: 1.4em; margin-bottom: 15px;">
-            🍫 Snack Guidance
+          <h3 style="color: #f59e0b; font-size: 1.4em; margin-bottom: 6px;">
+            🍫 Complete Your Daily Macros
           </h3>
+          <p style="color: #92400e; font-size: 0.95em; margin-bottom: 15px;">
+            Your meals provide most of what you need! Add these simple snacks to reach your goals:
+          </p>
           <div id="snack-flexible-message" style="display: none; white-space: pre-line; color: #555; margin-bottom: 15px; line-height: 1.7;"></div>
           <p id="snack-intro" style="margin-bottom: 15px; color: #666; display: none;">
             To help you meet your daily macro targets, consider adding:
@@ -1745,17 +1740,30 @@ html.in-iframe .app-card {
         snackIntro.style.display = 'block';
         let snackHTML = '';
         data.snack_recommendations.forEach((snack, index) => {
+          // Build coverage badges
+          let badgesHTML = '';
+          if (snack.coverage) {
+            Object.entries(snack.coverage).forEach(([macro, pct]) => {
+              const pctNum = parseInt(pct);
+              const badgeColor = pctNum >= 100 ? '#22c55e' : pctNum >= 50 ? '#f59e0b' : '#9ca3af';
+              const icon = pctNum >= 100 ? '✅' : pctNum >= 50 ? '⚠️' : '○';
+              const label = macro.charAt(0).toUpperCase() + macro.slice(1);
+              badgesHTML += `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.8em;font-weight:600;background:${badgeColor};color:white;margin-right:6px;">${icon} ${label} ${escapeHtml(pct)}</span>`;
+            });
+          }
           snackHTML += `
             <div style="background: white; padding: 15px; margin-bottom: 12px; border-radius: 6px; border: 1px solid #fbbf24;">
               <div style="font-weight: 600; font-size: 1.1em; margin-bottom: 8px;">
                 ${index + 1}. ${escapeHtml(snack.name)}
               </div>
-              <div style="display: flex; gap: 15px; flex-wrap: wrap; color: #666; font-size: 0.95em;">
-                <span>🥩 Protein: ${escapeHtml(snack.protein)}g</span>
-                <span>🍞 Carbs: ${escapeHtml(snack.carbs)}g</span>
-                <span>🥑 Fat: ${escapeHtml(snack.fat)}g</span>
-                <span>⚡ ${escapeHtml(snack.calories)} kcal</span>
+              <div style="display: flex; gap: 15px; flex-wrap: wrap; color: #666; font-size: 0.95em; margin-bottom: 8px;">
+                <span>🥩 ${escapeHtml(String(snack.protein))}g protein</span>
+                <span>🍞 ${escapeHtml(String(snack.carbs))}g carbs</span>
+                <span>🥑 ${escapeHtml(String(snack.fat))}g fat</span>
+                <span>⚡ ${escapeHtml(String(snack.calories))} kcal</span>
               </div>
+              ${badgesHTML ? `<div style="margin-bottom:8px;">${badgesHTML}</div>` : ''}
+              ${snack.reason ? `<div style="color:#92400e;font-size:0.9em;">💡 ${escapeHtml(snack.reason)}</div>` : ''}
             </div>`;
         });
         snackList.innerHTML = snackHTML;
@@ -1763,15 +1771,6 @@ html.in-iframe .app-card {
       } else {
         snackContainer.style.display = 'none';
       }
-
-      document.getElementById("addProteinBtn").onclick = async () => {
-        const val = Number(document.getElementById("extraProteinInput").value) || 0;
-        if (val <= 0) { alert("Enter grams > 0"); return; }
-        try {
-          const res = await api("/add-protein", { session_id: sessionId, extra_protein_grams: val });
-          renderMenu(res);
-        } catch (e) { alert("Error adding protein"); console.error(e); }
-      };
 
       const saveBtn = document.getElementById("saveNote");
       if (saveBtn) {
@@ -1785,23 +1784,20 @@ html.in-iframe .app-card {
       }
     }
 
-    async function addProteinToMeal(mealIndex){
-      const inp = document.getElementById(`p-${mealIndex}`);
-      const val = Number(inp.value) || 0;
-      if (val <= 0) { alert("Enter grams > 0"); return; }
-      try {
-        const res = await api("/add-protein", { session_id: sessionId, extra_protein_grams: val, meal_index: mealIndex });
-        renderMenu(res);
-      } catch (e) { alert("Error adding protein"); console.error(e); }
-    }
-
     async function swapMeal(name){
       if (!confirm(`Swap "${name}"?`)) return;
       try {
         const res = await api("/swap-meal", { session_id: sessionId, meal_to_swap: name });
-        if (res.menu) renderMenu(res);
-        else alert(res.message || "No replacement");
-      } catch (e) { alert("Swap error"); console.error(e); }
+        if (res.menu) {
+          renderMenu(res);
+          if (res.reason === "no_compatible_meals") {
+            const restrictions = (res.restrictions_applied || []).join(", ") || "your restrictions";
+            alert(`❌ No compatible alternatives found\n\nAll available options conflict with: ${restrictions}\n\n💡 ${res.suggestion || "Try regenerating the full menu."}`);
+          }
+        } else {
+          alert(res.message || "No replacement available.");
+        }
+      } catch (e) { alert("Swap error — please try again."); console.error(e); }
     }
 
     async function redoMenu(){

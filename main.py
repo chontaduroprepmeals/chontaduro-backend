@@ -508,6 +508,7 @@ def calc_macros(calories: int, objective: str, weight_kg: Optional[float], sex: 
 
 # --- SNACK DATABASE FOR MACRO COMPLETION ---
 SNACK_DATABASE = [
+    # --- High protein, low carb ---
     {
         "name": "Protein Shake + Banana + Almendras",
         "description": "1 scoop whey protein + 1 banana mediana + 15 almendras",
@@ -515,7 +516,8 @@ SNACK_DATABASE = [
         "carbs_g": 30,
         "fat_g": 9,
         "calories": 325,
-        "category": "shake"
+        "category": "shake",
+        "profile": "high_protein"
     },
     {
         "name": "Pechuga de Pollo + Camote",
@@ -524,8 +526,82 @@ SNACK_DATABASE = [
         "carbs_g": 20,
         "fat_g": 5,
         "calories": 253,
-        "category": "whole_food"
+        "category": "whole_food",
+        "profile": "high_protein_low_carb"
     },
+    {
+        "name": "Beef Jerky + String Cheese",
+        "description": "30g beef jerky + 1 string cheese stick",
+        "protein_g": 20,
+        "carbs_g": 5,
+        "fat_g": 8,
+        "calories": 170,
+        "category": "whole_food",
+        "profile": "high_protein_low_carb"
+    },
+    {
+        "name": "Whey Protein Shake (Solo)",
+        "description": "1.5 scoops whey protein en agua o leche descremada",
+        "protein_g": 36,
+        "carbs_g": 8,
+        "fat_g": 3,
+        "calories": 203,
+        "category": "shake",
+        "profile": "high_protein_low_carb"
+    },
+    # --- High carb, moderate protein ---
+    {
+        "name": "Banana + Mantequilla de Maní",
+        "description": "1 banana grande + 2 cdas mantequilla de maní",
+        "protein_g": 7,
+        "carbs_g": 35,
+        "fat_g": 16,
+        "calories": 308,
+        "category": "whole_food",
+        "profile": "high_carb"
+    },
+    {
+        "name": "Rice Cakes + Hummus + Zanahoria",
+        "description": "3 rice cakes + 4 cdas hummus + zanahorias baby",
+        "protein_g": 8,
+        "carbs_g": 38,
+        "fat_g": 7,
+        "calories": 247,
+        "category": "whole_food",
+        "profile": "high_carb"
+    },
+    {
+        "name": "Avena con Leche + Miel + Frutas",
+        "description": "40g avena cocida + 1 taza leche + 1 cda miel + fresas",
+        "protein_g": 11,
+        "carbs_g": 52,
+        "fat_g": 5,
+        "calories": 301,
+        "category": "whole_food",
+        "profile": "high_carb"
+    },
+    # --- High fat, moderate protein ---
+    {
+        "name": "Almendras + Nueces Mix",
+        "description": "30g almendras + 15g nueces",
+        "protein_g": 8,
+        "carbs_g": 9,
+        "fat_g": 22,
+        "calories": 258,
+        "category": "nuts",
+        "profile": "high_fat"
+    },
+    {
+        "name": "Aguacate Toast + Huevo Pochado",
+        "description": "1 rebanada pan integral + 1/2 aguacate + 1 huevo pochado",
+        "protein_g": 10,
+        "carbs_g": 18,
+        "fat_g": 18,
+        "calories": 275,
+        "category": "eggs",
+        "profile": "high_fat"
+    },
+    # --- Balanced (all macros) ---
     {
         "name": "Greek Yogurt + Granola + Mantequilla de Maní",
         "description": "170g Greek yogurt 0% + 30g granola + 1 cda PB",
@@ -533,7 +609,8 @@ SNACK_DATABASE = [
         "carbs_g": 22,
         "fat_g": 11,
         "calories": 267,
-        "category": "yogurt"
+        "category": "yogurt",
+        "profile": "balanced"
     },
     {
         "name": "Atún + Arroz + Aguacate",
@@ -542,7 +619,8 @@ SNACK_DATABASE = [
         "carbs_g": 25,
         "fat_g": 8,
         "calories": 272,
-        "category": "whole_food"
+        "category": "whole_food",
+        "profile": "balanced"
     },
     {
         "name": "Huevos Revueltos + Pan Integral + Aguacate",
@@ -551,7 +629,8 @@ SNACK_DATABASE = [
         "carbs_g": 28,
         "fat_g": 14,
         "calories": 310,
-        "category": "eggs"
+        "category": "eggs",
+        "profile": "balanced"
     },
     {
         "name": "Cottage Cheese + Frutas + Nueces",
@@ -560,7 +639,8 @@ SNACK_DATABASE = [
         "carbs_g": 15,
         "fat_g": 12,
         "calories": 252,
-        "category": "dairy"
+        "category": "dairy",
+        "profile": "balanced"
     },
     {
         "name": "Protein Bar de Alta Calidad",
@@ -569,7 +649,8 @@ SNACK_DATABASE = [
         "carbs_g": 24,
         "fat_g": 8,
         "calories": 248,
-        "category": "bar"
+        "category": "bar",
+        "profile": "balanced"
     },
     {
         "name": "Batido de Proteína Vegana + Avena",
@@ -578,7 +659,8 @@ SNACK_DATABASE = [
         "carbs_g": 35,
         "fat_g": 10,
         "calories": 342,
-        "category": "shake"
+        "category": "shake",
+        "profile": "balanced"
     },
     {
         "name": "Pavo + Pan Pita + Hummus",
@@ -587,7 +669,8 @@ SNACK_DATABASE = [
         "carbs_g": 30,
         "fat_g": 8,
         "calories": 304,
-        "category": "whole_food"
+        "category": "whole_food",
+        "profile": "balanced"
     },
     {
         "name": "Salmón Ahumado + Galletas Integrales + Queso Crema Light",
@@ -596,7 +679,18 @@ SNACK_DATABASE = [
         "carbs_g": 18,
         "fat_g": 9,
         "calories": 213,
-        "category": "fish"
+        "category": "fish",
+        "profile": "balanced"
+    },
+    {
+        "name": "Edamame + Queso Cottage",
+        "description": "100g edamame cocido + 100g cottage cheese",
+        "protein_g": 19,
+        "carbs_g": 12,
+        "fat_g": 6,
+        "calories": 178,
+        "category": "dairy",
+        "profile": "balanced"
     },
 ]
 
@@ -624,65 +718,83 @@ def calculate_macro_deficit(target_macros: Dict[str, int], achieved_macros: Dict
 def recommend_snacks(deficit: Dict[str, int], num_recommendations: int = 3) -> List[Dict[str, Any]]:
     """
     Recommend snacks that best fill the macro deficit.
-    
+
     Args:
         deficit: Dict with 'protein', 'carbs', 'fat', 'calories' deficits
         num_recommendations: Number of snack recommendations to return
-        
+
     Returns:
-        List of snack dicts sorted by how well they fill the deficit
+        List of snack dicts sorted by how well they fill the deficit, each with
+        'reason' (explanation) and 'coverage' (percentage of deficit covered per macro).
     """
     if all(v <= 0 for v in deficit.values()):
-        # No deficit, no need for snacks
         return []
-    
-    # Score each snack based on how well it fills the deficit
+
     scored_snacks = []
     for snack in SNACK_DATABASE:
-        # Calculate how well this snack matches the deficit
-        # Higher score = better match
         score = 0.0
-        
-        # Protein match (most important for body recomposition)
-        if deficit["protein"] > 0:
-            protein_ratio = min(snack["protein_g"] / deficit["protein"], 1.0)
-            score += protein_ratio * 3.0  # Weight protein heavily
-        
-        # Carbs match
-        if deficit["carbs"] > 0:
-            carbs_ratio = min(snack["carbs_g"] / deficit["carbs"], 1.0)
-            score += carbs_ratio * 1.5
-        
-        # Fat match
-        if deficit["fat"] > 0:
-            fat_ratio = min(snack["fat_g"] / deficit["fat"], 1.0)
-            score += fat_ratio * 1.5
-        
-        # Calorie match
-        if deficit["calories"] > 0:
-            cal_ratio = min(snack["calories"] / deficit["calories"], 1.0)
-            score += cal_ratio * 1.0
-        
-        # Penalize snacks that are too large (exceed deficit too much)
-        if deficit["calories"] > 0 and snack["calories"] > deficit["calories"] * 1.5:
+
+        protein_ratio = min(snack["protein_g"] / deficit["protein"], 1.0) if deficit.get("protein", 0) > 0 else 0.0
+        carbs_ratio   = min(snack["carbs_g"]   / deficit["carbs"],   1.0) if deficit.get("carbs",   0) > 0 else 0.0
+        fat_ratio     = min(snack["fat_g"]     / deficit["fat"],     1.0) if deficit.get("fat",     0) > 0 else 0.0
+        cal_ratio     = min(snack["calories"]  / deficit["calories"], 1.0) if deficit.get("calories",0) > 0 else 0.0
+
+        score += protein_ratio * 3.0
+        score += carbs_ratio   * 1.5
+        score += fat_ratio     * 1.5
+        score += cal_ratio     * 1.0
+
+        if deficit.get("calories", 0) > 0 and snack["calories"] > deficit["calories"] * 1.5:
             score *= 0.7
-        
+
         scored_snacks.append({
             "snack": snack,
-            "score": score
+            "score": score,
+            "protein_ratio": protein_ratio,
+            "carbs_ratio":   carbs_ratio,
+            "fat_ratio":     fat_ratio,
+            "cal_ratio":     cal_ratio,
         })
-    
-    # Sort by score (highest first) and return top N with frontend-expected key names
+
     scored_snacks.sort(key=lambda x: x["score"], reverse=True)
+
+    def _format_macro_coverage(macro_name: str, snack_amount: int, ratio: float, gap: int) -> str:
+        return f"{macro_name} ({snack_amount}g closes {int(ratio * 100)}% of {gap}g gap)"
+
     recommendations = []
     for item in scored_snacks[:num_recommendations]:
         snack = item["snack"]
+
+        # Build human-readable "reason"
+        primary_macros = []
+        if deficit.get("protein", 0) > 0 and item["protein_ratio"] >= 0.5:
+            primary_macros.append(_format_macro_coverage("protein", snack["protein_g"], item["protein_ratio"], deficit["protein"]))
+        if deficit.get("carbs", 0) > 0 and item["carbs_ratio"] >= 0.5:
+            primary_macros.append(_format_macro_coverage("carbs", snack["carbs_g"], item["carbs_ratio"], deficit["carbs"]))
+        if deficit.get("fat", 0) > 0 and item["fat_ratio"] >= 0.5:
+            primary_macros.append(_format_macro_coverage("fat", snack["fat_g"], item["fat_ratio"], deficit["fat"]))
+        reason = ("High in " + " & ".join(primary_macros)) if primary_macros else "Balanced option to help close remaining macro gaps"
+
+        # Build coverage dict (percentage strings)
+        coverage: Dict[str, str] = {}
+        if deficit.get("protein", 0) > 0:
+            coverage["protein"] = f"{int(item['protein_ratio'] * 100)}%"
+        if deficit.get("carbs", 0) > 0:
+            coverage["carbs"] = f"{int(item['carbs_ratio'] * 100)}%"
+        if deficit.get("fat", 0) > 0:
+            coverage["fat"] = f"{int(item['fat_ratio'] * 100)}%"
+        if deficit.get("calories", 0) > 0:
+            coverage["calories"] = f"{int(item['cal_ratio'] * 100)}%"
+
         recommendations.append({
             "name": snack["name"],
+            "description": snack.get("description", ""),
             "protein": snack["protein_g"],
             "carbs": snack["carbs_g"],
             "fat": snack["fat_g"],
-            "calories": snack["calories"]
+            "calories": snack["calories"],
+            "reason": reason,
+            "coverage": coverage,
         })
     return recommendations
 
@@ -809,6 +921,10 @@ _PROTEIN_DISTANCE_WEIGHT = 2    # Penalty per gram away from protein target
 _CALORIE_DISTANCE_WEIGHT = 0.1  # Penalty per kcal away from calorie target
 _HIGH_PROTEIN_BONUS = 20        # Bonus for meals naturally in 30-40g protein range
 _LOW_PROTEIN_PENALTY = 30       # Penalty for meals below 20g protein (hard to supplement)
+
+# Default fallback targets used when a replaced meal has no recorded protein/calorie values
+_DEFAULT_SWAP_PROTEIN_TARGET_G = 40
+_DEFAULT_SWAP_CALORIE_TARGET = 600
 
 
 def select_meal_for_protein_target(available_meals: List[Dict], target_protein: int, target_calories: int) -> Dict:
@@ -1325,6 +1441,7 @@ def validate_daily_macros(
 
 MEAT_KEYWORDS = {"chicken","beef","pork","turkey","lamb","bacon","ham","steak"}
 FISH_KEYWORDS = {"salmon","shrimp","fish","tuna","trout","cod","shellfish","prawns"}
+RED_MEAT_KEYWORDS = {"beef","lamb","steak","veal","bison"}
 DAIRY_KEYWORDS = {"milk","yogurt","cheese","butter","cream"}
 EGG_KEYWORDS = {"egg","eggs"}
 NUT_KEYWORDS = {"nut","nuts","almond","walnut","peanut"}
@@ -1348,6 +1465,8 @@ def is_meal_compatible_with_diet(ingredients: List[str], diet: Optional[str]) ->
     ings = [i.lower() for i in (ingredients or [])]
     if d == "omnivore":
         return True
+    if d == "no red meat":
+        return not any(any(mk in ing for mk in RED_MEAT_KEYWORDS) for ing in ings)
     if d == "pescatarian":
         return not any(any(mk in ing for mk in MEAT_KEYWORDS) for ing in ings)
     if d == "vegetarian":
@@ -1418,6 +1537,8 @@ def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions
             undesired.update({"chicken","poultry"})
         elif "seafood" in rr or "shellfish" in rr:
             undesired.update(FISH_KEYWORDS)
+        elif "red meat" in rr or "no red meat" in rr:
+            undesired.update(RED_MEAT_KEYWORDS)
         elif "soy" in rr:
             undesired.update(SOY_KEYWORDS)
         elif "corn" in rr:
@@ -2154,7 +2275,7 @@ def process_meal_data(meal: Meal, protein: int, calories: int, fat_ratio: float 
 # --- UI form definitions (unchanged) ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "diet_preference":
-        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Pescatarian"], "required": True}],"current_step":"diet_preference"}
+        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","No Red Meat","Vegetarian","Pescatarian"], "required": True}],"current_step":"diet_preference"}
     if step_name == "pick_plan":
         return {"question":"Which plan do you want?","fields":[{"name":"Plan","type":"select","options":["Plan 1: 1 main meal per day","Plan 2: 2 main meals per day","Plan 3: 1 main meal + 1 breakfast","Plan 4: 2 main meals + 1 breakfast (full day)"], "required": True}],"current_step":"pick_plan"}
     if step_name == "objective":
@@ -3067,11 +3188,30 @@ async def swap_meal(request: Request):
         current_names = [m.get("name") for m in state.menu]
         potential = [m for m in avail if m.name not in current_names and m.type.lower() == replaced_type]
         if not potential:
+            # Fallback: try any type that respects restrictions
             potential = [m for m in avail if m.name not in current_names]
         if not potential:
-            return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)), "message": "No replacements available."}
+            restrictions_applied = list(filter(None, (state.dietary_restrictions or []) + ([state.diet_preference] if state.diet_preference else [])))
+            return JSONResponse(
+                content={
+                    "menu": state.menu,
+                    "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)),
+                    "message": f"❌ No compatible alternatives found for '{meal_to_swap}'.",
+                    "reason": "no_compatible_meals",
+                    "restrictions_applied": restrictions_applied,
+                    "suggestion": "Try regenerating the full menu or adjusting your dietary restrictions.",
+                }
+            )
 
-        new_meal = random.choice(potential)
+        # Use smart selection (protein/calorie targets) instead of random.choice
+        protein_target = int(replaced_meal.get("protein_assigned", replaced_meal.get("protein", _DEFAULT_SWAP_PROTEIN_TARGET_G)) or _DEFAULT_SWAP_PROTEIN_TARGET_G)
+        calorie_target = int(replaced_meal.get("calories", _DEFAULT_SWAP_CALORIE_TARGET) or _DEFAULT_SWAP_CALORIE_TARGET)
+        new_meal_dict = select_meal_for_protein_target(
+            [m.model_dump() for m in potential],
+            protein_target,
+            calorie_target,
+        )
+        new_meal = Meal(**new_meal_dict) if new_meal_dict else potential[0]
 
         # Standard pricing: Breakfast = $11, Main Meal = $15
         if replaced_type == "breakfast":
