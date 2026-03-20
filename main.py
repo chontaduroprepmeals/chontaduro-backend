@@ -598,6 +598,96 @@ SNACK_DATABASE = [
         "calories": 213,
         "category": "fish"
     },
+    {
+        "name": "Turkey Jerky + Manzana",
+        "description": "30g turkey jerky + 1 manzana mediana",
+        "protein_g": 13,
+        "carbs_g": 25,
+        "fat_g": 2,
+        "calories": 168,
+        "category": "whole_food"
+    },
+    {
+        "name": "Almendras + Queso Mozzarella",
+        "description": "20g almendras + 30g mozzarella",
+        "protein_g": 10,
+        "carbs_g": 4,
+        "fat_g": 16,
+        "calories": 200,
+        "category": "dairy"
+    },
+    {
+        "name": "Banana + Mantequilla de Maní",
+        "description": "1 banana mediana + 2 cdas mantequilla de maní",
+        "protein_g": 7,
+        "carbs_g": 35,
+        "fat_g": 16,
+        "calories": 308,
+        "category": "whole_food"
+    },
+    {
+        "name": "Rice Cakes + Hummus + Pepino",
+        "description": "3 rice cakes + 4 cdas hummus + 1/2 pepino",
+        "protein_g": 6,
+        "carbs_g": 30,
+        "fat_g": 6,
+        "calories": 198,
+        "category": "whole_food"
+    },
+    {
+        "name": "Avocado Toast + Huevo",
+        "description": "1 rebanada pan integral + 1/4 aguacate + 1 huevo hervido",
+        "protein_g": 10,
+        "carbs_g": 18,
+        "fat_g": 12,
+        "calories": 218,
+        "category": "eggs"
+    },
+    {
+        "name": "Yogurt Griego + Miel + Nueces",
+        "description": "170g Greek yogurt 0% + 1 cdta miel + 10g nueces",
+        "protein_g": 17,
+        "carbs_g": 14,
+        "fat_g": 6,
+        "calories": 178,
+        "category": "yogurt"
+    },
+    {
+        "name": "Proteína en Polvo + Leche de Almendra",
+        "description": "1 scoop whey protein + 240ml leche de almendra sin azúcar",
+        "protein_g": 26,
+        "carbs_g": 5,
+        "fat_g": 3,
+        "calories": 151,
+        "category": "shake"
+    },
+    {
+        "name": "Tostadas con Queso Cottage + Tomate",
+        "description": "2 tostadas integrales + 100g cottage cheese + 1 tomate",
+        "protein_g": 14,
+        "carbs_g": 22,
+        "fat_g": 4,
+        "calories": 180,
+        "category": "dairy"
+    },
+    {
+        "name": "Mix de Frutos Secos + Chocolate Oscuro",
+        "description": "25g mix de nueces/almendras/marañón + 20g chocolate 70%",
+        "protein_g": 6,
+        "carbs_g": 18,
+        "fat_g": 20,
+        "calories": 270,
+        "category": "whole_food"
+    },
+    {
+        "name": "Huevos Duros + Frutas del Bosque",
+        "description": "2 huevos duros + 80g arándanos/fresas",
+        "protein_g": 13,
+        "carbs_g": 12,
+        "fat_g": 10,
+        "calories": 190,
+        "category": "eggs"
+    },
 ]
 
 
@@ -630,7 +720,8 @@ def recommend_snacks(deficit: Dict[str, int], num_recommendations: int = 3) -> L
         num_recommendations: Number of snack recommendations to return
         
     Returns:
-        List of snack dicts sorted by how well they fill the deficit
+        List of snack dicts sorted by how well they fill the deficit,
+        each with 'reason' explanation and 'coverage' percentages.
     """
     if all(v <= 0 for v in deficit.values()):
         # No deficit, no need for snacks
@@ -677,12 +768,39 @@ def recommend_snacks(deficit: Dict[str, int], num_recommendations: int = 3) -> L
     recommendations = []
     for item in scored_snacks[:num_recommendations]:
         snack = item["snack"]
+        
+        # Compute coverage percentages once, reuse for both reasons and coverage dict
+        macro_map = [
+            ("protein", snack["protein_g"], deficit["protein"], "High in protein to close {}g gap"),
+            ("carbs",   snack["carbs_g"],   deficit["carbs"],   "Good carb source for {}g gap"),
+            ("fat",     snack["fat_g"],     deficit["fat"],     "Helps close {}g fat gap"),
+            ("calories",snack["calories"],  deficit["calories"],None),
+        ]
+        pct_values: dict[str, int] = {}
+        for key, snack_val, def_val, _ in macro_map:
+            pct_values[key] = min(round(snack_val / def_val * 100), 100) if def_val > 0 else 0
+        
+        # Build reason from highest-coverage macros (>= 50%)
+        reasons = []
+        for key, _, def_val, reason_tpl in macro_map:
+            if reason_tpl and def_val > 0 and pct_values[key] >= 50:
+                reasons.append(reason_tpl.format(def_val))
+        reason = reasons[0] if reasons else "Balanced macro coverage"
+        
+        # Coverage percentages per macro as display strings
+        coverage = {
+            key: (f"{pct_values[key]}%" if def_val > 0 else "—")
+            for key, _, def_val, _ in macro_map
+        }
+        
         recommendations.append({
             "name": snack["name"],
             "protein": snack["protein_g"],
             "carbs": snack["carbs_g"],
             "fat": snack["fat_g"],
-            "calories": snack["calories"]
+            "calories": snack["calories"],
+            "reason": reason,
+            "coverage": coverage,
         })
     return recommendations
 
@@ -1325,6 +1443,7 @@ def validate_daily_macros(
 
 MEAT_KEYWORDS = {"chicken","beef","pork","turkey","lamb","bacon","ham","steak"}
 FISH_KEYWORDS = {"salmon","shrimp","fish","tuna","trout","cod","shellfish","prawns"}
+RED_MEAT_KEYWORDS = {"beef","lamb","steak","veal","bison"}
 DAIRY_KEYWORDS = {"milk","yogurt","cheese","butter","cream"}
 EGG_KEYWORDS = {"egg","eggs"}
 NUT_KEYWORDS = {"nut","nuts","almond","walnut","peanut"}
@@ -1352,6 +1471,8 @@ def is_meal_compatible_with_diet(ingredients: List[str], diet: Optional[str]) ->
         return not any(any(mk in ing for mk in MEAT_KEYWORDS) for ing in ings)
     if d == "vegetarian":
         return not any(any(mk in ing for mk in (MEAT_KEYWORDS | FISH_KEYWORDS)) for ing in ings)
+    if d in ("no red meat", "no_red_meat"):
+        return not any(any(rk in ing for rk in RED_MEAT_KEYWORDS) for ing in ings)
     if d == "few restrictions":
         return True
     return True
@@ -1418,6 +1539,8 @@ def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions
             undesired.update({"chicken","poultry"})
         elif "seafood" in rr or "shellfish" in rr:
             undesired.update(FISH_KEYWORDS)
+        elif "red meat" in rr or "no red meat" in rr:
+            undesired.update(RED_MEAT_KEYWORDS)
         elif "soy" in rr:
             undesired.update(SOY_KEYWORDS)
         elif "corn" in rr:
@@ -2154,7 +2277,7 @@ def process_meal_data(meal: Meal, protein: int, calories: int, fat_ratio: float 
 # --- UI form definitions (unchanged) ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "diet_preference":
-        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Pescatarian"], "required": True}],"current_step":"diet_preference"}
+        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Pescatarian","No Red Meat"], "required": True}],"current_step":"diet_preference"}
     if step_name == "pick_plan":
         return {"question":"Which plan do you want?","fields":[{"name":"Plan","type":"select","options":["Plan 1: 1 main meal per day","Plan 2: 2 main meals per day","Plan 3: 1 main meal + 1 breakfast","Plan 4: 2 main meals + 1 breakfast (full day)"], "required": True}],"current_step":"pick_plan"}
     if step_name == "objective":
@@ -3069,7 +3192,18 @@ async def swap_meal(request: Request):
         if not potential:
             potential = [m for m in avail if m.name not in current_names]
         if not potential:
-            return {"menu": state.menu, "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)), "message": "No replacements available."}
+            restrictions_applied = list(filter(None, [
+                state.diet_preference if state.diet_preference and state.diet_preference.lower() != "omnivore" else None,
+                *[str(r) for r in (state.dietary_restrictions or []) if r and not str(r).lower().startswith("none")]
+            ]))
+            return {
+                "menu": state.menu,
+                "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)),
+                "message": f"❌ No compatible alternatives found for '{meal_to_swap}'. All available {replaced_type} options conflict with your restrictions.",
+                "reason": "no_compatible_meals",
+                "restrictions_applied": restrictions_applied,
+                "suggestion": "Try regenerating the full menu or adjusting your restrictions."
+            }
 
         new_meal = random.choice(potential)
 
