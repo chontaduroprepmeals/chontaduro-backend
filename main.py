@@ -691,6 +691,37 @@ SNACK_DATABASE = [
 ]
 
 
+def get_plan_display_config(plan: int) -> Dict[str, bool]:
+    """
+    Return a dict of boolean flags controlling what nutritional detail
+    is visible to the client based on their subscription plan.
+
+    Plan 4 (premium): full macro detail, ingredient list (names only — amounts/gramajes
+    are never exposed to the client in any plan), daily summary.
+    Plans 1-3 (basic): only dish name, brief ingredient description, and portion slogan.
+    Unknown plans default to the most restrictive (basic) view.
+
+    Args:
+        plan: The user's plan number (1-4).
+
+    Returns:
+        Dict with display flags:
+          - show_macros: show per-meal macro table (protein/carbs/fat/calories)
+          - show_ingredients: show ingredient name list (amounts are never shown)
+          - show_daily_summary: show end-of-day macro totals panel
+          - show_nutrition_totals: show the "Daily Nutrition Plan" header panel
+          - show_snack_recommendations: show snack suggestions section
+    """
+    is_plan4 = plan == 4
+    return {
+        "show_macros": is_plan4,
+        "show_ingredients": True,          # ingredient names visible for all plans; amounts are always hidden
+        "show_daily_summary": is_plan4,
+        "show_nutrition_totals": is_plan4,
+        "show_snack_recommendations": is_plan4,
+    }
+
+
 def calculate_macro_deficit(target_macros: Dict[str, int], achieved_macros: Dict[str, int]) -> Dict[str, int]:
     """
     Calculate the difference between target macros and what was achieved in the meal plan.
@@ -2843,6 +2874,7 @@ async def next_step(request: Request):
                         "menu": response_menu,
                         "price": total_price,
                         "message": "Your full menu is ready!",
+                        "plan": state.plan,
                         "nutrition": {
                             "tmb": tmb,
                             "tdee": tdee,
@@ -2875,6 +2907,7 @@ async def next_step(request: Request):
                         "menu": response_menu,
                         "price": total_price,
                         "message": "Your menu is ready!",
+                        "plan": state.plan,
                         "nutrition": {
                             "tmb": tmb,
                             "tdee": tdee,
@@ -3255,7 +3288,7 @@ async def swap_meal(request: Request):
         precio_menu = sum(m.get("price", 0.0) for m in state.menu)
         envio = 0.0 if precio_menu >= 100.0 else 10.0  # Envío gratis si precio total supera $100
         total_price = precio_menu + envio
-        return {"menu": state.menu, "price": total_price, "message": f"Swapped '{meal_to_swap}' -> '{new_meal.name}'.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
+        return {"menu": state.menu, "price": total_price, "plan": state.plan, "message": f"Swapped '{meal_to_swap}' -> '{new_meal.name}'.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
     except HTTPException:
         raise
     except Exception as e:
@@ -3311,7 +3344,7 @@ async def redo_menu(request: Request):
     state.extra_protein_map = {}
     sessions[sid] = state.model_dump()
     total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], 0)
-    return {"menu": state.menu, "price": total_price, "message":"Full menu regenerated.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
+    return {"menu": state.menu, "price": total_price, "plan": state.plan, "message":"Full menu regenerated.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
 # --- RUTAS RELACIONADAS CON STRIPE ---
 
 @app.post("/calculate-total")
