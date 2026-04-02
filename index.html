@@ -1513,21 +1513,6 @@ html.in-iframe .app-card {
         </div>`;
       }
 
-      // Global add-protein control REMOVED per UX simplification
-      // Snack section is rendered at the top after menu header (Plan 4 only)
-
-      // Snack Recommendations Section (TOP - before meals) — only for Plan 4
-      html += `<div id="snack-recommendations" style="display: none;">
-        <div style="background: linear-gradient(135deg, #fff9e6 0%, #fef3c7 100%); border: 2px solid #f59e0b; border-top: 5px solid #d97706; padding: 24px; margin: 0 0 24px 0; border-radius: 12px; box-shadow: 0 2px 8px rgba(245,158,11,0.15);">
-          <h2 style="color: #92400e; font-size: 1.5em; font-weight: 700; margin-bottom: 8px;">
-            🍫 Complete Your Day - Snack Suggestions
-          </h2>
-          <p style="color: #78350f; margin-bottom: 16px; font-size: 0.95em; line-height: 1.5;">Your meals provide the foundation. Add these simple snacks to hit your exact macro targets:</p>
-          <div id="snack-flexible-message" style="display: none; white-space: pre-line; color: #555; margin-bottom: 15px; line-height: 1.7;"></div>
-          <div id="snack-list"></div>
-        </div>
-      </div>`;
-
       html += `<div class="space-y-3">`;
       // Group meals by day
       const mealsByDay = groupMealsByDay(data.menu || []);
@@ -1579,27 +1564,22 @@ html.in-iframe .app-card {
             portionInfo = `<div class="text-xs text-blue-600 mt-1">📏 Scaled to meet your needs</div>`;
           }
 
-          // Ingredients display — controlled by plan:
-          // Plan 4: show ingredient names without amounts/gramajes
-          // Plans 1-3: show ingredient names as a brief appetizing description (no label, no amounts)
+          // Ingredients display — Plan 4 only: show ingredient names without amounts/gramajes.
+          // Plans 1-3: no ingredient list shown at all (only name and portion slogan).
           let ingredientsHTML = '';
-          const ingredientNames = [];
-          if (m.base_macros && m.base_macros.ingredient_breakdown && m.base_macros.ingredient_breakdown.length > 0) {
-            m.base_macros.ingredient_breakdown.forEach(ing => ingredientNames.push(ing.name));
-          } else if (m.ingredients && m.ingredients.length > 0) {
-            m.ingredients.forEach(i => ingredientNames.push(i));
-          }
-
-          if (ingredientNames.length > 0) {
-            if (isPlan4) {
+          if (isPlan4) {
+            const ingredientNames = [];
+            if (m.base_macros && m.base_macros.ingredient_breakdown && m.base_macros.ingredient_breakdown.length > 0) {
+              m.base_macros.ingredient_breakdown.forEach(ing => ingredientNames.push(ing.name));
+            } else if (m.ingredients && m.ingredients.length > 0) {
+              m.ingredients.forEach(i => ingredientNames.push(i));
+            }
+            if (ingredientNames.length > 0) {
               // Plan 4: labeled list of ingredient names, no amounts/gramajes
               ingredientsHTML = '<div style="margin-top: 12px; padding: 10px; background: #f9fafb; border-radius: 6px;">';
               ingredientsHTML += '<div style="font-weight: 600; margin-bottom: 6px; color: #374151;">Ingredients:</div>';
               ingredientsHTML += `<div style="color: #6b7280; font-size: 0.9em;">${ingredientNames.join(', ')}</div>`;
               ingredientsHTML += '</div>';
-            } else {
-              // Plans 1-3: brief appetizing description (ingredient names only, no label or amounts)
-              ingredientsHTML = `<div class="mt-2 text-sm text-gray-600 italic">${ingredientNames.join(', ')}</div>`;
             }
           }
 
@@ -1689,15 +1669,12 @@ html.in-iframe .app-card {
       // Store menu data globally for checkout
       window.currentMenuData = data;
 
-      // Populate snack recommendations — only shown for Plan 4
-      const snackContainer = document.getElementById('snack-recommendations');
-      const snackList = document.getElementById('snack-list');
-      const snackFlexibleDiv = document.getElementById('snack-flexible-message');
       const escapeHtml = (str) => String(str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
       // Populate daily summary if present (Plan 4 only)
+      // Snack suggestion is shown exclusively inside this summary block.
       const summarySection = document.getElementById('daily-summary-section');
       if (isPlan4 && data.daily_summary && summarySection) {
         const ds = data.daily_summary;
@@ -1733,49 +1710,6 @@ html.in-iframe .app-card {
               ${escapeHtml(ds.message || '')}
             </div>
           </div>`;
-      }
-
-      if (isPlan4 && data.snack_flexible && data.snack_flexible.show_snacks) {
-        // Flexible range message (Plan 4 with small protein gap)
-        snackFlexibleDiv.textContent = data.snack_flexible.message;
-        snackFlexibleDiv.style.display = 'block';
-        snackContainer.style.display = 'block';
-      } else if (isPlan4 && data.snack_recommendations && data.snack_recommendations.length > 0) {
-        let snackHTML = '';
-        data.snack_recommendations.forEach((snack, index) => {
-          // Coverage badges
-          let badgesHTML = '';
-          if (snack.coverage) {
-            const macroLabels = { protein: '🥩 Protein', carbs: '🍞 Carbs', fat: '🥑 Fat', calories: '⚡ Calories' };
-            Object.entries(snack.coverage).forEach(([macro, pct]) => {
-              if (pct === '—') return;
-              const numPct = parseInt(pct, 10);
-              let badgeColor, badgeIcon;
-              if (numPct >= 100) { badgeColor = '#dcfce7; color:#16a34a'; badgeIcon = '✅'; }
-              else if (numPct >= 50) { badgeColor = '#fef9c3; color:#ca8a04'; badgeIcon = '⚠️'; }
-              else { badgeColor = '#f3f4f6; color:#6b7280'; badgeIcon = ''; }
-              badgesHTML += `<span style="display:inline-block; padding:2px 8px; margin:2px; border-radius:12px; font-size:0.8em; background:${badgeColor}; white-space:nowrap;">${badgeIcon} ${macroLabels[macro]} ${pct}</span>`;
-            });
-          }
-          snackHTML += `
-            <div style="background: white; padding: 16px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #fbbf24; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-              <div style="font-weight: 700; font-size: 1.1em; margin-bottom: 8px; color: #1f2937;">
-                ${index + 1}. ${escapeHtml(snack.name)}
-              </div>
-              <div style="display: flex; gap: 15px; flex-wrap: wrap; color: #555; font-size: 0.95em; margin-bottom: 8px;">
-                <span>🥩 ${escapeHtml(String(snack.protein))}g protein</span>
-                <span>🍞 ${escapeHtml(String(snack.carbs))}g carbs</span>
-                <span>🥑 ${escapeHtml(String(snack.fat))}g fat</span>
-                <span>⚡ ${escapeHtml(String(snack.calories))} kcal</span>
-              </div>
-              ${badgesHTML ? `<div style="margin-bottom:8px;">${badgesHTML}</div>` : ''}
-              ${snack.reason ? `<div style="font-size:0.9em; color:#6b7280; font-style:italic;">💡 ${escapeHtml(snack.reason)}</div>` : ''}
-            </div>`;
-        });
-        snackList.innerHTML = snackHTML;
-        snackContainer.style.display = 'block';
-      } else {
-        snackContainer.style.display = 'none';
       }
 
       const saveBtn = document.getElementById("saveNote");
