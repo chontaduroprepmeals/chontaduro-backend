@@ -697,8 +697,9 @@ def get_plan_display_config(plan: int) -> Dict[str, bool]:
     is visible to the client based on their subscription plan.
 
     Plan 4 (premium): full macro detail, ingredient list (names only — amounts/gramajes
-    are never exposed to the client in any plan), daily summary.
-    Plans 1-3 (basic): only dish name, brief ingredient description, and portion slogan.
+    are never exposed to the client in any plan), daily summary, snack in summary.
+    Plans 1-3 (basic): only dish name and portion slogan — no ingredients, no macros,
+    no daily summary, no snack suggestions anywhere.
     Unknown plans default to the most restrictive (basic) view.
 
     Args:
@@ -708,14 +709,14 @@ def get_plan_display_config(plan: int) -> Dict[str, bool]:
         Dict with display flags:
           - show_macros: show per-meal macro table (protein/carbs/fat/calories)
           - show_ingredients: show ingredient name list (amounts are never shown)
-          - show_daily_summary: show end-of-day macro totals panel
+          - show_daily_summary: show end-of-day macro totals panel (includes snack suggestion)
           - show_nutrition_totals: show the "Daily Nutrition Plan" header panel
-          - show_snack_recommendations: show snack suggestions section
+          - show_snack_recommendations: show snack suggestions section (only in daily summary)
     """
     is_plan4 = plan == 4
     return {
         "show_macros": is_plan4,
-        "show_ingredients": True,          # ingredient names visible for all plans; amounts are always hidden
+        "show_ingredients": is_plan4,      # ingredient names only for Plan 4; amounts are never shown
         "show_daily_summary": is_plan4,
         "show_nutrition_totals": is_plan4,
         "show_snack_recommendations": is_plan4,

@@ -50,10 +50,10 @@ class TestGetPlanDisplayConfig:
         assert config["show_macros"] is False
 
     @pytest.mark.parametrize("plan", [1, 2, 3])
-    def test_basic_plans_still_show_ingredients(self, plan):
-        """Ingredient *names* (no amounts) are shown as an appetising description."""
+    def test_basic_plans_hide_ingredients(self, plan):
+        """Plans 1-3 do not show any ingredient list — not even names."""
         config = get_plan_display_config(plan)
-        assert config["show_ingredients"] is True
+        assert config["show_ingredients"] is False
 
     @pytest.mark.parametrize("plan", [1, 2, 3])
     def test_basic_plans_hide_daily_summary(self, plan):
@@ -72,10 +72,11 @@ class TestGetPlanDisplayConfig:
 
     # --- Edge cases ---
 
-    def test_unknown_plan_hides_everything_except_ingredients(self):
+    def test_unknown_plan_hides_everything(self):
         """An unrecognised plan number must default to the most restrictive view."""
         config = get_plan_display_config(0)
         assert config["show_macros"] is False
+        assert config["show_ingredients"] is False
         assert config["show_daily_summary"] is False
         assert config["show_nutrition_totals"] is False
         assert config["show_snack_recommendations"] is False
