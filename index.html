@@ -516,7 +516,8 @@ html.in-iframe .app-card {
         { value: "Omnivore", emoji: "🍖", desc: "Eat everything including meat and vegetables" },
         { value: "No Red Meat", emoji: "🐔", desc: "Chicken & fish OK — no beef, lamb, or steak" },
         { value: "Vegetarian", emoji: "🥗", desc: "No meat or poultry, but dairy/eggs OK" },
-        { value: "Pescatarian", emoji: "🐟", desc: "No meat, but fish/seafood is included" }
+        { value: "Pescatarian", emoji: "🐟", desc: "No meat, but fish/seafood is included" },
+        { value: "No Red Meat", emoji: "🍗", desc: "Chicken & fish OK, no beef/lamb/steak" }
       ];
 
       let html = `<form id="f">
@@ -1475,13 +1476,17 @@ html.in-iframe .app-card {
     function renderMenu(data){
       console.log('🍽️ renderMenu() called - Checkout button should appear');
       console.log('Menu data:', data);
+
+      // Determine the user plan number (1-4). Used to control visibility of nutritional detail.
+      const userPlan = data.plan || 0;
+      const isPlan4 = userPlan === 4;
       
       let html = `<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">Your Menu</h2><div><button onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Adjust Preferences</button></div></div>`;
       html += `<div class="mb-4">Estimated price: <strong>$${(data.price || 0).toFixed(2)}</strong></div>`;
-      if (data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal — Target: ${data.nutrition.calorie_target||'N/A'} kcal</div>`;
+      if (isPlan4 && data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal — Target: ${data.nutrition.calorie_target||'N/A'} kcal</div>`;
       
-      // Show daily totals if available
-      if (data.nutrition && data.nutrition.totals) {
+      // Show daily macro totals panel only for Plan 4
+      if (isPlan4 && data.nutrition && data.nutrition.totals) {
         const totals = data.nutrition.totals;
         html += `<div class="mb-4 p-4 bg-blue-50 rounded border-2 border-blue-200">
           <div class="font-bold text-lg mb-2">📊 Your Daily Nutrition Plan</div>
@@ -1509,14 +1514,10 @@ html.in-iframe .app-card {
         </div>`;
       }
 
-      // Global add-protein control removed — protein gap handled via snack suggestions below
-
       html += `<div class="space-y-3">`;
       // Group meals by day
       const mealsByDay = groupMealsByDay(data.menu || []);
       const dayKeys = Object.keys(mealsByDay).sort((a, b) => parseInt(a) - parseInt(b));
-      
-      let globalIdx = 0; // Track global meal index for protein inputs
       
       // Render each day section
       dayKeys.forEach(dayNum => {
@@ -1532,11 +1533,11 @@ html.in-iframe .app-card {
         });
         dayCalories = Math.round(dayCalories);
         
-        // Day header
+        // Day header — show calorie total only for Plan 4
         html += `<div class="mb-6 bg-white p-4 rounded-lg border-2 border-orange-200 shadow-sm">
           <div class="flex justify-between items-center mb-3">
             <h3 class="text-2xl font-bold text-orange-600">📅 DAY ${dayNum}</h3>
-            <div class="text-sm text-gray-600">Total: ${dayCalories} kcal</div>
+            ${isPlan4 ? `<div class="text-sm text-gray-600">Total: ${dayCalories} kcal</div>` : ''}
           </div>`;
         
         // Render meals for this day
@@ -1557,56 +1558,60 @@ html.in-iframe .app-card {
           if (mealType === 'BREAKFAST') mealTypeEmoji = '🌅';
           else if (mealType === 'DINNER') mealTypeEmoji = '🌙';
 
-          // Portion info — show scaled notice when multiplier is not 1
+          // Portion info — show scaled notice for Plan 4 when multiplier is not 1
           const portionMultiplier = m.portion_multiplier || 1.0;
           let portionInfo = '';
-          if (portionMultiplier !== 1.0) {
+          if (isPlan4 && portionMultiplier !== 1.0) {
             portionInfo = `<div class="text-xs text-blue-600 mt-1">📏 Scaled to meet your needs</div>`;
           }
 
-          // Base ingredients breakdown
+          // Ingredients display — Plan 4 only: show ingredient names without amounts/gramajes.
+          // Plans 1-3: no ingredient list shown at all (only name and portion slogan).
           let ingredientsHTML = '';
-          if (m.base_macros && m.base_macros.ingredient_breakdown && m.base_macros.ingredient_breakdown.length > 0) {
-            ingredientsHTML += '<div style="margin-top: 12px; padding: 10px; background: #f9fafb; border-radius: 6px;">';
-            ingredientsHTML += '<div style="font-weight: 600; margin-bottom: 8px; color: #374151;">Base ingredients:</div>';
-            ingredientsHTML += '<ul style="margin: 0; padding-left: 20px; color: #6b7280;">';
-            m.base_macros.ingredient_breakdown.forEach(ing => {
-              ingredientsHTML += `<li style="margin-bottom: 4px;">${ing.amount}${ing.unit} ${ing.name}`;
-              if (ing.protein > 0) {
-                ingredientsHTML += ` <span style="color: #9ca3af;">(${ing.protein}g protein)</span>`;
-              }
-              ingredientsHTML += `</li>`;
-            });
-            ingredientsHTML += '</ul></div>';
-          } else {
-            // Fallback to simple ingredient list
-            const ing = (m.ingredients || []).join(", ");
-            if (ing) {
-              ingredientsHTML = `<div class="mt-2 text-sm text-gray-700">Ingredients: ${ing}</div>`;
+          if (isPlan4) {
+            const ingredientNames = [];
+            if (m.base_macros && m.base_macros.ingredient_breakdown && m.base_macros.ingredient_breakdown.length > 0) {
+              m.base_macros.ingredient_breakdown.forEach(ing => ingredientNames.push(ing.name));
+            } else if (m.ingredients && m.ingredients.length > 0) {
+              m.ingredients.forEach(i => ingredientNames.push(i));
+            }
+            if (ingredientNames.length > 0) {
+              // Plan 4: labeled list of ingredient names, no amounts/gramajes
+              ingredientsHTML = '<div style="margin-top: 12px; padding: 10px; background: #f9fafb; border-radius: 6px;">';
+              ingredientsHTML += '<div style="font-weight: 600; margin-bottom: 6px; color: #374151;">Ingredients:</div>';
+              ingredientsHTML += `<div style="color: #6b7280; font-size: 0.9em;">${ingredientNames.join(', ')}</div>`;
+              ingredientsHTML += '</div>';
             }
           }
 
-          // Modifications section (only show modifications with a visible display label)
+          // Modifications section — only for Plan 4 (only show modifications with a visible display label)
           let modificationsHTML = '';
-          const visibleMods = (m.modifications || []).filter(mod => mod.display);
-          if (visibleMods.length > 0) {
-            modificationsHTML += '<div style="margin-top: 12px; padding: 10px; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 6px;">';
-            modificationsHTML += '<div style="font-weight: 600; margin-bottom: 6px; color: #92400e;">✨ Modified to meet your protein target:</div>';
-            modificationsHTML += '<ul style="margin: 0; padding-left: 20px; color: #78350f;">';
-            visibleMods.forEach(mod => {
-              modificationsHTML += `<li style="margin-bottom: 4px;">${mod.display}`;
-              if (mod.macros && mod.macros.protein) {
-                modificationsHTML += ` <span style="color: #a16207;">(+${mod.macros.protein}g protein)</span>`;
-              }
-              modificationsHTML += `</li>`;
-            });
-            modificationsHTML += '</ul></div>';
+          if (isPlan4) {
+            const visibleMods = (m.modifications || []).filter(mod => mod.display);
+            if (visibleMods.length > 0) {
+              modificationsHTML += '<div style="margin-top: 12px; padding: 10px; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 6px;">';
+              modificationsHTML += '<div style="font-weight: 600; margin-bottom: 6px; color: #92400e;">✨ Modified to meet your protein target:</div>';
+              modificationsHTML += '<ul style="margin: 0; padding-left: 20px; color: #78350f;">';
+              visibleMods.forEach(mod => {
+                modificationsHTML += `<li style="margin-bottom: 4px;">${mod.display}`;
+                if (mod.macros && mod.macros.protein) {
+                  modificationsHTML += ` <span style="color: #a16207;">(+${mod.macros.protein}g protein)</span>`;
+                }
+                modificationsHTML += `</li>`;
+              });
+              modificationsHTML += '</ul></div>';
+            }
           }
 
-          // Final macros display
-          let perMealInfo = `<div style="margin-top: 12px; font-weight: 600;" class="text-sm">`;
-          perMealInfo += `Final macros: 🥩 ${Math.round(displayProtein)}g  🍞 ${Math.round(displayCarbs)}g  🥑 ${Math.round(displayFat)}g  🔥 ${Math.round(displayCalories)} kcal`;
-          perMealInfo += `</div>`;
+          // Per-meal info — Plan 4: full macro table; Plans 1-3: personalized portion slogan
+          let perMealInfo = '';
+          if (isPlan4) {
+            perMealInfo = `<div style="margin-top: 12px; font-weight: 600;" class="text-sm">`;
+            perMealInfo += `Final macros: 🥩 ${Math.round(displayProtein)}g  🍞 ${Math.round(displayCarbs)}g  🥑 ${Math.round(displayFat)}g  🔥 ${Math.round(displayCalories)} kcal`;
+            perMealInfo += `</div>`;
+          } else {
+            perMealInfo = `<div style="margin-top: 10px; font-size: 0.9em; color: #6b7280; font-style: italic;">Porción adaptada a tus objetivos</div>`;
+          }
 
           html += `<div class="p-4 bg-gray-50 rounded border-2 border-gray-200">
             <div class="flex justify-between items-start">
@@ -1618,7 +1623,7 @@ html.in-iframe .app-card {
                     <div class="text-lg font-semibold">${m.name}</div>
                   </div>
                 </div>
-                <div class="text-sm text-gray-600">${m.type} • ${Math.round(displayCalories)} kcal • $${(m.price||0).toFixed(2)}</div>
+                <div class="text-sm text-gray-600">${m.type}${isPlan4 ? ` • ${Math.round(displayCalories)} kcal` : ''} • $${(m.price||0).toFixed(2)}</div>
                 ${portionInfo}
                 ${ingredientsHTML}
                 ${modificationsHTML}
@@ -1630,7 +1635,6 @@ html.in-iframe .app-card {
             </div>
           </div>`;
           
-          globalIdx++;
         });
         
         html += `</div>`; // Close day meals
@@ -1683,18 +1687,14 @@ html.in-iframe .app-card {
       // Store menu data globally for checkout
       window.currentMenuData = data;
 
-      // Populate snack recommendations if present
-      const snackContainer = document.getElementById('snack-recommendations');
-      const snackList = document.getElementById('snack-list');
-      const snackFlexibleDiv = document.getElementById('snack-flexible-message');
-      const snackIntro = document.getElementById('snack-intro');
       const escapeHtml = (str) => String(str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-      // Populate daily summary if present (Plan 4)
+      // Populate daily summary if present (Plan 4 only)
+      // Snack suggestion is shown exclusively inside this summary block.
       const summarySection = document.getElementById('daily-summary-section');
-      if (data.daily_summary && summarySection) {
+      if (isPlan4 && data.daily_summary && summarySection) {
         const ds = data.daily_summary;
         const mo = ds.meals_only || {};
         const sc = ds.snack_contribution || {};
@@ -1729,6 +1729,11 @@ html.in-iframe .app-card {
             </div>
           </div>`;
       }
+
+      const snackContainer = document.getElementById("snack-recommendations");
+      const snackFlexibleDiv = document.getElementById("snack-flexible-message");
+      const snackIntro = document.getElementById("snack-intro");
+      const snackList = document.getElementById("snack-list");
 
       if (data.snack_flexible && data.snack_flexible.show_snacks) {
         // Flexible range message (Plan 4 with small protein gap)
@@ -1788,16 +1793,19 @@ html.in-iframe .app-card {
       if (!confirm(`Swap "${name}"?`)) return;
       try {
         const res = await api("/swap-meal", { session_id: sessionId, meal_to_swap: name });
-        if (res.menu) {
-          renderMenu(res);
-          if (res.reason === "no_compatible_meals") {
-            const restrictions = (res.restrictions_applied || []).join(", ") || "your restrictions";
-            alert(`❌ No compatible alternatives found\n\nAll available options conflict with: ${restrictions}\n\n💡 ${res.suggestion || "Try regenerating the full menu."}`);
+        if (res.reason === 'no_compatible_meals') {
+          let msg = res.message || "No replacement available.";
+          if (res.suggestion) msg += "\n\n💡 " + res.suggestion;
+          if (res.restrictions_applied && res.restrictions_applied.length > 0) {
+            msg += "\n\nRestrictions applied: " + res.restrictions_applied.join(", ");
           }
+          alert(msg);
+        } else if (res.menu) {
+          renderMenu(res);
         } else {
-          alert(res.message || "No replacement available.");
+          alert(res.message || "No replacement available. Please try again.");
         }
-      } catch (e) { alert("Swap error — please try again."); console.error(e); }
+      } catch (e) { alert("Swap error. Please try again."); console.error(e); }
     }
 
     async function redoMenu(){

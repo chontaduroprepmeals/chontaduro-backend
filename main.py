@@ -692,7 +692,129 @@ SNACK_DATABASE = [
         "category": "dairy",
         "profile": "balanced"
     },
+    {
+        "name": "Turkey Jerky + Manzana",
+        "description": "30g turkey jerky + 1 manzana mediana",
+        "protein_g": 13,
+        "carbs_g": 25,
+        "fat_g": 2,
+        "calories": 168,
+        "category": "whole_food"
+    },
+    {
+        "name": "Almendras + Queso Mozzarella",
+        "description": "20g almendras + 30g mozzarella",
+        "protein_g": 10,
+        "carbs_g": 4,
+        "fat_g": 16,
+        "calories": 200,
+        "category": "dairy"
+    },
+    {
+        "name": "Banana + Mantequilla de Maní",
+        "description": "1 banana mediana + 2 cdas mantequilla de maní",
+        "protein_g": 7,
+        "carbs_g": 35,
+        "fat_g": 16,
+        "calories": 308,
+        "category": "whole_food"
+    },
+    {
+        "name": "Rice Cakes + Hummus + Pepino",
+        "description": "3 rice cakes + 4 cdas hummus + 1/2 pepino",
+        "protein_g": 6,
+        "carbs_g": 30,
+        "fat_g": 6,
+        "calories": 198,
+        "category": "whole_food"
+    },
+    {
+        "name": "Avocado Toast + Huevo",
+        "description": "1 rebanada pan integral + 1/4 aguacate + 1 huevo hervido",
+        "protein_g": 10,
+        "carbs_g": 18,
+        "fat_g": 12,
+        "calories": 218,
+        "category": "eggs"
+    },
+    {
+        "name": "Yogurt Griego + Miel + Nueces",
+        "description": "170g Greek yogurt 0% + 1 cdta miel + 10g nueces",
+        "protein_g": 17,
+        "carbs_g": 14,
+        "fat_g": 6,
+        "calories": 178,
+        "category": "yogurt"
+    },
+    {
+        "name": "Proteína en Polvo + Leche de Almendra",
+        "description": "1 scoop whey protein + 240ml leche de almendra sin azúcar",
+        "protein_g": 26,
+        "carbs_g": 5,
+        "fat_g": 3,
+        "calories": 151,
+        "category": "shake"
+    },
+    {
+        "name": "Tostadas con Queso Cottage + Tomate",
+        "description": "2 tostadas integrales + 100g cottage cheese + 1 tomate",
+        "protein_g": 14,
+        "carbs_g": 22,
+        "fat_g": 4,
+        "calories": 180,
+        "category": "dairy"
+    },
+    {
+        "name": "Mix de Frutos Secos + Chocolate Oscuro",
+        "description": "25g mix de nueces/almendras/marañón + 20g chocolate 70%",
+        "protein_g": 6,
+        "carbs_g": 18,
+        "fat_g": 20,
+        "calories": 270,
+        "category": "whole_food"
+    },
+    {
+        "name": "Huevos Duros + Frutas del Bosque",
+        "description": "2 huevos duros + 80g arándanos/fresas",
+        "protein_g": 13,
+        "carbs_g": 12,
+        "fat_g": 10,
+        "calories": 190,
+        "category": "eggs"
+    },
 ]
+
+
+def get_plan_display_config(plan: int) -> Dict[str, bool]:
+    """
+    Return a dict of boolean flags controlling what nutritional detail
+    is visible to the client based on their subscription plan.
+
+    Plan 4 (premium): full macro detail, ingredient list (names only — amounts/gramajes
+    are never exposed to the client in any plan), daily summary, snack in summary.
+    Plans 1-3 (basic): only dish name and portion slogan — no ingredients, no macros,
+    no daily summary, no snack suggestions anywhere.
+    Unknown plans default to the most restrictive (basic) view.
+
+    Args:
+        plan: The user's plan number (1-4).
+
+    Returns:
+        Dict with display flags:
+          - show_macros: show per-meal macro table (protein/carbs/fat/calories)
+          - show_ingredients: show ingredient name list (amounts are never shown)
+          - show_daily_summary: show end-of-day macro totals panel (includes snack suggestion)
+          - show_nutrition_totals: show the "Daily Nutrition Plan" header panel
+          - show_snack_recommendations: show snack suggestions section (only in daily summary)
+    """
+    is_plan4 = plan == 4
+    return {
+        "show_macros": is_plan4,
+        "show_ingredients": is_plan4,      # ingredient names only for Plan 4; amounts are never shown
+        "show_daily_summary": is_plan4,
+        "show_nutrition_totals": is_plan4,
+        "show_snack_recommendations": is_plan4,
+    }
 
 
 def calculate_macro_deficit(target_macros: Dict[str, int], achieved_macros: Dict[str, int]) -> Dict[str, int]:
@@ -1471,6 +1593,8 @@ def is_meal_compatible_with_diet(ingredients: List[str], diet: Optional[str]) ->
         return not any(any(mk in ing for mk in MEAT_KEYWORDS) for ing in ings)
     if d == "vegetarian":
         return not any(any(mk in ing for mk in (MEAT_KEYWORDS | FISH_KEYWORDS)) for ing in ings)
+    if d in ("no red meat", "no_red_meat"):
+        return not any(any(rk in ing for rk in RED_MEAT_KEYWORDS) for ing in ings)
     if d == "few restrictions":
         return True
     return True
@@ -2275,7 +2399,7 @@ def process_meal_data(meal: Meal, protein: int, calories: int, fat_ratio: float 
 # --- UI form definitions (unchanged) ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "diet_preference":
-        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","No Red Meat","Vegetarian","Pescatarian"], "required": True}],"current_step":"diet_preference"}
+        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Pescatarian","No Red Meat"], "required": True}],"current_step":"diet_preference"}
     if step_name == "pick_plan":
         return {"question":"Which plan do you want?","fields":[{"name":"Plan","type":"select","options":["Plan 1: 1 main meal per day","Plan 2: 2 main meals per day","Plan 3: 1 main meal + 1 breakfast","Plan 4: 2 main meals + 1 breakfast (full day)"], "required": True}],"current_step":"pick_plan"}
     if step_name == "objective":
@@ -2841,6 +2965,7 @@ async def next_step(request: Request):
                         "menu": response_menu,
                         "price": total_price,
                         "message": "Your full menu is ready!",
+                        "plan": state.plan,
                         "nutrition": {
                             "tmb": tmb,
                             "tdee": tdee,
@@ -2873,6 +2998,7 @@ async def next_step(request: Request):
                         "menu": response_menu,
                         "price": total_price,
                         "message": "Your menu is ready!",
+                        "plan": state.plan,
                         "nutrition": {
                             "tmb": tmb,
                             "tdee": tdee,
@@ -3191,17 +3317,18 @@ async def swap_meal(request: Request):
             # Fallback: try any type that respects restrictions
             potential = [m for m in avail if m.name not in current_names]
         if not potential:
-            restrictions_applied = list(filter(None, (state.dietary_restrictions or []) + ([state.diet_preference] if state.diet_preference else [])))
-            return JSONResponse(
-                content={
-                    "menu": state.menu,
-                    "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)),
-                    "message": f"❌ No compatible alternatives found for '{meal_to_swap}'.",
-                    "reason": "no_compatible_meals",
-                    "restrictions_applied": restrictions_applied,
-                    "suggestion": "Try regenerating the full menu or adjusting your dietary restrictions.",
-                }
-            )
+            restrictions_applied = list(filter(None, [
+                state.diet_preference if state.diet_preference and state.diet_preference.lower() != "omnivore" else None,
+                *[str(r) for r in (state.dietary_restrictions or []) if r and not str(r).lower().startswith("none")]
+            ]))
+            return {
+                "menu": state.menu,
+                "price": calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], sum(int(v) for v in state.extra_protein_map.values()) + int(state.extra_protein_grams or 0)),
+                "message": f"❌ No compatible alternatives found for '{meal_to_swap}'. All available {replaced_type} options conflict with your restrictions.",
+                "reason": "no_compatible_meals",
+                "restrictions_applied": restrictions_applied,
+                "suggestion": "Try regenerating the full menu or adjusting your restrictions."
+            }
 
         # Use smart selection (protein/calorie targets) instead of random.choice
         protein_target = int(replaced_meal.get("protein_assigned", replaced_meal.get("protein", _DEFAULT_SWAP_PROTEIN_TARGET_G)) or _DEFAULT_SWAP_PROTEIN_TARGET_G)
@@ -3261,7 +3388,7 @@ async def swap_meal(request: Request):
         precio_menu = sum(m.get("price", 0.0) for m in state.menu)
         envio = 0.0 if precio_menu >= 100.0 else 10.0  # Envío gratis si precio total supera $100
         total_price = precio_menu + envio
-        return {"menu": state.menu, "price": total_price, "message": f"Swapped '{meal_to_swap}' -> '{new_meal.name}'.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
+        return {"menu": state.menu, "price": total_price, "plan": state.plan, "message": f"Swapped '{meal_to_swap}' -> '{new_meal.name}'.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
     except HTTPException:
         raise
     except Exception as e:
@@ -3317,7 +3444,7 @@ async def redo_menu(request: Request):
     state.extra_protein_map = {}
     sessions[sid] = state.model_dump()
     total_price = calculate_price([Meal(**m) if isinstance(m, dict) else m for m in state.menu], 0)
-    return {"menu": state.menu, "price": total_price, "message":"Full menu regenerated.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
+    return {"menu": state.menu, "price": total_price, "plan": state.plan, "message":"Full menu regenerated.", "nutrition": {"tmb": tmb, "tdee": tdee, "calorie_target": calorie_target, "macros": macros}}
 # --- RUTAS RELACIONADAS CON STRIPE ---
 
 @app.post("/calculate-total")
