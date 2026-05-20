@@ -1739,6 +1739,7 @@ html.in-iframe .app-card {
 
     // --- Checkout functionality (new flow) ---
     let checkoutContext = {
+      mode: 'signin',
       fullName: '',
       email: '',
       password: '',
@@ -1770,11 +1771,19 @@ html.in-iframe .app-card {
     }
 
     function renderCheckoutRegistrationStep() {
-      document.getElementById('checkoutModalTitle').textContent = 'Register to Place Your Order';
+      const mode = checkoutContext.mode || 'signin';
+      document.getElementById('checkoutModalTitle').textContent = mode === 'signin' ? 'Sign In to Place Your Order' : 'Create Account to Place Your Order';
       document.getElementById('checkoutModalContent').innerHTML = `
         <div style="background:#fff7ed;border:2px solid #fdba74;padding:14px;border-radius:10px;">
+          <div style="display:flex;gap:8px;margin-bottom:14px;">
+            <button type="button" id="checkoutSignInTab" style="flex:1;padding:10px;border-radius:8px;border:1px solid #fdba74;font-weight:700;cursor:pointer;${mode === 'signin' ? 'background:#ea580c;color:#fff;' : 'background:#fff;color:#9a3412;'}">Sign In</button>
+            <button type="button" id="checkoutCreateTab" style="flex:1;padding:10px;border-radius:8px;border:1px solid #fdba74;font-weight:700;cursor:pointer;${mode === 'create' ? 'background:#ea580c;color:#fff;' : 'background:#fff;color:#9a3412;'}">Create Account</button>
+          </div>
+
+          <div id="checkoutFullNameWrap" style="display:${mode === 'create' ? 'block' : 'none'};">
           <label for="checkoutFullName" style="display:block;font-weight:600;color:#9a3412;margin-bottom:6px;">Full Name *</label>
           <input id="checkoutFullName" type="text" placeholder="John Doe" aria-label="Full name" style="width:100%;padding:10px;border:1px solid #fdba74;border-radius:8px;margin-bottom:10px;">
+          </div>
 
           <label for="checkoutEmail" style="display:block;font-weight:600;color:#9a3412;margin-bottom:6px;">Email *</label>
           <input id="checkoutEmail" type="email" placeholder="john@example.com" aria-label="Email" style="width:100%;padding:10px;border:1px solid #fdba74;border-radius:8px;margin-bottom:10px;">
@@ -1785,13 +1794,23 @@ html.in-iframe .app-card {
             <button type="button" id="toggleCheckoutPasswordBtn" aria-label="Show or hide password" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:#fff;border:1px solid #fdba74;border-radius:6px;padding:4px 8px;cursor:pointer;">👁️</button>
           </div>
 
+          <div id="checkoutModeHint" style="font-size:0.85rem;color:#6b7280;margin-bottom:10px;">${mode === 'signin' ? 'Already have an account? Sign in with your email and password.' : 'Create a new account to save your order history.'}</div>
+
           <div class="actions">
             <button id="checkoutCancelBtn" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">Cancel</button>
-            <button id="checkoutRegisterBtn" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">Continue →</button>
+            <button id="checkoutRegisterBtn" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">${mode === 'signin' ? 'Sign In →' : 'Create Account →'}</button>
           </div>
         </div>
       `;
 
+      document.getElementById('checkoutSignInTab').onclick = () => {
+        checkoutContext.mode = 'signin';
+        renderCheckoutRegistrationStep();
+      };
+      document.getElementById('checkoutCreateTab').onclick = () => {
+        checkoutContext.mode = 'create';
+        renderCheckoutRegistrationStep();
+      };
       document.getElementById('checkoutCancelBtn').onclick = hideCheckoutModal;
       document.getElementById('checkoutRegisterBtn').onclick = handleRegistrationAndSummary;
       document.getElementById('toggleCheckoutPasswordBtn').addEventListener('click', (e) => {
@@ -1810,19 +1829,26 @@ html.in-iframe .app-card {
         }
       });
       setTimeout(() => {
-        const fullNameInput = document.getElementById('checkoutFullName');
-        if (fullNameInput) fullNameInput.focus();
+        const target = checkoutContext.mode === 'create'
+          ? document.getElementById('checkoutFullName')
+          : document.getElementById('checkoutEmail');
+        if (target) target.focus();
       }, 100);
     }
 
     async function handleRegistrationAndSummary() {
       const errorDiv = document.getElementById('checkoutErrorMessage');
+      const mode = checkoutContext.mode || 'signin';
       const fullName = (document.getElementById('checkoutFullName')?.value || '').trim();
       const email = (document.getElementById('checkoutEmail')?.value || '').trim();
       const password = (document.getElementById('checkoutPassword')?.value || '').trim();
 
-      if (!fullName || !email || !password) {
-        errorDiv.textContent = 'Please complete full name, email, and password.';
+      if (mode === 'create' && !fullName) {
+        errorDiv.textContent = 'Please complete your full name.';
+        return;
+      }
+      if (!email || !password) {
+        errorDiv.textContent = 'Please enter your email and password.';
         return;
       }
       if (!email.includes('@')) {
@@ -1839,11 +1865,14 @@ html.in-iframe .app-card {
       checkoutContext.password = password;
 
       try {
-        const regResp = await api('/register-or-authenticate', {
-          full_name: fullName,
+        const regPayload = {
           email,
           password,
-        });
+        };
+        if (mode === 'create') {
+          regPayload.full_name = fullName;
+        }
+        const regResp = await api('/register-or-authenticate', regPayload);
         if (!regResp.ok) {
           errorDiv.textContent = 'Could not register/authenticate your account.';
           return;
@@ -1953,6 +1982,7 @@ html.in-iframe .app-card {
       formData.append('file', fileInput.files[0]);
       formData.append('session_id', sessionId);
       formData.append('email', checkoutContext.email);
+      formData.append('full_name', checkoutContext.fullName || '');
 
       try {
         const response = await fetch(`${BASE}/upload-payment-proof`, {

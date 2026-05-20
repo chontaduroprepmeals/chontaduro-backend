@@ -36,6 +36,14 @@ WA_TAX_RATE = 0.1025
 ZELLE_PAYEE_NAME = os.getenv("ZELLE_PAYEE_NAME", "Chontaduro Kitchen")
 ZELLE_PAYEE_EMAIL = os.getenv("ZELLE_PAYEE_EMAIL", "")
 ZELLE_PAYEE_PHONE = os.getenv("ZELLE_PAYEE_PHONE", "")
+STRIPE_SUCCESS_URL = os.getenv(
+    "STRIPE_SUCCESS_URL",
+    "https://chontaduro-backend.onrender.com/?checkout=success&session_id={CHECKOUT_SESSION_ID}",
+)
+STRIPE_CANCEL_URL = os.getenv(
+    "STRIPE_CANCEL_URL",
+    "https://chontaduro-backend.onrender.com/?checkout=cancel",
+)
 
 # --- Email config ---
 SMTP_HOST = os.getenv("SMTP_HOST", "")
@@ -310,7 +318,7 @@ class LoginRequest(BaseModel):
 
 
 class RegisterOrAuthRequest(BaseModel):
-    full_name: str = Field(min_length=1, max_length=100)
+    full_name: Optional[str] = Field(default=None, max_length=100)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
 
@@ -3503,7 +3511,7 @@ def calculate_total(order: Order):
 
 @app.post("/register-or-authenticate")
 def register_or_authenticate(payload: RegisterOrAuthRequest):
-    full_name = payload.full_name.strip()
+    full_name = (payload.full_name or "").strip()
     email = str(payload.email).strip().lower()
     password = payload.password
 
@@ -3522,6 +3530,9 @@ def register_or_authenticate(payload: RegisterOrAuthRequest):
                     "email": existing_user.email,
                 },
             }
+
+        if not full_name:
+            raise HTTPException(status_code=400, detail="Full name is required to create a new account.")
 
         hashed_password = User.hash_password(password)
         new_user = User(
@@ -3664,8 +3675,8 @@ def create_checkout_session(payload: CheckoutSessionRequest):
             payment_method_types=["card"],
             line_items=line_items,  # Use the generated list
             mode="payment",
-            success_url="https://chontaduro-backend.onrender.com/success",
-            cancel_url="https://chontaduro-backend.onrender.com/cancel",
+            success_url=STRIPE_SUCCESS_URL,
+            cancel_url=STRIPE_CANCEL_URL,
             customer_email=email,
             metadata={
                 "order_id": order_id,
@@ -3694,6 +3705,7 @@ async def upload_payment_proof(
     file: UploadFile = File(...),
     session_id: str = Form(...),
     email: str = Form(...),
+    full_name: str = Form(...),
 ):
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded.")
@@ -3713,6 +3725,24 @@ async def upload_payment_proof(
         out.write(contents)
 
     url = f"/uploads/payment_proofs/{filename}"
+
+    try:
+        order = _build_order_from_session(session_id)
+        totals = _compute_order_totals(order)
+        _send_confirmation_email(
+            to_email=ZELLE_PAYEE_EMAIL or "chontaduroprepmeals@gmail.com",
+            full_name=full_name,
+            customer_email=email,
+            order_summary=totals,
+            payment_method="Zelle screenshot uploaded",
+            payment_reference=url,
+            attachment_bytes=contents,
+            attachment_filename=file.filename or filename,
+            attachment_content_type=file.content_type or "application/octet-stream",
+        )
+    except Exception as exc:
+        print(f"[EMAIL] Failed to send Zelle proof email: {exc}")
+
     return {
         "ok": True,
         "session_id": session_id,
@@ -3941,15 +3971,26 @@ def _compute_order_totals(order: Order) -> Dict[str, float]:
     }
 
 
-def _send_confirmation_email(to_email: str, full_name: str, order_summary: Dict[str, Any], payment_method: str, payment_reference: Optional[str] = None) -> bool:
+def _send_confirmation_email(
+    to_email: str,
+    full_name: str,
+    order_summary: Dict[str, Any],
+    payment_method: str,
+    payment_reference: Optional[str] = None,
+    customer_email: Optional[str] = None,
+    attachment_bytes: Optional[bytes] = None,
+    attachment_filename: Optional[str] = None,
+    attachment_content_type: Optional[str] = None,
+) -> bool:
     if not (SMTP_HOST and SMTP_FROM_EMAIL):
         print("[EMAIL] SMTP not configured. Skipping confirmation email.")
         return False
 
-    subject = "Your Chontaduro order is confirmed ✅"
+    subject = "Zelle payment proof received ✅"
     body = (
-        f"Hi {full_name},\n\n"
-        "Thank you for your order. Your order is confirmed and is being prepared.\n\n"
+        f"New Zelle payment proof received for {full_name}.\n\n"
+        f"Customer name: {full_name}\n"
+        f"Customer email: {customer_email or 'N/A'}\n"
         f"Payment method: {payment_method}\n"
         f"Subtotal: ${order_summary.get('subtotal', 0):.2f}\n"
         f"Washington tax (10.25%): ${order_summary.get('tax', 0):.2f}\n"
@@ -3957,13 +3998,24 @@ def _send_confirmation_email(to_email: str, full_name: str, order_summary: Dict[
     )
     if payment_reference:
         body += f"Payment reference: {payment_reference}\n"
-    body += "\nWe appreciate your trust in Chontaduro!\n"
+    body += "\nThe uploaded payment screenshot is attached to this email.\n"
 
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = SMTP_FROM_EMAIL
     msg["To"] = to_email
     msg.set_content(body)
+
+    if attachment_bytes and attachment_filename:
+        maintype, subtype = "application", "octet-stream"
+        if attachment_content_type and "/" in attachment_content_type:
+            maintype, subtype = attachment_content_type.split("/", 1)
+        msg.add_attachment(
+            attachment_bytes,
+            maintype=maintype,
+            subtype=subtype,
+            filename=attachment_filename,
+        )
 
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
