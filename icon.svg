@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Chontaduro logo">
+  <rect width="512" height="512" rx="96" fill="#ea580c"/>
+  <circle cx="256" cy="220" r="120" fill="#fff7ed" opacity="0.16"/>
+  <path d="M148 318c35-65 81-98 108-98s73 33 108 98c-31 34-70 52-108 52s-77-18-108-52z" fill="#fff7ed"/>
+  <circle cx="256" cy="212" r="46" fill="#ffffff"/>
+  <path d="M256 132c12 0 22-10 22-22s-10-22-22-22-22 10-22 22 10 22 22 22zm-26 18c0-6 5-10 10-10h32c5 0 10 4 10 10v22h-52v-22z" fill="#fff7ed"/>
+</svg>

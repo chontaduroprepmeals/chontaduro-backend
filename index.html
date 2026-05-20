@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Chontaduro Menu Generator</title>
+  <meta name="theme-color" content="#ea580c">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     /* --- Responsive typography & base --- */
@@ -253,6 +256,12 @@ html.in-iframe .app-card {
         // Slightly bump base font-size for readability inside small iframes
         document.documentElement.style.fontSize = '17px';
         // Ensure the iframe fills the parent's dimensions fully
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
         document.documentElement.style.width = "100%";
         document.documentElement.style.height = "100%";
         document.body.style.width = "100%";
@@ -374,7 +383,7 @@ html.in-iframe .app-card {
         { value: "Plan 1: 1 main meal per day", emoji: "🍽️", price: "$15/day", desc: "One nutritious main meal", meals: "1 meal" },
         { value: "Plan 2: 2 main meals per day", emoji: "🥗", price: "$30/day", desc: "Two balanced main meals", meals: "2 meals" },
         { value: "Plan 3: 1 main meal + 1 breakfast", emoji: "🍳", price: "$26/day", desc: "Start strong with breakfast", meals: "2 meals" },
-        { value: "Plan 4: 2 main meals + 1 breakfast (full day)", emoji: "✨", price: "$41/day", desc: "Complete nutrition plan", meals: "3 meals", featured: true }
+        { value: "Plan 4: 2 main meals + 1 breakfast (full day)", emoji: "✨", price: "$40/day", desc: "Complete nutrition plan", meals: "3 meals", featured: true }
       ];
 
       let html = `<form id="f">
@@ -485,10 +494,8 @@ html.in-iframe .app-card {
     // Diet Preference Visual Cards
     function renderDietPreference(question, field) {
       const diets = [
-        { value: "Omnivore", emoji: "🍖", desc: "Eat everything including meat and vegetables" },
-        { value: "Vegetarian", emoji: "🥗", desc: "No meat or poultry, but dairy/eggs OK" },
-        { value: "Pescatarian", emoji: "🐟", desc: "No meat, but fish/seafood is included" },
-        { value: "No Red Meat", emoji: "🍗", desc: "Chicken & fish OK, no beef/lamb/steak" }
+        { value: "Omnivore", emoji: "🍖", desc: "Chicken, turkey, ground beef, pork, tuna, sardines, and eggs" },
+        { value: "No Red Meat", emoji: "🍗", desc: "Chicken, turkey, tuna, sardines, and eggs only" }
       ];
 
       let html = `<form id="f">
@@ -1278,7 +1285,7 @@ html.in-iframe .app-card {
 
     // Beautiful ZIP Code Input with map styling
     function renderZipCodeInput(question, fields) {
-      const allowedZips = ['98027', '98052', '98004', '98033', '98008', '98005', '98006', '98007', '98009', '98034'];
+      const allowedZipPrefixes = ['980xx', '981xx', '982xx', '983xx', '984xx'];
       
       let html = `
         <form id="f">
@@ -1302,7 +1309,7 @@ html.in-iframe .app-card {
                 <input type="text" 
                        id="zipcode_input" 
                        name="zipcode" 
-                       placeholder="e.g., 98027"
+                    placeholder="e.g., 98101"
                        maxlength="5"
                        pattern="[0-9]{5}"
                        class="w-full px-4 py-3 text-xl font-semibold text-center border-2 border-gray-300 rounded-lg
@@ -1314,8 +1321,9 @@ html.in-iframe .app-card {
                 <div class="flex items-start gap-2 text-sm text-gray-600">
                   <span class="text-lg">🚚</span>
                   <div>
-                    <div class="font-semibold mb-1">We deliver to Seattle area:</div>
-                    <div class="text-xs text-gray-500">${allowedZips.join(', ')}</div>
+                    <div class="font-semibold mb-1">Delivery zones:</div>
+                    <div class="text-xs text-gray-500">${allowedZipPrefixes.join(', ')}</div>
+                    <div class="text-xs text-gray-500 mt-1">All other ZIP codes are pickup only.</div>
                   </div>
                 </div>
               </div>
@@ -1466,10 +1474,40 @@ html.in-iframe .app-card {
       // Determine the user plan number (1-4). Used to control visibility of nutritional detail.
       const userPlan = data.plan || 0;
       const isPlan4 = userPlan === 4;
+      const dailySummaries = data.daily_summaries || {};
+
+      const createMealPlaceholder = (meal) => {
+        const title = String(meal.name || 'Chef Selection').slice(0, 28);
+        const subtitle = String(meal.meal_type || meal.type || 'Fresh weekly menu').slice(0, 30);
+        const svg = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" viewBox="0 0 800 480">
+            <defs>
+              <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#fff7ed"/>
+                <stop offset="50%" stop-color="#fed7aa"/>
+                <stop offset="100%" stop-color="#fdba74"/>
+              </linearGradient>
+            </defs>
+            <rect width="800" height="480" fill="url(#bg)" rx="36"/>
+            <circle cx="650" cy="110" r="70" fill="#fb923c" opacity="0.22"/>
+            <circle cx="120" cy="390" r="90" fill="#f97316" opacity="0.18"/>
+            <text x="60" y="175" font-family="Inter, Arial, sans-serif" font-size="28" fill="#9a3412" font-weight="700">Chontaduro premium meal</text>
+            <text x="60" y="245" font-family="Inter, Arial, sans-serif" font-size="42" fill="#431407" font-weight="800">${title}</text>
+            <text x="60" y="305" font-family="Inter, Arial, sans-serif" font-size="26" fill="#7c2d12">${subtitle}</text>
+          </svg>`;
+        return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+      };
       
-      let html = `<div class="mb-4 p-4 rounded-lg border-2 border-orange-200 bg-orange-50 text-orange-900 font-medium">Our weekly menu rotates with a variety of proteins. Medical allergies are accommodated..</div>`;
+      let html = `<div class="mb-4 rounded-2xl border-2 border-orange-200 bg-gradient-to-r from-orange-50 via-amber-50 to-white p-5 text-orange-900 shadow-sm">
+        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-orange-600 mb-2">Premium weekly menu</div>
+        <div class="text-lg font-bold mb-1">Chef-curated variety with premium presentation</div>
+        <div class="text-sm">Protein rotation follows your selected diet. Medical allergies are accommodated, and meals are styled for a polished weekly experience.</div>
+      </div>`;
+      html += `<div class="mb-4 p-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-sm font-medium">Each meal contains a maximum of 40g of protein — the optimal amount for absorption. Your daily macros are calculated based on your personal stats and goals.</div>`;
       html += `<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">Your Menu</h2><div><button onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Adjust Preferences</button></div></div>`;
-      html += `<div class="mb-4">Estimated price: <strong>$${(data.price || 0).toFixed(2)}</strong></div>`;
+      const planPriceMap = { 1: 15, 2: 30, 3: 26, 4: 40 };
+      const planPrice = planPriceMap[userPlan] || (data.price || 0);
+      html += `<div class="mb-4">Estimated plan price: <strong>$${Number(planPrice).toFixed(2)}</strong></div>`;
       if (isPlan4 && data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal — Target: ${data.nutrition.calorie_target||'N/A'} kcal</div>`;
       
       // Show daily macro totals panel only for Plan 4
@@ -1533,6 +1571,8 @@ html.in-iframe .app-card {
         dayMeals.forEach(m => {
           const safeName = (m.name || "").replace(/'/g, "\\'");
           const mealType = m.meal_type || 'MEAL';
+          const placeholderSrc = createMealPlaceholder(m);
+          const imageSrc = m.image_url || placeholderSrc;
 
           // Use final_macros when available, otherwise fall back to assigned values
           const displayProtein = m.final_macros ? m.final_macros.protein_g : (m.protein_assigned || m.provided_protein || 0);
@@ -1600,9 +1640,13 @@ html.in-iframe .app-card {
             perMealInfo = `<div style="margin-top: 10px; font-size: 0.9em; color: #6b7280; font-style: italic;">Porción adaptada a tus objetivos</div>`;
           }
 
-          html += `<div class="p-4 bg-gray-50 rounded border-2 border-gray-200">
-            <div class="flex justify-between items-start">
-              <div class="flex-1">
+          html += `<div class="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
+            <div style="height:190px;overflow:hidden;background:linear-gradient(135deg,#fff7ed,#ffedd5);">
+              <img src="${imageSrc}" alt="${m.name || 'Meal image'}" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.onerror=null;this.src='${placeholderSrc}'">
+            </div>
+            <div class="p-4 bg-gradient-to-b from-white to-orange-50/30">
+              <div class="flex justify-between items-start gap-4">
+                <div class="flex-1">
                 <div class="flex items-center gap-2 mb-2">
                   <span class="text-2xl">${mealTypeEmoji}</span>
                   <div>
@@ -1617,19 +1661,68 @@ html.in-iframe .app-card {
                 ${perMealInfo}
               </div>
               <div class="flex flex-col items-end gap-2 ml-4"></div>
+              </div>
             </div>
           </div>`;
           
         });
         
         html += `</div>`; // Close day meals
+        const ds = dailySummaries[String(dayNum)] || (isPlan4 ? {
+          meals_only: {
+            protein: Math.round(dayProtein),
+            carbs: Math.round(dayCarbs),
+            fat: Math.round(dayFat),
+            calories: Math.round(dayCalories),
+          },
+          snack_contribution: {
+            protein: '10-20g',
+            carbs: '15-25g',
+            calories: '~150 kcal',
+          },
+          final_total_estimate: {
+            protein: `~${Math.round(dayProtein + 10)}-${Math.round(dayProtein + 20)}g`,
+            carbs: `~${Math.round(dayCarbs + 15)}-${Math.round(dayCarbs + 25)}g`,
+            fat: `~${Math.round(dayFat)}-${Math.round(dayFat + 5)}g`,
+            calories: `~${Math.round(dayCalories + 120)}-${Math.round(dayCalories + 180)} kcal`,
+          },
+          message: '✨ Daily macro balance prepared for your selected goal.'
+        } : null);
+        if (isPlan4 && ds) {
+          const mo = ds.meals_only || {};
+          const sc = ds.snack_contribution || {};
+          const ft = ds.final_total_estimate || {};
+          html += `<div class="mt-4 rounded-2xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
+            <div class="text-sm font-semibold uppercase tracking-wide text-emerald-700 mb-2">Daily nutrition summary</div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+              <div class="rounded-xl bg-white p-3 border border-emerald-100">
+                <div class="font-bold text-emerald-800 mb-1">Meals only</div>
+                <div>${mo.protein || 0}g protein</div>
+                <div>${mo.carbs || 0}g carbs</div>
+                <div>${mo.fat || 0}g fat</div>
+                <div>${mo.calories || 0} kcal</div>
+              </div>
+              <div class="rounded-xl bg-white p-3 border border-amber-100">
+                <div class="font-bold text-amber-700 mb-1">Recommended snack</div>
+                <div>${sc.protein || ''} protein</div>
+                <div>${sc.carbs || ''} carbs</div>
+                <div>${sc.calories || ''}</div>
+              </div>
+              <div class="rounded-xl bg-white p-3 border border-emerald-100">
+                <div class="font-bold text-emerald-800 mb-1">Estimated final total</div>
+                <div>${ft.protein || ''} protein</div>
+                <div>${ft.carbs || ''} carbs</div>
+                <div>${ft.fat || ''} fat</div>
+                <div>${ft.calories || ''}</div>
+              </div>
+            </div>
+            <div class="mt-3 text-sm font-medium text-emerald-700">${ds.message || ''}</div>
+          </div>`;
+        }
         html += `</div>`; // Close day section
       });
 
       html += `</div>`;
-
-      // Daily Summary placeholder (populated after innerHTML is set)
-      html += `<div id="daily-summary-section"></div>`;
 
       html += `<div class="mt-4 flex gap-3 justify-center flex-wrap">
           <button onclick="proceedToCheckout()" class="px-4 py-3 bg-green-600 text-white rounded font-bold text-lg">🛒 Order Now</button>
@@ -1657,45 +1750,6 @@ html.in-iframe .app-card {
       const escapeHtml = (str) => String(str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
-      // Populate daily summary if present (Plan 4 only)
-      // Snack suggestion is shown exclusively inside this summary block.
-      const summarySection = document.getElementById('daily-summary-section');
-      if (isPlan4 && data.daily_summary && summarySection) {
-        const ds = data.daily_summary;
-        const mo = ds.meals_only || {};
-        const sc = ds.snack_contribution || {};
-        const ft = ds.final_total_estimate || {};
-        summarySection.innerHTML = `
-          <div style="background: #f0fdf4; border: 2px solid #22c55e; padding: 20px; margin: 30px 0; border-radius: 10px;">
-            <h3 style="color: #15803d; font-size: 1.4em; margin-bottom: 15px; font-weight: 700;">📊 Complete Day Summary</h3>
-            <div style="margin-bottom: 10px; padding: 12px; background: white; border-radius: 6px; border-left: 3px solid #22c55e;">
-              <strong>🍽️ Meals (3):</strong>
-              ${escapeHtml(String(mo.protein || 0))}g protein &nbsp;·&nbsp;
-              ${escapeHtml(String(mo.carbs || 0))}g carbs &nbsp;·&nbsp;
-              ${escapeHtml(String(mo.fat || 0))}g fat &nbsp;·&nbsp;
-              ${escapeHtml(String(mo.calories || 0))} kcal
-            </div>
-            <div style="margin-bottom: 10px; padding: 12px; background: white; border-radius: 6px; border-left: 3px solid #f59e0b;">
-              <strong>🍫 Recommended snack:</strong>
-              ${escapeHtml(sc.protein || '')} protein &nbsp;·&nbsp;
-              ${escapeHtml(sc.carbs || '')} carbs &nbsp;·&nbsp;
-              ${escapeHtml(sc.calories || '')}
-            </div>
-            <div style="padding: 14px; background: #dcfce7; border-radius: 6px; border-left: 4px solid #16a34a;">
-              <div style="font-weight: 700; color: #15803d; margin-bottom: 6px;">FINAL TOTAL:</div>
-              <div style="color: #166534; line-height: 1.7;">
-                ${escapeHtml(ft.protein || '')} protein &nbsp;·&nbsp;
-                ${escapeHtml(ft.carbs || '')} carbs &nbsp;·&nbsp;
-                ${escapeHtml(ft.fat || '')} fat &nbsp;·&nbsp;
-                ${escapeHtml(ft.calories || '')}
-              </div>
-            </div>
-            <div style="margin-top: 14px; font-size: 1.1em; text-align: center; color: #15803d; font-weight: 600;">
-              ${escapeHtml(ds.message || '')}
-            </div>
-          </div>`;
-      }
 
       const saveBtn = document.getElementById("saveNote");
       if (saveBtn) {
@@ -1743,6 +1797,8 @@ html.in-iframe .app-card {
       fullName: '',
       email: '',
       password: '',
+      deliveryOption: 'delivery',
+      subscriptionType: 'one_time',
       summary: null,
       proofUrl: '',
     };
@@ -1878,10 +1934,7 @@ html.in-iframe .app-card {
           return;
         }
 
-        const summaryResp = await api('/order-summary', { session_id: sessionId });
-        checkoutContext.summary = summaryResp;
-        checkoutContext.proofUrl = '';
-        renderCheckoutSummaryStep();
+        await refreshCheckoutSummary();
       } catch (err) {
         errorDiv.textContent = err.message || 'Could not continue to order summary.';
       }
@@ -1890,13 +1943,40 @@ html.in-iframe .app-card {
     function renderCheckoutSummaryStep() {
       const s = checkoutContext.summary || {};
       const z = s.zelle || {};
+      const isPlan4 = String(window.currentMenuData?.plan || '') === '4' || Number(window.currentMenuData?.plan || 0) === 4;
       document.getElementById('checkoutModalTitle').textContent = 'Order Summary';
       document.getElementById('checkoutModalContent').innerHTML = `
+        <div style="background:#ecfdf5;border:2px solid #10b981;padding:12px;border-radius:10px;margin-bottom:12px;color:#065f46;font-weight:700;">${s.promo_banner || 'Free delivery on orders $150+'}</div>
+
         <div style="background:#fff7ed;border:2px solid #fdba74;padding:12px;border-radius:10px;margin-bottom:12px;">
           <div><strong>Items:</strong> ${s.items_count || 0}</div>
+          <div><strong>Plan:</strong> ${s.plan_label || 'N/A'}</div>
           <div><strong>Subtotal:</strong> $${(s.subtotal || 0).toFixed(2)}</div>
+          <div><strong>Shipping:</strong> $${(s.shipping || 0).toFixed(2)}</div>
           <div><strong>Washington Tax (10.25%):</strong> $${(s.tax || 0).toFixed(2)}</div>
           <div style="margin-top:6px;font-size:1.05rem;color:#c2410c;"><strong>Total:</strong> $${(s.total || 0).toFixed(2)}</div>
+          <div style="margin-top:8px;color:#9a3412;font-weight:600;">Next available Sunday: ${s.delivery_date_label || 'N/A'}</div>
+        </div>
+
+        <div style="margin-bottom:12px;padding:12px;border:2px solid #fdba74;border-radius:10px;background:#fff7ed;">
+          <div style="font-weight:700;margin-bottom:8px;color:#9a3412;">Delivery & Subscription</div>
+          <label style="display:block;margin-bottom:8px;color:#374151;">Delivery option</label>
+          <select id="deliveryOptionSelect" style="width:100%;padding:10px;border:1px solid #fdba74;border-radius:8px;">
+            <option value="delivery" ${checkoutContext.deliveryOption === 'delivery' ? 'selected' : ''}>Delivery - $10 flat fee (free on $150+)</option>
+            <option value="pickup" ${checkoutContext.deliveryOption === 'pickup' ? 'selected' : ''}>Pickup - FREE, Seattle Central, Sunday 4PM-7PM</option>
+          </select>
+          ${isPlan4 ? `
+          <label style="display:flex;gap:10px;align-items:flex-start;margin-top:12px;color:#374151;">
+            <input type="checkbox" id="weeklySubscriptionCheckbox" ${checkoutContext.subscriptionType === 'weekly_5_days' ? 'checked' : ''} style="margin-top:4px;">
+            <span>Weekly subscription x5 days Plan 4 ($200, free delivery included)</span>
+          </label>` : `<div style="margin-top:12px;font-size:0.9rem;color:#6b7280;">Weekly subscription is available for Plan 4 only.</div>`}
+          <div style="margin-top:10px;font-size:0.9rem;color:#6b7280;">Orders open every Monday and close every Friday at 2PM sharp. After Friday 2PM, orders are assigned to the next Sunday.</div>
+          <div style="margin-top:8px;font-size:0.9rem;color:#6b7280;">${s.pickup_text || 'Pickup: FREE, Seattle Central, Sunday 4PM-7PM'}</div>
+        </div>
+
+        <div style="margin-bottom:12px;padding:12px;border:2px solid #fecaca;border-radius:10px;background:#fff1f2;">
+          <div style="font-weight:700;margin-bottom:6px;color:#b91c1c;">Cancellation Policy</div>
+          <div style="font-size:0.95rem;color:#7f1d1d;">${s.cancellation_policy || 'Cancellations allowed until Friday 2PM only. No cancellations or refunds after Friday 2PM.'}</div>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:10px;">
@@ -1929,6 +2009,28 @@ html.in-iframe .app-card {
       document.getElementById('payCardBtn').onclick = payWithCardStripe;
       document.getElementById('uploadProofBtn').onclick = uploadZelleProof;
       document.getElementById('confirmZelleBtn').onclick = confirmZellePayment;
+      const deliverySelect = document.getElementById('deliveryOptionSelect');
+      const weeklyCheckbox = document.getElementById('weeklySubscriptionCheckbox');
+      if (deliverySelect) {
+        deliverySelect.onchange = async () => {
+          checkoutContext.deliveryOption = deliverySelect.value;
+          await refreshCheckoutSummary();
+        };
+      }
+      if (weeklyCheckbox) {
+        weeklyCheckbox.onchange = async () => {
+          checkoutContext.subscriptionType = weeklyCheckbox.checked ? 'weekly_5_days' : 'one_time';
+          await refreshCheckoutSummary();
+        };
+      }
+      const zelleProofInput = document.getElementById('zelleProofInput');
+      if (zelleProofInput) {
+        zelleProofInput.onchange = () => {
+          checkoutContext.proofUrl = '';
+          const proofStatus = document.getElementById('proofStatus');
+          if (proofStatus) proofStatus.textContent = 'File selected. Click Confirm Zelle Payment to continue.';
+        };
+      }
       document.getElementById('checkoutErrorMessage').textContent = '';
     }
 
@@ -1946,6 +2048,8 @@ html.in-iframe .app-card {
           name: checkoutContext.fullName,
           email: checkoutContext.email,
           password: checkoutContext.password,
+          delivery_option: checkoutContext.deliveryOption,
+          subscription_type: checkoutContext.subscriptionType,
           order: { items: buildOrderItemsFromMenu(menuData) },
         };
         const response = await fetch(`${BASE}/create-checkout-session`, {
@@ -1975,7 +2079,7 @@ html.in-iframe .app-card {
 
       if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
         errorDiv.textContent = 'Please select a payment confirmation screenshot first.';
-        return;
+        return null;
       }
 
       const formData = new FormData();
@@ -1983,6 +2087,8 @@ html.in-iframe .app-card {
       formData.append('session_id', sessionId);
       formData.append('email', checkoutContext.email);
       formData.append('full_name', checkoutContext.fullName || '');
+      formData.append('delivery_option', checkoutContext.deliveryOption || 'delivery');
+      formData.append('subscription_type', checkoutContext.subscriptionType || 'one_time');
 
       try {
         const response = await fetch(`${BASE}/upload-payment-proof`, {
@@ -1995,14 +2101,26 @@ html.in-iframe .app-card {
         }
         checkoutContext.proofUrl = result.payment_proof_url;
         proofStatus.textContent = `Uploaded: ${checkoutContext.proofUrl}`;
+        return checkoutContext.proofUrl;
       } catch (err) {
         errorDiv.textContent = err.message || 'Could not upload screenshot.';
+        return null;
       }
     }
 
     async function confirmZellePayment() {
       const errorDiv = document.getElementById('checkoutErrorMessage');
       const proofStatus = document.getElementById('proofStatus');
+      errorDiv.textContent = '';
+
+      const fileInput = document.getElementById('zelleProofInput');
+      const hasSelectedFile = !!(fileInput && fileInput.files && fileInput.files.length > 0);
+
+      if (!checkoutContext.proofUrl && hasSelectedFile) {
+        const uploadedUrl = await uploadZelleProof();
+        if (!uploadedUrl) return;
+      }
+
       if (!checkoutContext.proofUrl) {
         errorDiv.textContent = 'Please upload your Zelle screenshot before confirming.';
         return;
@@ -2014,6 +2132,8 @@ html.in-iframe .app-card {
           full_name: checkoutContext.fullName,
           email: checkoutContext.email,
           payment_proof_url: checkoutContext.proofUrl,
+          delivery_option: checkoutContext.deliveryOption,
+          subscription_type: checkoutContext.subscriptionType,
         });
         proofStatus.textContent = result.message || 'Payment confirmed.';
         alert('Payment confirmed. Your order is confirmed and being prepared. A confirmation email has been sent.');
@@ -2074,13 +2194,23 @@ html.in-iframe .app-card {
           return { error: true, message: txt || res.statusText, status: res.status };
         }
         return await res.json();
-      } catch (e) {
-        // return a standardized error shape for the caller
-        return { error:true, message: e.message === 'timeout' ? 'Server is taking too long to respond (timeout).' : 'Network error or the server may be sleeping.', status: 0 };
+      } catch (err) {
+        return { error: true, message: err.message || 'Error communicating with the server.' };
       }
     }
 
     // Promise that resolves once zip is provided/confirmed
+
+    async function refreshCheckoutSummary() {
+      const summaryResp = await api('/order-summary', {
+        session_id: sessionId,
+        delivery_option: checkoutContext.deliveryOption,
+        subscription_type: checkoutContext.subscriptionType,
+      });
+      checkoutContext.summary = summaryResp;
+      checkoutContext.proofUrl = '';
+      renderCheckoutSummaryStep();
+    }
     function ensureZip() {
       return new Promise(async (resolve) => {
         const saved = localStorage.getItem('user_zip');
@@ -2119,10 +2249,12 @@ html.in-iframe .app-card {
           }
           if (resp.can_deliver) {
             localStorage.setItem('user_zip', zip);
+            checkoutContext.deliveryOption = 'delivery';
             const banner = document.getElementById('zipBanner');
-            banner.style.display='block'; banner.textContent = `Great! We deliver to ${zip}.`;
+            banner.style.display='block'; banner.textContent = resp.message || `Great! We deliver to ${zip}.`;
             cleanupAndResolve();
           } else {
+            checkoutContext.deliveryOption = 'pickup';
             zipMessage.textContent = resp.message || 'We do not deliver to this ZIP.';
             zipContinueBtn.style.display = 'inline-block';
           }
@@ -2132,6 +2264,7 @@ html.in-iframe .app-card {
           const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
           if (!zip) { zipMessage.textContent = 'Enter a postal code to continue.'; return; }
           localStorage.setItem('user_zip', zip);
+          checkoutContext.deliveryOption = 'pickup';
           const banner = document.getElementById('zipBanner');
           banner.style.display='block'; banner.textContent = `You continued with ${zip}. Note: pickup only.`;
           cleanupAndResolve();

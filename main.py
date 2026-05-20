@@ -1,10 +1,14 @@
 import os
+import csv
+import io
+import threading
+import time
 os.makedirs("uploads", exist_ok=True)
 
 # main.py
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, EmailStr
 from upload_image import register_upload_routes
 from fastapi.staticfiles import StaticFiles
@@ -33,6 +37,17 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
 # --- Payments / Tax config ---
 WA_TAX_RATE = 0.1025
+PLAN_PRICES = {1: 15.0, 2: 30.0, 3: 26.0, 4: 40.0}
+WEEKLY_SUBSCRIPTION_PLAN4_PRICE = 200.0
+DELIVERY_FEE = 10.0
+FREE_DELIVERY_THRESHOLD = 150.0
+PICKUP_LOCATION = "Seattle Central"
+PICKUP_WINDOW = "Sunday 4PM-7PM"
+ORDER_CUTOFF_WEEKDAY = 4  # Friday
+ORDER_CUTOFF_HOUR = 14    # 2 PM
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "ChontaduroAdmin123!")
+ADMIN_SESSION_COOKIE = "admin_auth"
 ZELLE_PAYEE_NAME = os.getenv("ZELLE_PAYEE_NAME", "Chontaduro Kitchen")
 ZELLE_PAYEE_EMAIL = os.getenv("ZELLE_PAYEE_EMAIL", "")
 ZELLE_PAYEE_PHONE = os.getenv("ZELLE_PAYEE_PHONE", "")
@@ -93,11 +108,357 @@ class User(Base):
         except ValueError:
             return False
 
+
+class OrderRecord(Base):
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
+    delivery_date = Column(DateTime, index=True)
+    list_name = Column(String, nullable=False, index=True)  # this_sunday | next_sunday
+    customer_name = Column(String, nullable=False)
+    email = Column(String, nullable=False, index=True)
+    plan_label = Column(String, nullable=False)
+    delivery_option = Column(String, nullable=False)  # delivery | pickup
+    subscription_type = Column(String, nullable=False, default="one_time")
+    subscription_status = Column(String, nullable=False, default="none")
+    allergies = Column(String, nullable=True)
+    total = Column(String, nullable=False)
+    payment_method = Column(String, nullable=True)
+    notes = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="pending")
+
 # Initialize database tables AFTER models are defined
 def init_db():
     Base.metadata.create_all(bind=engine)
 
 init_db()
+
+
+def _utcnow() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def _normalize_utc(dt: Optional[datetime.datetime]) -> datetime.datetime:
+    if dt is None:
+        return _utcnow()
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc)
+
+
+def _friday_cutoff_for(dt: Optional[datetime.datetime] = None) -> datetime.datetime:
+    current = _normalize_utc(dt)
+    days_ahead = (ORDER_CUTOFF_WEEKDAY - current.weekday()) % 7
+    friday = current + datetime.timedelta(days=days_ahead)
+    return friday.replace(hour=ORDER_CUTOFF_HOUR, minute=0, second=0, microsecond=0)
+
+
+def _upcoming_sunday_for(dt: Optional[datetime.datetime] = None) -> datetime.datetime:
+    current = _normalize_utc(dt)
+    days_ahead = (6 - current.weekday()) % 7
+    if days_ahead == 0:
+        days_ahead = 7
+    sunday = current + datetime.timedelta(days=days_ahead)
+    return sunday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _next_available_sunday_for(dt: Optional[datetime.datetime] = None) -> datetime.datetime:
+    current = _normalize_utc(dt)
+    cutoff = _friday_cutoff_for(current)
+    if current <= cutoff:
+        return _upcoming_sunday_for(current)
+    return _upcoming_sunday_for(current + datetime.timedelta(days=7))
+
+
+def _delivery_list_name_for(delivery_date: datetime.datetime, now: Optional[datetime.datetime] = None) -> str:
+    reference = _normalize_utc(now)
+    this_sunday = _upcoming_sunday_for(reference)
+    return "this_sunday" if delivery_date.date() == this_sunday.date() else "next_sunday"
+
+
+def _plan_price(plan: Optional[int], subscription_type: Optional[str] = None) -> float:
+    if str(subscription_type or "").lower() in {"weekly", "weekly_5_days", "subscription_weekly", "weekly_subscription"}:
+        return WEEKLY_SUBSCRIPTION_PLAN4_PRICE
+    return float(PLAN_PRICES.get(int(plan or 0), 0.0))
+
+
+def _delivery_option_label(delivery_option: Optional[str]) -> str:
+    return "pickup" if str(delivery_option or "delivery").strip().lower() == "pickup" else "delivery"
+
+
+def _build_checkout_pricing(
+    *,
+    plan: Optional[int],
+    delivery_option: Optional[str],
+    subscription_type: Optional[str] = None,
+    fallback_order: Optional[Any] = None,
+    now: Optional[datetime.datetime] = None,
+) -> Dict[str, Any]:
+    current = _normalize_utc(now)
+    delivery_dt = _delivery_date_from_order(current)
+    is_weekly = str(subscription_type or "").lower() in {"weekly", "weekly_5_days", "subscription_weekly", "weekly_subscription"}
+    plan_label = "Weekly subscription x5 days Plan 4" if is_weekly else f"Plan {int(plan or 0)}"
+    subtotal = _plan_price(plan, subscription_type)
+    if (plan or 0) == 0 and fallback_order is not None:
+        subtotal = 0.0
+        for item in fallback_order.items:
+            subtotal += float(_item_price(item.item_type) * int(item.quantity))
+        plan_label = "Legacy Order"
+    shipping = _shipping_fee(_delivery_option_label(delivery_option), subtotal)
+    if is_weekly:
+        shipping = 0.0
+    tax = round(subtotal * WA_TAX_RATE, 2)
+    total = round(subtotal + shipping + tax, 2)
+    return {
+        "plan_label": plan_label,
+        "subtotal": round(subtotal, 2),
+        "shipping": round(shipping, 2),
+        "tax": tax,
+        "tax_rate": WA_TAX_RATE,
+        "total": total,
+        "delivery_option": _delivery_option_label(delivery_option),
+        "delivery_date": delivery_dt,
+        "delivery_date_label": delivery_dt.strftime("%A, %B %d, %Y"),
+        "list_name": _delivery_list_name_for(delivery_dt, current),
+        "free_delivery": shipping == 0.0,
+        "promo_banner": f"Free delivery on orders ${int(FREE_DELIVERY_THRESHOLD)}+",
+        "cancellation_policy": "Cancellations allowed until Friday 2PM only. No cancellations or refunds after Friday 2PM.",
+        "order_window": "Orders open every Monday and close every Friday at 2PM sharp.",
+        "pickup_text": f"Pickup: FREE, {PICKUP_LOCATION}, {PICKUP_WINDOW}",
+    }
+
+
+def _shipping_fee(delivery_option: str, subtotal: float) -> float:
+    if (delivery_option or "").strip().lower() == "pickup":
+        return 0.0
+    if subtotal >= FREE_DELIVERY_THRESHOLD:
+        return 0.0
+    return DELIVERY_FEE
+
+
+def _current_delivery_date_label(dt: Optional[datetime.datetime] = None) -> str:
+    delivery_date = _next_available_sunday_for(dt)
+    return delivery_date.strftime("%A, %B %d")
+
+
+def _delivery_date_from_order(now: Optional[datetime.datetime] = None) -> datetime.datetime:
+    return _next_available_sunday_for(now)
+
+
+def _serialize_order_row(order: OrderRecord) -> Dict[str, Any]:
+    return {
+        "id": order.id,
+        "order_time": order.created_at.isoformat() if order.created_at else "",
+        "delivery_date": order.delivery_date.isoformat() if order.delivery_date else "",
+        "list_name": order.list_name,
+        "customer_name": order.customer_name,
+        "email": order.email,
+        "plan": order.plan_label,
+        "delivery_option": order.delivery_option,
+        "subscription_type": order.subscription_type,
+        "subscription_status": order.subscription_status,
+        "allergies": order.allergies or "",
+        "total": order.total,
+        "payment_method": order.payment_method or "",
+        "status": order.status,
+    }
+
+
+def _upsert_order_record(
+    *,
+    customer_name: str,
+    email: str,
+    plan_label: str,
+    delivery_option: str,
+    total: float,
+    allergies: Optional[List[str]] = None,
+    payment_method: Optional[str] = None,
+    subscription_type: str = "one_time",
+    subscription_status: str = "none",
+    notes: Optional[str] = None,
+    status: str = "pending",
+    delivery_date: Optional[datetime.datetime] = None,
+) -> OrderRecord:
+    db = SessionLocal()
+    try:
+        delivery_dt = _normalize_utc(delivery_date or _delivery_date_from_order())
+        list_name = _delivery_list_name_for(delivery_dt)
+        allergies_text = ", ".join([str(a).strip() for a in (allergies or []) if str(a).strip()])
+        existing = (
+            db.query(OrderRecord)
+            .filter(
+                OrderRecord.email == email,
+                OrderRecord.plan_label == plan_label,
+                OrderRecord.delivery_date == delivery_dt,
+                OrderRecord.delivery_option == delivery_option,
+            )
+            .order_by(OrderRecord.id.desc())
+            .first()
+        )
+        if existing:
+            existing.customer_name = customer_name
+            existing.total = f"{total:.2f}"
+            existing.allergies = allergies_text
+            existing.payment_method = payment_method
+            existing.subscription_type = subscription_type
+            existing.subscription_status = subscription_status
+            existing.notes = notes
+            existing.status = status
+            db.commit()
+            db.refresh(existing)
+            return existing
+
+        record = OrderRecord(
+            created_at=_utcnow(),
+            delivery_date=delivery_dt,
+            list_name=list_name,
+            customer_name=customer_name,
+            email=email,
+            plan_label=plan_label,
+            delivery_option=delivery_option,
+            subscription_type=subscription_type,
+            subscription_status=subscription_status,
+            allergies=allergies_text,
+            total=f"{total:.2f}",
+            payment_method=payment_method,
+            notes=notes,
+            status=status,
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return record
+    finally:
+        db.close()
+
+
+def _query_orders(list_name: str) -> List[OrderRecord]:
+    db = SessionLocal()
+    try:
+        return (
+            db.query(OrderRecord)
+            .filter(OrderRecord.list_name == list_name)
+            .order_by(OrderRecord.created_at.asc())
+            .all()
+        )
+    finally:
+        db.close()
+
+
+def _orders_to_csv(orders: List[OrderRecord]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["order_time", "customer_name", "email", "plan", "delivery_option", "total", "allergies", "delivery_date", "subscription_type", "status"])
+    for order in orders:
+        writer.writerow([
+            order.created_at.isoformat() if order.created_at else "",
+            order.customer_name,
+            order.email,
+            order.plan_label,
+            order.delivery_option,
+            order.total,
+            order.allergies or "",
+            order.delivery_date.isoformat() if order.delivery_date else "",
+            order.subscription_type,
+            order.status,
+        ])
+    return output.getvalue()
+
+
+def _admin_dashboard_html(authenticated: bool = False) -> str:
+    this_orders = [_serialize_order_row(o) for o in _query_orders("this_sunday")]
+    next_orders = [_serialize_order_row(o) for o in _query_orders("next_sunday")]
+
+    def table_rows(rows: List[Dict[str, Any]]) -> str:
+        if not rows:
+            return '<tr><td colspan="7" style="padding:12px;text-align:center;color:#6b7280;">No orders yet.</td></tr>'
+        html_rows = []
+        for r in rows:
+            html_rows.append(
+                f"<tr>"
+                f"<td style='padding:8px;border-bottom:1px solid #e5e7eb;'>{r['order_time']}</td>"
+                f"<td style='padding:8px;border-bottom:1px solid #e5e7eb;'>{r['customer_name']}</td>"
+                f"<td style='padding:8px;border-bottom:1px solid #e5e7eb;'>{r['email']}</td>"
+                f"<td style='padding:8px;border-bottom:1px solid #e5e7eb;'>{r['plan']}</td>"
+                f"<td style='padding:8px;border-bottom:1px solid #e5e7eb;'>{r['delivery_option']}</td>"
+                f"<td style='padding:8px;border-bottom:1px solid #e5e7eb;'>${r['total']}</td>"
+                f"<td style='padding:8px;border-bottom:1px solid #e5e7eb;'>{r['allergies']}</td>"
+                f"</tr>"
+            )
+        return "".join(html_rows)
+
+    if not authenticated:
+        return f"""
+        <!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Admin Login</title>
+        <style>body{{font-family:Inter,Arial,sans-serif;background:#f7f3f0;margin:0;padding:40px;}} .card{{max-width:420px;margin:0 auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);}} input,button{{width:100%;padding:12px;margin-top:10px;border-radius:10px;border:1px solid #ddd;box-sizing:border-box;}} button{{background:#ea580c;color:#fff;border:none;font-weight:700;cursor:pointer;}}</style></head>
+        <body><div class='card'><h1 style='margin-top:0;color:#9a3412;'>Admin Login</h1>
+        <form id='adminForm'><input id='u' placeholder='Username' autocomplete='username'><input id='p' type='password' placeholder='Password' autocomplete='current-password'><button type='submit'>Sign In</button><div id='err' style='color:#b00020;margin-top:10px;'></div></form>
+        <script>document.getElementById('adminForm').onsubmit=async(e)=>{{e.preventDefault();const r=await fetch('/admin-login',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{username:document.getElementById('u').value,password:document.getElementById('p').value}})}});if(r.ok)location.reload();else document.getElementById('err').textContent=(await r.json()).detail||'Login failed';}};</script></div></body></html>
+        """
+
+    return f"""
+    <!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Chontaduro Admin</title>
+    <style>body{{font-family:Inter,Arial,sans-serif;background:#f7f3f0;margin:0;padding:24px;}} .wrap{{max-width:1280px;margin:0 auto;}} .grid{{display:grid;grid-template-columns:1fr 1fr;gap:20px;}} .card{{background:#fff;padding:18px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.08);}} table{{width:100%;border-collapse:collapse;font-size:14px;}} th{{text-align:left;background:#fff7ed;padding:10px;border-bottom:2px solid #fdba74;position:sticky;top:0;}} td{{vertical-align:top;}} .toolbar{{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}} .btn{{display:inline-block;padding:10px 14px;border-radius:10px;background:#ea580c;color:#fff;text-decoration:none;font-weight:700;}} .muted{{color:#6b7280;}} </style></head><body><div class='wrap'><div class='toolbar'><a class='btn' href='/admin/export/this_sunday'>Export This Sunday CSV</a><a class='btn' href='/admin/export/next_sunday'>Export Next Sunday CSV</a><a class='btn' href='/admin-logout'>Logout</a></div><div class='grid'><div class='card'><h2>This Sunday</h2><p class='muted'>{len(this_orders)} orders</p><div style='overflow:auto;max-height:70vh;'><table><thead><tr><th>Time</th><th>Name</th><th>Email</th><th>Plan</th><th>Delivery</th><th>Total</th><th>Allergies</th></tr></thead><tbody>{table_rows(this_orders)}</tbody></table></div></div><div class='card'><h2>Next Sunday</h2><p class='muted'>{len(next_orders)} orders</p><div style='overflow:auto;max-height:70vh;'><table><thead><tr><th>Time</th><th>Name</th><th>Email</th><th>Plan</th><th>Delivery</th><th>Total</th><th>Allergies</th></tr></thead><tbody>{table_rows(next_orders)}</tbody></table></div></div></div></div></body></html>
+    """
+
+
+def _is_admin_authenticated(request: Request) -> bool:
+    return request.cookies.get(ADMIN_SESSION_COOKIE) == "1"
+
+
+def _send_weekly_admin_email(list_name: str = "this_sunday") -> bool:
+    orders = _query_orders(list_name)
+    if not orders:
+        return False
+    if not (SMTP_HOST and SMTP_FROM_EMAIL and ZELLE_PAYEE_EMAIL):
+        return False
+
+    rows = []
+    for o in orders:
+        rows.append(
+            f"<tr><td style='padding:8px;border:1px solid #ddd;'>{o.customer_name}</td><td style='padding:8px;border:1px solid #ddd;'>{o.plan_label}</td><td style='padding:8px;border:1px solid #ddd;'>{o.delivery_option}</td><td style='padding:8px;border:1px solid #ddd;'>{o.allergies or ''}</td><td style='padding:8px;border:1px solid #ddd;'>${o.total}</td></tr>"
+        )
+    html = f"""
+    <html><body style='font-family:Arial,sans-serif;'>
+    <h2>Weekly Orders for {list_name.replace('_', ' ').title()}</h2>
+    <table style='border-collapse:collapse;width:100%;'>
+    <thead><tr><th style='padding:8px;border:1px solid #ddd;'>Name</th><th style='padding:8px;border:1px solid #ddd;'>Plan</th><th style='padding:8px;border:1px solid #ddd;'>Delivery</th><th style='padding:8px;border:1px solid #ddd;'>Allergies</th><th style='padding:8px;border:1px solid #ddd;'>Total</th></tr></thead>
+    <tbody>{''.join(rows)}</tbody></table></body></html>
+    """
+    msg = EmailMessage()
+    msg["Subject"] = f"Chontaduro weekly orders - {list_name.replace('_', ' ').title()}"
+    msg["From"] = SMTP_FROM_EMAIL
+    msg["To"] = ZELLE_PAYEE_EMAIL
+    msg.set_content("Weekly order summary attached in HTML.")
+    msg.add_alternative(html, subtype="html")
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            if SMTP_USERNAME and SMTP_PASSWORD:
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(msg)
+        return True
+    except Exception as exc:
+        print(f"[EMAIL] Weekly admin email failed: {exc}")
+        return False
+
+
+_LAST_WEEKLY_EMAIL_WEEK: Optional[str] = None
+
+
+def _weekly_admin_email_loop():
+    global _LAST_WEEKLY_EMAIL_WEEK
+    while True:
+        try:
+            now = _utcnow()
+            week_id = now.strftime("%G-W%V")
+            if now.weekday() == 4 and now.hour >= 14 and _LAST_WEEKLY_EMAIL_WEEK != week_id:
+                if _send_weekly_admin_email("this_sunday"):
+                    _LAST_WEEKLY_EMAIL_WEEK = week_id
+        except Exception as exc:
+            print(f"[EMAIL] Weekly admin loop error: {exc}")
+        time.sleep(60)
 
 app = FastAPI()
 
@@ -127,6 +488,11 @@ register_upload_routes(app)
 # montar carpeta ./uploads para servir archivos locales (fallback)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 register_delivery_routes(app)
+
+
+@app.on_event("startup")
+def _startup_background_tasks():
+    threading.Thread(target=_weekly_admin_email_loop, daemon=True).start()
 
 @app.get("/healthz")
 def healthz():
@@ -304,6 +670,8 @@ class CheckoutSessionRequest(BaseModel):
     session_id: Optional[str] = None
     allergies_selected: List[str] = Field(default_factory=list)
     allergies_other_note: Optional[str] = None
+    delivery_option: Optional[str] = Field(default="pickup")
+    subscription_type: Optional[str] = Field(default="one_time")
 
 
 class RegisterRequest(BaseModel):
@@ -325,6 +693,8 @@ class RegisterOrAuthRequest(BaseModel):
 
 class OrderSummaryRequest(BaseModel):
     session_id: str
+    delivery_option: Optional[str] = Field(default="pickup")
+    subscription_type: Optional[str] = Field(default="one_time")
 
 
 class ZelleConfirmRequest(BaseModel):
@@ -332,6 +702,13 @@ class ZelleConfirmRequest(BaseModel):
     full_name: str = Field(min_length=1, max_length=100)
     email: EmailStr
     payment_proof_url: str = Field(min_length=1, max_length=1000)
+    delivery_option: Optional[str] = Field(default="pickup")
+    subscription_type: Optional[str] = Field(default="one_time")
+
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
 
 # --- HELPERS: normalization for incoming requests (tolerant) ---
 def normalize_step_name(step: str) -> str:
@@ -1571,7 +1948,7 @@ def validate_daily_macros(
 
 
 MEAT_KEYWORDS = {"chicken","beef","pork","turkey","lamb","bacon","ham","steak"}
-FISH_KEYWORDS = {"salmon","shrimp","fish","tuna","trout","cod","shellfish","prawns"}
+FISH_KEYWORDS = {"salmon","shrimp","fish","tuna","trout","cod","shellfish","prawns","sardine","sardines"}
 RED_MEAT_KEYWORDS = {"beef","lamb","steak","veal","bison"}
 DAIRY_KEYWORDS = {"milk","yogurt","cheese","butter","cream"}
 EGG_KEYWORDS = {"egg","eggs"}
@@ -1588,6 +1965,153 @@ VEGETABLE_KEYWORDS = {
     "greens","mixed greens","salad","mixed vegetables","vegetables","veg","spring mix","spinach leaves"
 }
 
+OMNIVORE_ALLOWED_PROTEINS = {"chicken", "turkey", "beef", "pork", "tuna", "sardines", "eggs"}
+NO_RED_MEAT_ALLOWED_PROTEINS = {"chicken", "turkey", "tuna", "sardines", "eggs"}
+PROTEIN_FAMILY_PATTERNS = [
+    ("sardines", {"sardine", "sardines"}),
+    ("tuna", {"tuna"}),
+    ("beef", {"ground beef", "beef", "steak", "veal", "bison"}),
+    ("pork", {"pork", "bacon", "ham", "sausage", "chorizo"}),
+    ("turkey", {"turkey"}),
+    ("chicken", {"chicken"}),
+    ("eggs", {"egg", "eggs", "omelet", "omelette"}),
+    ("salmon", {"salmon"}),
+    ("shrimp", {"shrimp", "prawn", "prawns", "shellfish"}),
+    ("other_fish", {"fish", "cod", "trout"}),
+]
+
+
+def _meal_text_blob(meal_like: Any) -> str:
+    if isinstance(meal_like, dict):
+        parts = [meal_like.get("name", ""), meal_like.get("type", "")]
+        parts.extend(meal_like.get("ingredients", []) or [])
+        parts.extend(meal_like.get("tags", []) or [])
+        return " ".join(str(part or "") for part in parts).lower()
+    if isinstance(meal_like, list):
+        return " ".join(str(part or "") for part in meal_like).lower()
+    return str(meal_like or "").lower()
+
+
+def _extract_protein_families(meal_like: Any) -> List[str]:
+    blob = _meal_text_blob(meal_like)
+    families: List[str] = []
+    for family, patterns in PROTEIN_FAMILY_PATTERNS:
+        if any(pattern in blob for pattern in patterns):
+            families.append(family)
+    return families
+
+
+def _allowed_protein_families_for_diet(diet: Optional[str]) -> Optional[set[str]]:
+    d = str(diet or "").strip().lower()
+    if d == "omnivore":
+        return OMNIVORE_ALLOWED_PROTEINS
+    if d in {"no red meat", "no_red_meat"}:
+        return NO_RED_MEAT_ALLOWED_PROTEINS
+    return None
+
+
+def _has_only_allowed_proteins(meal_like: Any, diet: Optional[str]) -> bool:
+    allowed = _allowed_protein_families_for_diet(diet)
+    if not allowed:
+        return True
+    detected = set(_extract_protein_families(meal_like))
+    if not detected:
+        return True
+    return detected.issubset(allowed)
+
+
+def _primary_protein_family(meal_like: Any) -> Optional[str]:
+    families = _extract_protein_families(meal_like)
+    for family in families:
+        if family in {"chicken", "turkey", "beef", "pork", "tuna", "sardines", "eggs"}:
+            return family
+    return families[0] if families else None
+
+
+def _meal_preparation_signature(meal_like: Any) -> str:
+    if isinstance(meal_like, dict):
+        name = str(meal_like.get("name", "") or "")
+    elif hasattr(meal_like, "name"):
+        name = str(getattr(meal_like, "name", "") or "")
+    else:
+        name = str(meal_like or "")
+    signature = name.lower()
+    for _, patterns in PROTEIN_FAMILY_PATTERNS:
+        for pattern in patterns:
+            signature = signature.replace(pattern, " ")
+    signature = " ".join(signature.replace("-", " ").replace("/", " ").split())
+    return signature or name.lower()
+
+
+def _enforce_weekly_protein_variety(menu_objs: List[Meal], state: SessionState) -> List[Meal]:
+    if not menu_objs or not state.plan:
+        return menu_objs
+
+    available = filter_meals(state.dislikes, state.allergies, state.dietary_restrictions, state.diet_preference)
+    if not available:
+        return menu_objs
+
+    same_type_pool: Dict[str, List[Meal]] = {}
+    for meal in available:
+        same_type_pool.setdefault(meal.type.lower(), []).append(meal)
+
+    plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
+    num_main, num_break = plan_map.get(state.plan, (1, 0))
+    meals_per_day = max(1, num_main + num_break)
+    protein_counts: Dict[str, int] = {}
+    protein_preparations: Dict[str, set[str]] = {}
+    adjusted_menu: List[Meal] = []
+
+    for idx, meal in enumerate(menu_objs):
+        meal_type = str(getattr(meal, "type", "") or "").lower()
+        day_start = (idx // meals_per_day) * meals_per_day
+        day_used_names = {
+            adjusted.name.strip().lower()
+            for adjusted in adjusted_menu[day_start:]
+            if getattr(adjusted, "name", None)
+        }
+
+        def _fits(candidate: Meal) -> bool:
+            name_key = candidate.name.strip().lower()
+            if name_key in day_used_names:
+                return False
+            family = _primary_protein_family(candidate)
+            if not family:
+                return True
+            prep = _meal_preparation_signature(candidate)
+            used_count = protein_counts.get(family, 0)
+            used_preps = protein_preparations.get(family, set())
+            if used_count >= 2:
+                return False
+            if prep in used_preps:
+                return False
+            return True
+
+        selected = meal if _fits(meal) else None
+        if not selected:
+            for candidate in same_type_pool.get(meal_type, []):
+                if _fits(candidate):
+                    selected = candidate
+                    break
+        if not selected:
+            for pool in same_type_pool.values():
+                for candidate in pool:
+                    if _fits(candidate):
+                        selected = candidate
+                        break
+                if selected:
+                    break
+        if not selected:
+            selected = meal
+
+        family = _primary_protein_family(selected)
+        if family:
+            protein_counts[family] = protein_counts.get(family, 0) + 1
+            protein_preparations.setdefault(family, set()).add(_meal_preparation_signature(selected))
+        adjusted_menu.append(selected)
+
+    return adjusted_menu
+
 
 def is_meal_compatible_with_diet(ingredients: List[str], diet: Optional[str]) -> bool:
     if not diet:
@@ -1595,13 +2119,9 @@ def is_meal_compatible_with_diet(ingredients: List[str], diet: Optional[str]) ->
     d = diet.lower()
     ings = [i.lower() for i in (ingredients or [])]
     if d == "omnivore":
-        return True
-    if d == "pescatarian":
-        return not any(any(mk in ing for mk in MEAT_KEYWORDS) for ing in ings)
-    if d == "vegetarian":
-        return not any(any(mk in ing for mk in (MEAT_KEYWORDS | FISH_KEYWORDS)) for ing in ings)
+        return _has_only_allowed_proteins(ingredients, d)
     if d in ("no red meat", "no_red_meat"):
-        return not any(any(rk in ing for rk in RED_MEAT_KEYWORDS) for ing in ings)
+        return _has_only_allowed_proteins(ingredients, d) and not any(any(rk in ing for rk in RED_MEAT_KEYWORDS) for ing in ings)
     if d == "few restrictions":
         return True
     return True
@@ -2002,7 +2522,7 @@ def generate_menu_using_template(state: SessionState) -> List[Meal]:
                     menu_objs.append(Meal(name=name or "Unknown", type="Main Meal", ingredients=[], calories=0, price=0.0))
             else:
                 menu_objs.append(Meal(name=name or "Unknown", type="Main Meal", ingredients=[], calories=0, price=0.0))
-    return menu_objs
+    return _enforce_weekly_protein_variety(menu_objs, state)
 
 def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int], calorie_target: int) -> List[Dict[str, Any]]:
     """
@@ -2184,7 +2704,8 @@ def generate_menu(state: SessionState, protein_per_meal: Optional[int] = None, c
         if not day_items and available:
             day_items.append(random.choice(available))
         menu.extend(day_items)
-    return menu[: state.days * (num_main + num_break)]
+    final_menu = menu[: state.days * (num_main + num_break)]
+    return _enforce_weekly_protein_variety(final_menu, state)
 
 
 def assess_menu_possibility(state: SessionState) -> Dict[str, Any]:
@@ -2406,7 +2927,7 @@ def process_meal_data(meal: Meal, protein: int, calories: int, fat_ratio: float 
 # --- UI form definitions (unchanged) ---
 def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "diet_preference":
-        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","Vegetarian","Pescatarian","No Red Meat"], "required": True}],"current_step":"diet_preference"}
+        return {"question":"What is your diet preference?","fields":[{"name":"Diet Preference","type":"select","options":["Omnivore","No Red Meat"], "required": True}],"current_step":"diet_preference"}
     if step_name == "pick_plan":
         return {"question":"Which plan do you want?","fields":[{"name":"Plan","type":"select","options":["Plan 1: 1 main meal per day","Plan 2: 2 main meals per day","Plan 3: 1 main meal + 1 breakfast","Plan 4: 2 main meals + 1 breakfast (full day)"], "required": True}],"current_step":"pick_plan"}
     if step_name == "objective":
@@ -2902,12 +3423,7 @@ async def next_step(request: Request):
                         target_calories=calorie_dist["total_meal_calories"],
                     )
 
-                # Compute Day 1 meal totals from final_macros (post-adjustment values)
-                day1_meals = [m for m in response_menu if m.get("day_number", 1) == 1]
-                day1_meal_protein = round(sum(m["final_macros"]["protein_g"] for m in day1_meals), 1)
-                day1_meal_carbs = round(sum(m["final_macros"]["carbs_g"] for m in day1_meals), 1)
-                day1_meal_fat = round(sum(m["final_macros"]["fat_g"] for m in day1_meals), 1)
-                day1_meal_calories = round(sum(m["final_macros"]["calories"] for m in day1_meals))
+                daily_summaries: Dict[str, Any] = {}
 
                 # Calcula el precio total
                 total_price = calculate_price(
@@ -2995,31 +3511,38 @@ async def next_step(request: Request):
                 # Respuesta basada en el plan seleccionado
                 if state.plan == 4:
                     # Build daily summary for Plan 4
-                    # Carbs remaining for the snack after meals contribute their share
-                    remaining_carbs_for_snacks = max(0, macros.get("carbs_grams", 0) - day1_meal_carbs)
                     # Snack protein range: ±5g around the deficit, with a minimum of 10g
                     _snack_protein_floor = 10
                     _snack_range_variance = 5
-                    daily_summary = {
-                        "meals_only": {
-                            "protein": round(day1_meal_protein, 1),
-                            "carbs": round(day1_meal_carbs, 1),
-                            "fat": round(day1_meal_fat, 1),
-                            "calories": round(day1_meal_calories),
-                        },
-                        "snack_contribution": {
-                            "protein": f"{max(_snack_protein_floor, protein_deficit_for_snacks - _snack_range_variance)}-{protein_deficit_for_snacks + _snack_range_variance}g",
-                            "carbs": snack_flexible_info.get("carbs_range", "15-25g") if snack_flexible_info else "15-25g",
-                            "calories": f"~{calorie_dist['snack_calories_reserved']} kcal",
-                        },
-                        "final_total_estimate": {
-                            "protein": f"~{round(day1_meal_protein + protein_deficit_for_snacks - _snack_range_variance)}-{round(day1_meal_protein + protein_deficit_for_snacks + _snack_range_variance)}g",
-                            "carbs": f"~{round(day1_meal_carbs + max(0, remaining_carbs_for_snacks - _snack_range_variance))}-{round(day1_meal_carbs + remaining_carbs_for_snacks + 10)}g",
-                            "fat": f"~{round(day1_meal_fat)}-{round(day1_meal_fat + 5)}g",
-                            "calories": f"~{round(day1_meal_calories + calorie_dist['snack_calories_reserved'] - 30)}-{round(day1_meal_calories + calorie_dist['snack_calories_reserved'] + 30)} kcal",
-                        },
-                        "message": "✨ Perfect balance for your body recomposition goals!",
-                    }
+                    for day_num in sorted(days_in_menu):
+                        day_meals = [m for m in response_menu if m.get("day_number", 1) == day_num]
+                        day_meal_protein = round(sum(m["final_macros"]["protein_g"] for m in day_meals), 1)
+                        day_meal_carbs = round(sum(m["final_macros"]["carbs_g"] for m in day_meals), 1)
+                        day_meal_fat = round(sum(m["final_macros"]["fat_g"] for m in day_meals), 1)
+                        day_meal_calories = round(sum(m["final_macros"]["calories"] for m in day_meals))
+                        remaining_carbs_for_snacks = max(0, macros.get("carbs_grams", 0) - day_meal_carbs)
+                        daily_summaries[str(day_num)] = {
+                            "meals_only": {
+                                "protein": round(day_meal_protein, 1),
+                                "carbs": round(day_meal_carbs, 1),
+                                "fat": round(day_meal_fat, 1),
+                                "calories": round(day_meal_calories),
+                            },
+                            "snack_contribution": {
+                                "protein": f"{max(_snack_protein_floor, protein_deficit_for_snacks - _snack_range_variance)}-{protein_deficit_for_snacks + _snack_range_variance}g",
+                                "carbs": snack_flexible_info.get("carbs_range", "15-25g") if snack_flexible_info else "15-25g",
+                                "calories": f"~{calorie_dist['snack_calories_reserved']} kcal",
+                            },
+                            "final_total_estimate": {
+                                "protein": f"~{round(day_meal_protein + protein_deficit_for_snacks - _snack_range_variance)}-{round(day_meal_protein + protein_deficit_for_snacks + _snack_range_variance)}g",
+                                "carbs": f"~{round(day_meal_carbs + max(0, remaining_carbs_for_snacks - _snack_range_variance))}-{round(day_meal_carbs + remaining_carbs_for_snacks + 10)}g",
+                                "fat": f"~{round(day_meal_fat)}-{round(day_meal_fat + 5)}g",
+                                "calories": f"~{round(day_meal_calories + calorie_dist['snack_calories_reserved'] - 30)}-{round(day_meal_calories + calorie_dist['snack_calories_reserved'] + 30)} kcal",
+                            },
+                            "message": "✨ Perfect balance for your body recomposition goals!",
+                        }
+
+                    daily_summary = daily_summaries.get("1", {})
                     state.menu = response_menu
                     state.current_step = "review"
                     sessions[session_id] = state.model_dump()
@@ -3053,6 +3576,7 @@ async def next_step(request: Request):
                         "snack_message": snack_message,
                         "plan_validation": plan_validation,
                         "daily_summary": daily_summary,
+                        "daily_summaries": daily_summaries,
                         "current_step": state.current_step,
                     }
                 else:
@@ -3559,13 +4083,20 @@ def register_or_authenticate(payload: RegisterOrAuthRequest):
 
 @app.post("/order-summary")
 def order_summary(payload: OrderSummaryRequest):
-    order = _build_order_from_session(payload.session_id)
-    totals = _compute_order_totals(order)
+    if payload.session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    state = SessionState(**sessions[payload.session_id])
+    pricing = _build_checkout_pricing(
+        plan=state.plan,
+        delivery_option=payload.delivery_option,
+        subscription_type=payload.subscription_type,
+        fallback_order=_build_order_from_session(payload.session_id) if not state.plan else None,
+    )
     return {
         "ok": True,
         "session_id": payload.session_id,
-        "items_count": len(order.items),
-        **totals,
+        "items_count": len(state.menu or []),
+        **pricing,
         "zelle": {
             "name": ZELLE_PAYEE_NAME,
             "email": ZELLE_PAYEE_EMAIL,
@@ -3578,11 +4109,12 @@ def create_checkout_session(payload: CheckoutSessionRequest):
     """
     Create Stripe checkout session after user has already registered/authenticated.
     """
-    order = payload.order
     email = str(payload.email)
     name = payload.name
     password = payload.password
     session_id = payload.session_id
+    delivery_option = payload.delivery_option or "delivery"
+    subscription_type = payload.subscription_type or "one_time"
     allergies_selected = [str(a).strip().lower() for a in (payload.allergies_selected or []) if str(a).strip()]
     allergies_other_note = (payload.allergies_other_note or "").strip()
 
@@ -3593,12 +4125,27 @@ def create_checkout_session(payload: CheckoutSessionRequest):
         if not allergies_other_note:
             allergies_other_note = (state.allergy_note or "").strip()
 
-    if not order:
-        if not session_id:
-            raise HTTPException(status_code=422, detail="Either order or session_id is required.")
-        order = _build_order_from_session(session_id)
+    if not session_id:
+        raise HTTPException(status_code=422, detail="session_id is required.")
 
-    totals = _compute_order_totals(order)
+    pricing = _build_checkout_pricing(
+        plan=SessionState(**sessions[session_id]).plan if session_id in sessions else None,
+        delivery_option=delivery_option,
+        subscription_type=subscription_type,
+        fallback_order=_build_order_from_session(session_id) if session_id in sessions and not SessionState(**sessions[session_id]).plan else None,
+    )
+    totals = {
+        "plan_label": pricing["plan_label"],
+        "subtotal": pricing["subtotal"],
+        "shipping": pricing["shipping"],
+        "tax": pricing["tax"],
+        "tax_rate": pricing["tax_rate"],
+        "total": pricing["total"],
+        "delivery_date": pricing["delivery_date"],
+        "delivery_date_label": pricing["delivery_date_label"],
+        "delivery_option": pricing["delivery_option"],
+        "subscription_type": subscription_type,
+    }
 
     # Create a database session
     db = SessionLocal()
@@ -3629,44 +4176,61 @@ def create_checkout_session(payload: CheckoutSessionRequest):
         # Initialize the product list for Stripe
         line_items = []
 
-        # Add each product in the order to the Stripe line items
-        for item in order.items:
-            price = _item_price(item.item_type)
-            
+        line_items.append({
+            "price_data": {
+                "currency": "usd",
+                "product_data": {"name": pricing["plan_label"]},
+                "unit_amount": int(round(pricing["subtotal"] * 100)),
+            },
+            "quantity": 1,
+        })
+
+        if pricing["shipping"] > 0:
             line_items.append({
                 "price_data": {
                     "currency": "usd",
-                    "product_data": {
-                        "name": item.item_type,  # Name of the product from the order
-                    },
-                    # Convert price to cents
-                    "unit_amount": int(price * 100),
+                    "product_data": {"name": "Delivery Fee"},
+                    "unit_amount": int(round(pricing["shipping"] * 100)),
                 },
-                "quantity": item.quantity,  # Quantity of the product
+                "quantity": 1,
             })
 
-        tax_amount_cents = int(round(totals["tax"] * 100))
-        if tax_amount_cents > 0:
+        if pricing["tax"] > 0:
             line_items.append({
                 "price_data": {
                     "currency": "usd",
-                    "product_data": {
-                        "name": "Washington State Tax (10.25%)",
-                    },
-                    "unit_amount": tax_amount_cents,
+                    "product_data": {"name": "Washington State Tax (10.25%)"},
+                    "unit_amount": int(round(pricing["tax"] * 100)),
                 },
                 "quantity": 1,
             })
 
         order_id = str(uuid4())
+        record = _upsert_order_record(
+            customer_name=name or (user.name if user else "Customer"),
+            email=email,
+            plan_label=pricing["plan_label"],
+            delivery_option=pricing["delivery_option"],
+            total=pricing["total"],
+            allergies=allergies_selected,
+            payment_method="Stripe",
+            subscription_type=subscription_type,
+            subscription_status="active" if subscription_type != "one_time" else "none",
+            notes=allergies_other_note,
+            status="pending_payment",
+            delivery_date=pricing["delivery_date"],
+        )
         PENDING_ORDERS[order_id] = {
             "order_id": order_id,
             "email": email,
             "full_name": name or (user.name if user else "Customer"),
             "session_id": session_id,
             "totals": totals,
+            "list_name": pricing["list_name"],
+            "delivery_date": pricing["delivery_date"],
             "allergies_selected": allergies_selected,
             "allergies_other_note": allergies_other_note,
+            "order_record_id": record.id,
             "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }
 
@@ -3683,6 +4247,9 @@ def create_checkout_session(payload: CheckoutSessionRequest):
                 "allergies_selected": ",".join(allergies_selected)[:500],
                 "allergies_other_note": allergies_other_note[:500],
                 "session_id": (session_id or "")[:120],
+                "delivery_option": pricing["delivery_option"],
+                "subscription_type": subscription_type[:120],
+                "plan_label": pricing["plan_label"][:120],
             },
         )
 
@@ -3691,6 +4258,8 @@ def create_checkout_session(payload: CheckoutSessionRequest):
             "checkout_url": session.url,
             "order_id": order_id,
             "summary": totals,
+            "delivery_date": pricing["delivery_date_label"],
+            "delivery_option": pricing["delivery_option"],
         }
     except HTTPException:
         raise
@@ -3706,6 +4275,8 @@ async def upload_payment_proof(
     session_id: str = Form(...),
     email: str = Form(...),
     full_name: str = Form(...),
+    delivery_option: str = Form(default="delivery"),
+    subscription_type: str = Form(default="one_time"),
 ):
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded.")
@@ -3727,13 +4298,32 @@ async def upload_payment_proof(
     url = f"/uploads/payment_proofs/{filename}"
 
     try:
-        order = _build_order_from_session(session_id)
-        totals = _compute_order_totals(order)
+        state = SessionState(**sessions[session_id]) if session_id in sessions else None
+        pricing = _build_checkout_pricing(
+            plan=state.plan if state else None,
+            delivery_option=delivery_option,
+            subscription_type=subscription_type,
+            fallback_order=_build_order_from_session(session_id) if state and not state.plan else None,
+        )
+        _upsert_order_record(
+            customer_name=full_name,
+            email=email,
+            plan_label=pricing["plan_label"],
+            delivery_option=pricing["delivery_option"],
+            total=pricing["total"],
+            allergies=(state.allergies if state else []),
+            payment_method="Zelle",
+            subscription_type=subscription_type,
+            subscription_status="active" if str(subscription_type or "one_time").lower() != "one_time" else "none",
+            notes=(state.allergy_note if state else None),
+            status="proof_uploaded",
+            delivery_date=pricing["delivery_date"],
+        )
         _send_confirmation_email(
             to_email=ZELLE_PAYEE_EMAIL or "chontaduroprepmeals@gmail.com",
             full_name=full_name,
             customer_email=email,
-            order_summary=totals,
+            order_summary=pricing,
             payment_method="Zelle screenshot uploaded",
             payment_reference=url,
             attachment_bytes=contents,
@@ -3753,13 +4343,35 @@ async def upload_payment_proof(
 
 @app.post("/confirm-zelle-payment")
 def confirm_zelle_payment(payload: ZelleConfirmRequest):
-    order = _build_order_from_session(payload.session_id)
-    totals = _compute_order_totals(order)
+    if payload.session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    state = SessionState(**sessions[payload.session_id])
+    pricing = _build_checkout_pricing(
+        plan=state.plan,
+        delivery_option=payload.delivery_option,
+        subscription_type=payload.subscription_type,
+        fallback_order=_build_order_from_session(payload.session_id) if not state.plan else None,
+    )
+
+    _upsert_order_record(
+        customer_name=payload.full_name,
+        email=str(payload.email),
+        plan_label=pricing["plan_label"],
+        delivery_option=pricing["delivery_option"],
+        total=pricing["total"],
+        allergies=state.allergies,
+        payment_method="Zelle",
+        subscription_type=payload.subscription_type or "one_time",
+        subscription_status="active" if str(payload.subscription_type or "one_time").lower() != "one_time" else "none",
+        notes=state.allergy_note,
+        status="paid",
+        delivery_date=pricing["delivery_date"],
+    )
 
     sent = _send_confirmation_email(
         to_email=str(payload.email),
         full_name=payload.full_name,
-        order_summary=totals,
+        order_summary=pricing,
         payment_method="Zelle",
         payment_reference=payload.payment_proof_url,
     )
@@ -3768,7 +4380,7 @@ def confirm_zelle_payment(payload: ZelleConfirmRequest):
         "ok": True,
         "message": "Payment confirmed. Your order is confirmed and being prepared.",
         "email_sent": sent,
-        "summary": totals,
+        "summary": pricing,
     }
 
 
@@ -3791,6 +4403,20 @@ async def stripe_webhook(request: Request):
         order_id = metadata.get("order_id")
         pending = PENDING_ORDERS.get(order_id)
         if pending:
+            _upsert_order_record(
+                customer_name=pending.get("full_name", "Customer"),
+                email=pending.get("email", ""),
+                plan_label=pending.get("totals", {}).get("plan_label", "Order"),
+                delivery_option=pending.get("totals", {}).get("delivery_option", "delivery"),
+                total=float(pending.get("totals", {}).get("total", 0)),
+                allergies=pending.get("allergies_selected", []),
+                payment_method="Stripe",
+                subscription_type=pending.get("totals", {}).get("subscription_type", "one_time"),
+                subscription_status="active" if str(pending.get("totals", {}).get("subscription_type", "one_time")).lower() != "one_time" else "none",
+                notes=pending.get("allergies_other_note"),
+                status="paid",
+                delivery_date=pending.get("totals", {}).get("delivery_date"),
+            )
             _send_confirmation_email(
                 to_email=pending.get("email", ""),
                 full_name=pending.get("full_name", "Customer"),
@@ -3909,6 +4535,57 @@ async def login_user(payload: LoginRequest):
     finally:
         db.close()
 
+
+@app.post("/admin-login")
+def admin_login(payload: AdminLoginRequest):
+    if payload.username != ADMIN_USERNAME or payload.password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid admin credentials.")
+    response = JSONResponse({"ok": True})
+    response.set_cookie(ADMIN_SESSION_COOKIE, "1", httponly=True, samesite="lax", max_age=60 * 60 * 8)
+    return response
+
+
+@app.get("/admin-logout")
+def admin_logout():
+    response = Response(content="Logged out", media_type="text/plain")
+    response.delete_cookie(ADMIN_SESSION_COOKIE)
+    return response
+
+
+@app.get("/admin")
+def admin_page(request: Request):
+    return HTMLResponse(_admin_dashboard_html(authenticated=_is_admin_authenticated(request)))
+
+
+@app.get("/admin/export/{list_name}")
+def admin_export_csv(list_name: str, request: Request):
+    if not _is_admin_authenticated(request):
+        raise HTTPException(status_code=401, detail="Unauthorized.")
+    if list_name not in {"this_sunday", "next_sunday"}:
+        raise HTTPException(status_code=400, detail="Invalid order list.")
+    csv_data = _orders_to_csv(_query_orders(list_name))
+    filename = f"{list_name}_orders.csv"
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/manifest.json")
+def serve_manifest():
+    return FileResponse("manifest.json", media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+def serve_service_worker():
+    return FileResponse("sw.js", media_type="application/javascript")
+
+
+@app.get("/icon.svg")
+def serve_icon():
+    return FileResponse("icon.svg", media_type="image/svg+xml")
+
 def calculate_price(menu: List[Meal], extra_protein: int) -> float:
     """
     Calculate total price for menu.
@@ -3986,19 +4663,40 @@ def _send_confirmation_email(
         print("[EMAIL] SMTP not configured. Skipping confirmation email.")
         return False
 
-    subject = "Zelle payment proof received ✅"
-    body = (
-        f"New Zelle payment proof received for {full_name}.\n\n"
-        f"Customer name: {full_name}\n"
-        f"Customer email: {customer_email or 'N/A'}\n"
-        f"Payment method: {payment_method}\n"
-        f"Subtotal: ${order_summary.get('subtotal', 0):.2f}\n"
-        f"Washington tax (10.25%): ${order_summary.get('tax', 0):.2f}\n"
-        f"Total: ${order_summary.get('total', 0):.2f}\n"
-    )
+    is_admin_proof_email = payment_method.lower().startswith("zelle screenshot") or (to_email == (ZELLE_PAYEE_EMAIL or "chontaduroprepmeals@gmail.com"))
+    subject = "Zelle payment proof received ✅" if is_admin_proof_email else "Your Chontaduro order is confirmed ✅"
+    if is_admin_proof_email:
+        body = (
+            f"New Zelle payment proof received for {full_name}.\n\n"
+            f"Customer name: {full_name}\n"
+            f"Customer email: {customer_email or 'N/A'}\n"
+            f"Payment method: {payment_method}\n"
+            f"Plan: {order_summary.get('plan_label', 'N/A')}\n"
+            f"Delivery option: {order_summary.get('delivery_option', 'delivery')}\n"
+            f"Shipping: ${order_summary.get('shipping', 0):.2f}\n"
+            f"Subtotal: ${order_summary.get('subtotal', 0):.2f}\n"
+            f"Washington tax (10.25%): ${order_summary.get('tax', 0):.2f}\n"
+            f"Total: ${order_summary.get('total', 0):.2f}\n"
+        )
+    else:
+        body = (
+            f"Hi {full_name},\n\n"
+            "Thank you for your order. Your order is confirmed and is being prepared.\n\n"
+            f"Payment method: {payment_method}\n"
+            f"Plan: {order_summary.get('plan_label', 'N/A')}\n"
+            f"Delivery option: {order_summary.get('delivery_option', 'delivery')}\n"
+            f"Next available Sunday: {order_summary.get('delivery_date_label', 'N/A')}\n"
+            f"Shipping: ${order_summary.get('shipping', 0):.2f}\n"
+            f"Subtotal: ${order_summary.get('subtotal', 0):.2f}\n"
+            f"Washington tax (10.25%): ${order_summary.get('tax', 0):.2f}\n"
+            f"Total: ${order_summary.get('total', 0):.2f}\n"
+        )
     if payment_reference:
         body += f"Payment reference: {payment_reference}\n"
-    body += "\nThe uploaded payment screenshot is attached to this email.\n"
+    if is_admin_proof_email:
+        body += "\nThe uploaded payment screenshot is attached to this email.\n"
+    else:
+        body += "\nWe appreciate your trust in Chontaduro!\n"
 
     msg = EmailMessage()
     msg["Subject"] = subject

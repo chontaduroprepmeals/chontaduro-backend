@@ -1,0 +1,17 @@
+{
+  "name": "Chontaduro",
+  "short_name": "Chontaduro",
+  "description": "Chontaduro meal planning and ordering app",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f3f0",
+  "theme_color": "#ea580c",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
