@@ -239,37 +239,9 @@ html.in-iframe .app-card {
   <div id="checkoutModalOverlay" aria-hidden="true">
     <div id="checkoutModal" role="dialog" aria-modal="true" aria-labelledby="checkoutModalTitle">
       <h2 id="checkoutModalTitle">Complete Your Order</h2>
-      <p id="checkoutModalDescription">Please sign in or create an account to proceed with payment.</p>
-      
-      <!-- Mode toggle tabs -->
-      <div style="display: flex; gap: 10px; margin: 16px 0; border-bottom: 2px solid #e5e7eb;">
-        <button id="signInTab" class="checkout-tab active" style="flex: 1; padding: 10px; background: none; border: none; border-bottom: 3px solid #ff7b00; font-weight: 600; cursor: pointer; color: #ff7b00;">
-          Sign In
-        </button>
-        <button id="createAccountTab" class="checkout-tab" style="flex: 1; padding: 10px; background: none; border: none; border-bottom: 3px solid transparent; font-weight: 500; cursor: pointer; color: #666;">
-          Create Account
-        </button>
-      </div>
-      
-      <!-- Name field (only for Create Account mode) -->
-      <div id="nameFieldContainer" style="display: none;">
-        <label for="checkoutName">Full Name *</label>
-        <input id="checkoutName" type="text" placeholder="John Doe" aria-label="Full name">
-      </div>
-      
-      <label for="checkoutEmail">Email *</label>
-      <input id="checkoutEmail" type="email" placeholder="john@example.com" required aria-label="Email address">
-      
-      <label for="checkoutPassword">Password *</label>
-      <input id="checkoutPassword" type="password" placeholder="Enter your password" required aria-label="Password">
-      <small id="passwordHint" style="color: #666; font-size: 0.85rem; display: none;">Create a password (minimum 6 characters) to access your order history.</small>
-      
+      <p id="checkoutModalDescription">Finish your registration, review your total, and choose payment method.</p>
+      <div id="checkoutModalContent"></div>
       <div id="checkoutErrorMessage" class="error-message"></div>
-
-      <div class="actions">
-        <button id="checkoutCancelBtn" class="px-4 py-2 bg-gray-300 rounded">Cancel</button>
-        <button id="checkoutSubmitBtn" class="px-4 py-2 bg-orange-500 text-white rounded">Sign In & Proceed to Payment</button>
-      </div>
     </div>
   </div>
 
@@ -1647,7 +1619,7 @@ html.in-iframe .app-card {
 
       html += `<div class="mt-4 flex gap-3 justify-center flex-wrap">
           <button onclick="redoMenu()" class="px-3 py-2 bg-blue-600 text-white rounded">Regenerate Full Menu</button>
-          <button onclick="proceedToCheckout()" class="px-4 py-3 bg-green-600 text-white rounded font-bold text-lg">🛒 Place Order</button>
+          <button onclick="proceedToCheckout()" class="px-4 py-3 bg-green-600 text-white rounded font-bold text-lg">🛒 Order Now</button>
         </div>`;
       
       console.log('✅ Place Order button added to HTML');
@@ -1752,221 +1724,267 @@ html.in-iframe .app-card {
       } catch (e) { alert("Error"); console.error(e); }
     }
 
-    // --- Checkout functionality ---
-    let checkoutMode = 'signin'; // 'signin' or 'createaccount'
-    
-    function setCheckoutMode(mode) {
-      checkoutMode = mode;
-      const nameContainer = document.getElementById('nameFieldContainer');
-      const passwordHint = document.getElementById('passwordHint');
-      const submitBtn = document.getElementById('checkoutSubmitBtn');
-      const signInTab = document.getElementById('signInTab');
-      const createAccountTab = document.getElementById('createAccountTab');
-      const passwordInput = document.getElementById('checkoutPassword');
-      
-      if (mode === 'signin') {
-        // Sign In mode
-        nameContainer.style.display = 'none';
-        passwordHint.style.display = 'none';
-        submitBtn.textContent = 'Sign In & Proceed to Payment';
-        passwordInput.placeholder = 'Enter your password';
-        
-        // Update tab styling
-        signInTab.style.borderBottom = '3px solid #ff7b00';
-        signInTab.style.color = '#ff7b00';
-        signInTab.style.fontWeight = '600';
-        createAccountTab.style.borderBottom = '3px solid transparent';
-        createAccountTab.style.color = '#666';
-        createAccountTab.style.fontWeight = '500';
-      } else {
-        // Create Account mode
-        nameContainer.style.display = 'block';
-        passwordHint.style.display = 'block';
-        submitBtn.textContent = 'Create Account & Proceed to Payment';
-        passwordInput.placeholder = 'Create a password (min 6 characters)';
-        
-        // Update tab styling
-        createAccountTab.style.borderBottom = '3px solid #ff7b00';
-        createAccountTab.style.color = '#ff7b00';
-        createAccountTab.style.fontWeight = '600';
-        signInTab.style.borderBottom = '3px solid transparent';
-        signInTab.style.color = '#666';
-        signInTab.style.fontWeight = '500';
-      }
-      
-      // Clear error message when switching modes
-      document.getElementById('checkoutErrorMessage').textContent = '';
-    }
-    
+    // --- Checkout functionality (new flow) ---
+    let checkoutContext = {
+      fullName: '',
+      email: '',
+      password: '',
+      summary: null,
+      proofUrl: '',
+    };
+
     function showCheckoutModal() {
       document.getElementById('checkoutModalOverlay').style.display = 'flex';
       document.getElementById('checkoutModalOverlay').setAttribute('aria-hidden', 'false');
-      
-      // Set up tab click handlers
-      document.getElementById('signInTab').onclick = () => setCheckoutMode('signin');
-      document.getElementById('createAccountTab').onclick = () => setCheckoutMode('createaccount');
-      
-      // Default to Sign In mode
-      setCheckoutMode('signin');
-      
-      // Clear any previous error messages
       document.getElementById('checkoutErrorMessage').textContent = '';
-      
-      // Focus on email field (common for both modes)
-      setTimeout(() => {
-        const emailInput = document.getElementById('checkoutEmail');
-        if (emailInput) emailInput.focus();
-      }, 100);
     }
 
     function hideCheckoutModal() {
       document.getElementById('checkoutModalOverlay').style.display = 'none';
       document.getElementById('checkoutModalOverlay').setAttribute('aria-hidden', 'true');
+      document.getElementById('checkoutModalContent').innerHTML = '';
+      document.getElementById('checkoutErrorMessage').textContent = '';
     }
 
-    async function proceedToCheckout() {
-      // Show the checkout modal to collect user info
-      showCheckoutModal();
-      
-      // Set up event listeners for modal buttons
-      const submitBtn = document.getElementById('checkoutSubmitBtn');
-      const cancelBtn = document.getElementById('checkoutCancelBtn');
-      
-      const submitHandler = async () => {
-        await handleCheckoutSubmit();
-      };
-      
-      const cancelHandler = () => {
-        hideCheckoutModal();
-        // Clear form
-        document.getElementById('checkoutName').value = '';
-        document.getElementById('checkoutEmail').value = '';
-        document.getElementById('checkoutPassword').value = '';
-      };
-      
-      // Remove old listeners and add new ones
-      submitBtn.replaceWith(submitBtn.cloneNode(true));
-      cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-      
-      document.getElementById('checkoutSubmitBtn').addEventListener('click', submitHandler);
-      document.getElementById('checkoutCancelBtn').addEventListener('click', cancelHandler);
+    function buildOrderItemsFromMenu(menuData) {
+      const orderItems = [];
+      (menuData.menu || []).forEach(meal => {
+        const mealType = String(meal.type || '').toLowerCase();
+        const itemType = mealType.includes('breakfast') ? 'breakfast' : 'main_menu';
+        orderItems.push({ item_type: itemType, quantity: 1, less_protein: false });
+      });
+      return orderItems;
     }
 
-    async function handleCheckoutSubmit() {
-      const name = document.getElementById('checkoutName').value.trim();
-      const email = document.getElementById('checkoutEmail').value.trim();
-      const password = document.getElementById('checkoutPassword').value.trim();
+    function renderCheckoutRegistrationStep() {
+      document.getElementById('checkoutModalTitle').textContent = 'Register to Place Your Order';
+      document.getElementById('checkoutModalContent').innerHTML = `
+        <div style="background:#fff7ed;border:2px solid #fdba74;padding:14px;border-radius:10px;">
+          <label for="checkoutFullName" style="display:block;font-weight:600;color:#9a3412;margin-bottom:6px;">Full Name *</label>
+          <input id="checkoutFullName" type="text" placeholder="John Doe" aria-label="Full name" style="width:100%;padding:10px;border:1px solid #fdba74;border-radius:8px;margin-bottom:10px;">
+
+          <label for="checkoutEmail" style="display:block;font-weight:600;color:#9a3412;margin-bottom:6px;">Email *</label>
+          <input id="checkoutEmail" type="email" placeholder="john@example.com" aria-label="Email" style="width:100%;padding:10px;border:1px solid #fdba74;border-radius:8px;margin-bottom:10px;">
+
+          <label for="checkoutPassword" style="display:block;font-weight:600;color:#9a3412;margin-bottom:6px;">Password *</label>
+          <div style="position:relative;margin-bottom:8px;">
+            <input id="checkoutPassword" type="password" placeholder="Minimum 8 characters" aria-label="Password" style="width:100%;padding:10px 44px 10px 10px;border:1px solid #fdba74;border-radius:8px;">
+            <button type="button" id="toggleCheckoutPasswordBtn" aria-label="Show or hide password" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:#fff;border:1px solid #fdba74;border-radius:6px;padding:4px 8px;cursor:pointer;">👁️</button>
+          </div>
+
+          <div class="actions">
+            <button id="checkoutCancelBtn" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">Cancel</button>
+            <button id="checkoutRegisterBtn" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">Continue →</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('checkoutCancelBtn').onclick = hideCheckoutModal;
+      document.getElementById('checkoutRegisterBtn').onclick = handleRegistrationAndSummary;
+      document.getElementById('toggleCheckoutPasswordBtn').onclick = () => {
+        const pwd = document.getElementById('checkoutPassword');
+        const eyeBtn = document.getElementById('toggleCheckoutPasswordBtn');
+        if (!pwd || !eyeBtn) return;
+        if (pwd.type === 'password') {
+          pwd.type = 'text';
+          eyeBtn.textContent = '🙈';
+        } else {
+          pwd.type = 'password';
+          eyeBtn.textContent = '👁️';
+        }
+      };
+      setTimeout(() => {
+        const fullNameInput = document.getElementById('checkoutFullName');
+        if (fullNameInput) fullNameInput.focus();
+      }, 100);
+    }
+
+    async function handleRegistrationAndSummary() {
       const errorDiv = document.getElementById('checkoutErrorMessage');
-      
-      // Validation based on mode
-      if (checkoutMode === 'createaccount') {
-        // Create Account mode - name is required
-        if (!name || !email || !password) {
-          errorDiv.textContent = 'Please fill in all required fields.';
-          return;
-        }
-      } else {
-        // Sign In mode - only email and password required
-        if (!email || !password) {
-          errorDiv.textContent = 'Please enter your email and password.';
-          return;
-        }
+      const fullName = (document.getElementById('checkoutFullName')?.value || '').trim();
+      const email = (document.getElementById('checkoutEmail')?.value || '').trim();
+      const password = (document.getElementById('checkoutPassword')?.value || '').trim();
+
+      if (!fullName || !email || !password) {
+        errorDiv.textContent = 'Please complete full name, email, and password.';
+        return;
       }
-      
       if (!email.includes('@')) {
         errorDiv.textContent = 'Please enter a valid email address.';
         return;
       }
-      
-      if (checkoutMode === 'createaccount' && password.length < 6) {
-        errorDiv.textContent = 'Password must be at least 6 characters long.';
+      if (password.length < 8) {
+        errorDiv.textContent = 'Password must be at least 8 characters.';
         return;
       }
-      
-      // Get the current menu data
+
+      checkoutContext.fullName = fullName;
+      checkoutContext.email = email;
+      checkoutContext.password = password;
+
+      try {
+        const regResp = await api('/register-or-authenticate', {
+          full_name: fullName,
+          email,
+          password,
+        });
+        if (!regResp.ok) {
+          errorDiv.textContent = 'Could not register/authenticate your account.';
+          return;
+        }
+
+        const summaryResp = await api('/order-summary', { session_id: sessionId });
+        checkoutContext.summary = summaryResp;
+        checkoutContext.proofUrl = '';
+        renderCheckoutSummaryStep();
+      } catch (err) {
+        errorDiv.textContent = err.message || 'Could not continue to order summary.';
+      }
+    }
+
+    function renderCheckoutSummaryStep() {
+      const s = checkoutContext.summary || {};
+      const z = s.zelle || {};
+      document.getElementById('checkoutModalTitle').textContent = 'Order Summary';
+      document.getElementById('checkoutModalContent').innerHTML = `
+        <div style="background:#fff7ed;border:2px solid #fdba74;padding:12px;border-radius:10px;margin-bottom:12px;">
+          <div><strong>Items:</strong> ${s.items_count || 0}</div>
+          <div><strong>Subtotal:</strong> $${(s.subtotal || 0).toFixed(2)}</div>
+          <div><strong>Washington Tax (10.25%):</strong> $${(s.tax || 0).toFixed(2)}</div>
+          <div style="margin-top:6px;font-size:1.05rem;color:#c2410c;"><strong>Total:</strong> $${(s.total || 0).toFixed(2)}</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <button id="payCardBtn" class="px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">Pay with Card (Stripe)</button>
+        </div>
+
+        <div style="margin-top:14px;padding:12px;border:2px solid #fdba74;border-radius:10px;background:#fff7ed;">
+          <div style="font-weight:700;margin-bottom:6px;color:#9a3412;">Pay with Zelle</div>
+          <div style="font-size:0.9rem;color:#374151;">Name: ${z.name || 'N/A'}</div>
+          <div style="font-size:0.9rem;color:#374151;">Email: ${z.email || 'N/A'}</div>
+          <div style="font-size:0.9rem;color:#374151;">Phone: ${z.phone || 'N/A'}</div>
+
+          <label for="zelleProofInput" style="margin-top:10px;display:block;">Upload payment confirmation screenshot</label>
+          <input id="zelleProofInput" type="file" accept="image/png,image/jpeg,image/webp" />
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+            <button id="uploadProofBtn" class="px-3 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">Upload Screenshot</button>
+            <button id="confirmZelleBtn" class="px-3 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">Confirm Zelle Payment</button>
+          </div>
+          <div id="proofStatus" style="font-size:0.85rem;color:#374151;margin-top:8px;"></div>
+        </div>
+
+        <div class="actions" style="margin-top:16px;">
+          <button id="checkoutBackBtn" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button>
+          <button id="checkoutCloseBtn" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">Close</button>
+        </div>
+      `;
+
+      document.getElementById('checkoutBackBtn').onclick = renderCheckoutRegistrationStep;
+      document.getElementById('checkoutCloseBtn').onclick = hideCheckoutModal;
+      document.getElementById('payCardBtn').onclick = payWithCardStripe;
+      document.getElementById('uploadProofBtn').onclick = uploadZelleProof;
+      document.getElementById('confirmZelleBtn').onclick = confirmZellePayment;
+      document.getElementById('checkoutErrorMessage').textContent = '';
+    }
+
+    async function payWithCardStripe() {
+      const errorDiv = document.getElementById('checkoutErrorMessage');
       const menuData = window.currentMenuData;
       if (!menuData || !menuData.menu) {
         errorDiv.textContent = 'No menu data found. Please regenerate your menu.';
         return;
       }
-      
-      // Build order items from menu
-      const orderItems = [];
-      menuData.menu.forEach(meal => {
-        // Determine item type and less_protein flag
-        const itemType = meal.type === 'breakfast' ? 'breakfast' : 'main_menu';
-        const lessProtein = meal.less_protein || false;
-        
-        orderItems.push({
-          item_type: itemType,
-          quantity: 1, // Each meal in the menu is quantity 1
-          less_protein: lessProtein
-        });
-      });
-      
-      // Prepare checkout session request
-      const checkoutData = {
-        items: orderItems
-      };
-      
+
       try {
-        // Show loading state
-        const submitBtn = document.getElementById('checkoutSubmitBtn');
-        const originalText = submitBtn.textContent;
-        submitBtn.textContent = 'Processing...';
-        submitBtn.disabled = true;
-        
-        // Build URL with query parameters
-        let url = `${BASE}/create-checkout-session?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
-        
-        // Only add name for Create Account mode
-        if (checkoutMode === 'createaccount' && name) {
-          url += `&name=${encodeURIComponent(name)}`;
-        }
-        
-        // Call the create-checkout-session endpoint
-        const response = await fetch(url, {
+        const payload = {
+          session_id: sessionId,
+          name: checkoutContext.fullName,
+          email: checkoutContext.email,
+          password: checkoutContext.password,
+          order: { items: buildOrderItemsFromMenu(menuData) },
+        };
+        const response = await fetch(`${BASE}/create-checkout-session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(checkoutData)
+          body: JSON.stringify(payload),
         });
-        
         const result = await response.json();
-        
         if (!response.ok) {
-          // Handle specific error for Sign In mode
-          if (checkoutMode === 'signin' && result.detail && result.detail.includes('provide your name and a password')) {
-            errorDiv.textContent = 'Account not found. Please create an account or check your email.';
-          } else if (result.detail && result.detail.includes('already exists')) {
-            errorDiv.textContent = 'An account with this email already exists. Please sign in instead.';
-            // Switch to sign in mode
-            setCheckoutMode('signin');
-          } else {
-            errorDiv.textContent = result.detail || 'Failed to create checkout session';
-          }
-          
-          // Reset button
-          submitBtn.textContent = originalText;
-          submitBtn.disabled = false;
-          return;
+          throw new Error(result.detail || 'Failed to create Stripe checkout session.');
         }
-        
-        // Redirect to Stripe checkout
         if (result.checkout_url) {
           window.location.href = result.checkout_url;
-        } else {
-          throw new Error('No checkout URL received');
+          return;
         }
-        
-      } catch (error) {
-        console.error('Checkout error:', error);
-        errorDiv.textContent = error.message || 'An error occurred. Please try again.';
-        
-        // Reset button
-        const submitBtn = document.getElementById('checkoutSubmitBtn');
-        submitBtn.textContent = checkoutMode === 'signin' ? 'Sign In & Proceed to Payment' : 'Create Account & Proceed to Payment';
-        submitBtn.disabled = false;
+        throw new Error('No checkout URL received.');
+      } catch (err) {
+        errorDiv.textContent = err.message || 'Card checkout failed.';
       }
+    }
+
+    async function uploadZelleProof() {
+      const fileInput = document.getElementById('zelleProofInput');
+      const proofStatus = document.getElementById('proofStatus');
+      const errorDiv = document.getElementById('checkoutErrorMessage');
+      errorDiv.textContent = '';
+
+      if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        errorDiv.textContent = 'Please select a payment confirmation screenshot first.';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      formData.append('session_id', sessionId);
+      formData.append('email', checkoutContext.email);
+
+      try {
+        const response = await fetch(`${BASE}/upload-payment-proof`, {
+          method: 'POST',
+          body: formData,
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.detail || 'Upload failed.');
+        }
+        checkoutContext.proofUrl = result.payment_proof_url;
+        proofStatus.textContent = `Uploaded: ${checkoutContext.proofUrl}`;
+      } catch (err) {
+        errorDiv.textContent = err.message || 'Could not upload screenshot.';
+      }
+    }
+
+    async function confirmZellePayment() {
+      const errorDiv = document.getElementById('checkoutErrorMessage');
+      const proofStatus = document.getElementById('proofStatus');
+      if (!checkoutContext.proofUrl) {
+        errorDiv.textContent = 'Please upload your Zelle screenshot before confirming.';
+        return;
+      }
+
+      try {
+        const result = await api('/confirm-zelle-payment', {
+          session_id: sessionId,
+          full_name: checkoutContext.fullName,
+          email: checkoutContext.email,
+          payment_proof_url: checkoutContext.proofUrl,
+        });
+        proofStatus.textContent = result.message || 'Payment confirmed.';
+        alert('Payment confirmed. Your order is confirmed and being prepared. A confirmation email has been sent.');
+        hideCheckoutModal();
+      } catch (err) {
+        errorDiv.textContent = err.message || 'Could not confirm Zelle payment.';
+      }
+    }
+
+    async function proceedToCheckout() {
+      const menuData = window.currentMenuData;
+      if (!menuData || !menuData.menu || menuData.menu.length === 0) {
+        alert('Please generate your personalized meals first.');
+        return;
+      }
+      showCheckoutModal();
+      renderCheckoutRegistrationStep();
     }
 
     // --- ZIP modal helpers and cold-start handling ---

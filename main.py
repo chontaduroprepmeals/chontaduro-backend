@@ -2,7 +2,7 @@ import os
 os.makedirs("uploads", exist_ok=True)
 
 # main.py
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import BaseModel, Field, EmailStr
@@ -10,11 +10,15 @@ from upload_image import register_upload_routes
 from fastapi.staticfiles import StaticFiles
 import random, json, traceback, datetime, math, hashlib
 from typing import List, Dict, Any, Optional
+from uuid import uuid4
 from delivery_allowed_api import register_delivery_routes
 from ingredients_database import INGREDIENT_DATABASE, find_ingredient
 from fastapi.responses import JSONResponse
 import stripe
+import bcrypt
 from dotenv import load_dotenv
+from email.message import EmailMessage
+import smtplib
 
 # SQLAlchemy imports (updated for modern syntax)
 from sqlalchemy import create_engine, Column, Integer, String, DateTime
@@ -25,6 +29,23 @@ load_dotenv()
 
 # Configurar la clave de Stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+# --- Payments / Tax config ---
+WA_TAX_RATE = 0.1025
+ZELLE_PAYEE_NAME = os.getenv("ZELLE_PAYEE_NAME", "Chontaduro Kitchen")
+ZELLE_PAYEE_EMAIL = os.getenv("ZELLE_PAYEE_EMAIL", "")
+ZELLE_PAYEE_PHONE = os.getenv("ZELLE_PAYEE_PHONE", "")
+
+# --- Email config ---
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", SMTP_USERNAME or "")
+
+# In-memory pending order cache (for Stripe webhook correlation)
+PENDING_ORDERS: Dict[str, Dict[str, Any]] = {}
 
 # --- SQLite Database Configuration ---
 SQLITE_DATABASE_URL = "sqlite:///./app.db"
@@ -47,12 +68,22 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    creation_date = Column(DateTime, default=datetime.datetime.utcnow)
+    creation_date = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     @staticmethod
     def hash_password(password: str) -> str:
-        salt = "secret_salt_here"  # Use a secure salt
-        return hashlib.sha256((password + salt).encode()).hexdigest()
+        if not password:
+            raise ValueError("Password must not be empty")
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    @staticmethod
+    def verify_password(password: str, hashed_password: str) -> bool:
+        if not password or not hashed_password:
+            return False
+        try:
+            return bcrypt.checkpw(password.encode("utf-8"), hashed_password.encode("utf-8"))
+        except ValueError:
+            return False
 
 # Initialize database tables AFTER models are defined
 def init_db():
@@ -63,9 +94,21 @@ init_db()
 app = FastAPI()
 
 # --- CORS ---
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://chontaduro-backend.onrender.com",
+]
+
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", ",".join(DEFAULT_ALLOWED_ORIGINS)).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -161,6 +204,11 @@ load_templates()
 # --- SESSIONS (in-memory) ---
 sessions: Dict[str, Dict[str, Any]] = {}
 
+# --- LOGIN SECURITY (in-memory lockout) ---
+MAX_FAILED_LOGIN_ATTEMPTS = int(os.getenv("MAX_FAILED_LOGIN_ATTEMPTS", "5"))
+LOGIN_LOCKOUT_MINUTES = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "15"))
+LOGIN_ATTEMPTS: Dict[str, Dict[str, Any]] = {}
+
 # --- FLOW STEPS ---
 STEPS = {
     "start": "diet_preference",
@@ -196,6 +244,7 @@ class SessionState(BaseModel):
     allergies: List[str] = Field(default_factory=list)
     dietary_restrictions: List[str] = Field(default_factory=list)
     allergies_and_restrictions: Optional[str] = None  # New unified field for allergies/dislikes
+    allergy_note: Optional[str] = None
     extra_protein_grams: int = 0  # global extra grams to distribute
     extra_protein_map: Dict[int, int] = Field(default_factory=dict)  # per-meal extras
     menu: List[Any] = Field(default_factory=list)
@@ -238,6 +287,44 @@ class OrderItem(BaseModel):
 class Order(BaseModel):
     items: list[OrderItem]
 
+
+class CheckoutSessionRequest(BaseModel):
+    order: Optional[Order] = None
+    email: EmailStr
+    name: Optional[str] = None
+    password: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    session_id: Optional[str] = None
+    allergies_selected: List[str] = Field(default_factory=list)
+    allergies_other_note: Optional[str] = None
+
+
+class RegisterRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+
+class RegisterOrAuthRequest(BaseModel):
+    full_name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class OrderSummaryRequest(BaseModel):
+    session_id: str
+
+
+class ZelleConfirmRequest(BaseModel):
+    session_id: str
+    full_name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    payment_proof_url: str = Field(min_length=1, max_length=1000)
+
 # --- HELPERS: normalization for incoming requests (tolerant) ---
 def normalize_step_name(step: str) -> str:
     if not step:
@@ -278,6 +365,8 @@ def map_answer_keys(answer: Dict[str, Any]) -> Dict[str, Any]:
         "diet": "diet_preference", "dietpreference": "diet_preference", "diet_preference": "diet_preference",
         "dietaryrestrictions": "dietary_restrictions", "dietary_restrictions": "dietary_restrictions",
         "allergies": "allergies", "alergias": "allergies",
+        "selectedallergies": "selected_allergies", "allergyselection": "selected_allergies",
+        "anyotherallergyornote": "allergy_note", "allergy_note": "allergy_note",
         "dislikes": "dislikes", "ingredientesnodedeseados": "dislikes",
         "extra_protein_grams": "extra_protein_grams", "extraprotein": "extra_protein_grams",
         "note": "user_note", "usernote": "user_note",
@@ -1621,7 +1710,7 @@ def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions
 
 # --- Template helpers: rotate pool by week and expand template to schedule ---
 def week_seed_string_from_date(dt: Optional[datetime.datetime] = None) -> str:
-    d = (dt or datetime.datetime.utcnow()).date()
+    d = (dt or datetime.datetime.now(datetime.timezone.utc)).date()
     iso = d.isocalendar()
     return f"{iso[0]}-W{iso[1]}"
 
@@ -2315,7 +2404,34 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
     if step_name == "objective":
         return {"question":"What is your main goal?","fields":[{"name":"Objective","type":"select","options":["Lose Fat","Gain Muscle","Maintain Shape","Body Recomposition (Lose Fat & Gain Muscle)"], "required": True}],"current_step":"objective"}
     if step_name == "allergies_and_restrictions":
-        return {"question":"Do you have any allergies or food restrictions?","fields":[{"name":"Allergies and Restrictions","type":"text","placeholder":"e.g., dairy, nuts, chicken (leave empty if none)", "required": False}],"current_step":"allergies_and_restrictions"}
+        return {
+            "question": "Select your allergies:",
+            "fields": [
+                {
+                    "name": "Selected Allergies",
+                    "type": "multiselect",
+                    "options": [
+                        "Peanuts",
+                        "Tree Nuts",
+                        "Dairy",
+                        "Gluten",
+                        "Eggs",
+                        "Fish",
+                        "Shellfish",
+                        "Soy",
+                        "Spicy",
+                    ],
+                    "required": False,
+                },
+                {
+                    "name": "Any other allergy or note?",
+                    "type": "text",
+                    "placeholder": "Optional",
+                    "required": False,
+                },
+            ],
+            "current_step": "allergies_and_restrictions",
+        }
     if step_name == "personal_info":
         return {
             "question":"Tell us your personal data:",
@@ -2343,6 +2459,8 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
             "days": state.days,
             "diet_preference": state.diet_preference or "Omnivore",
             "allergies_and_restrictions": state.allergies_and_restrictions or "None",
+            "selected_allergies": state.allergies,
+            "allergy_note": state.allergy_note,
             "weight_value": state.weight,
             "weight_unit": state.weight_unit,
             "height_value": state.height,
@@ -2359,7 +2477,7 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
 
 # --- ENDPOINTS & FLOW HANDLER (uses new allocation & templates) ---
 def normalize_request_payload(payload: Dict[str, Any]) -> NextStepRequest:
-    session_id = payload.get("session_id") or payload.get("sessionId") or payload.get("id") or str(random.randint(1000,9999))
+    session_id = payload.get("session_id") or payload.get("sessionId") or payload.get("id") or str(uuid4())
     step = payload.get("step") or payload.get("current_step") or payload.get("currentStep") or "start"
     answer = payload.get("answer") or payload.get("answers") or payload.get("data") or {}
     if answer is None:
@@ -2417,8 +2535,31 @@ async def next_step(request: Request):
         step_to_render_name = STEPS["objective"]
 
     elif step_name == "allergies_and_restrictions":
-        if "allergies_and_restrictions" in answer:
-            state.allergies_and_restrictions = str(answer.get("allergies_and_restrictions"))
+        selected = (
+            answer.get("selected_allergies")
+            or answer.get("Selected Allergies")
+            or answer.get("allergies")
+            or []
+        )
+        if isinstance(selected, str):
+            selected = [s.strip() for s in selected.split(",") if s.strip()]
+        if isinstance(selected, list):
+            state.allergies = [str(s).strip().lower() for s in selected if str(s).strip()]
+
+        note_val = (
+            answer.get("allergy_note")
+            or answer.get("Any other allergy or note?")
+            or answer.get("allergies_and_restrictions")
+            or ""
+        )
+        state.allergy_note = str(note_val).strip() or None
+
+        combined_parts = []
+        if state.allergies:
+            combined_parts.append(", ".join(state.allergies))
+        if state.allergy_note:
+            combined_parts.append(state.allergy_note)
+        state.allergies_and_restrictions = " | ".join(combined_parts) if combined_parts else None
         step_to_render_name = STEPS["allergies_and_restrictions"]
 
     elif step_name == "personal_info":
@@ -2551,7 +2692,7 @@ async def next_step(request: Request):
                     state.template_id = answer.get("template_id")
 
                     # Calcula la semana seleccionada basada en la lógica de corte jueves 22:00
-                    now = datetime.datetime.utcnow()
+                    now = datetime.datetime.now(datetime.timezone.utc)
                     weekday = now.weekday()  # Monday=0
                     thursday_cutoff = datetime.datetime.combine(
                         now + datetime.timedelta(days=(3 - weekday)).date(),
@@ -2871,6 +3012,9 @@ async def next_step(request: Request):
                         },
                         "message": "✨ Perfect balance for your body recomposition goals!",
                     }
+                    state.menu = response_menu
+                    state.current_step = "review"
+                    sessions[session_id] = state.model_dump()
                     return {
                         "menu": response_menu,
                         "price": total_price,
@@ -2904,6 +3048,9 @@ async def next_step(request: Request):
                         "current_step": state.current_step,
                     }
                 else:
+                    state.menu = response_menu
+                    state.current_step = "review"
+                    sessions[session_id] = state.model_dump()
                     return {
                         "menu": response_menu,
                         "price": total_price,
@@ -3007,7 +3154,7 @@ async def select_template(request: Request):
         raise HTTPException(status_code=404, detail="Template not found.")
     state.template_id = tid
     # compute selected_week based on cutoff (Thursday 22:00 UTC)
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc)
     weekday = now.weekday()  # Monday=0
     thursday = now + datetime.timedelta(days=(3 - weekday))
     thursday_cutoff = datetime.datetime.combine(thursday.date(), datetime.time(hour=22, minute=0))
@@ -3036,7 +3183,7 @@ async def place_order(request: Request):
         raise HTTPException(status_code=404, detail="Session not found.")
     state = SessionState(**sessions[sid])
     # record order timestamp
-    state.order_placed_at = datetime.datetime.utcnow().isoformat()
+    state.order_placed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     sessions[sid] = state.model_dump()
     # return schedule or menu summary
     if state.template_id:
@@ -3092,7 +3239,7 @@ async def post_feedback(request: Request):
         "comment": payload.get("comment"),
         "day_index": payload.get("day_index"),
         "slot_index": payload.get("slot_index"),
-        "created_at": datetime.datetime.utcnow().isoformat()
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
     FEEDBACKS.append(fb)
     return {"ok": True, "feedback_id": fb["id"]}
@@ -3350,30 +3497,105 @@ async def redo_menu(request: Request):
 
 @app.post("/calculate-total")
 def calculate_total(order: Order):
-    """Calculate total price. Standard: Breakfast = $11, Main Meal = $15"""
-    total = 0
-    for item in order.items:
-        if item.item_type == "main_menu":
-            price = 15  # Standard price for main meals
-        elif item.item_type == "breakfast":
-            price = 11  # Standard price for breakfast
-        else:
-            raise HTTPException(status_code=400, detail="Invalid item type")
-        total += item.quantity * price
-    return {"total": total}
+    """Calculate totals including Washington state tax (10.25%)."""
+    return _compute_order_totals(order)
+
+
+@app.post("/register-or-authenticate")
+def register_or_authenticate(payload: RegisterOrAuthRequest):
+    full_name = payload.full_name.strip()
+    email = str(payload.email).strip().lower()
+    password = payload.password
+
+    db = SessionLocal()
+    try:
+        existing_user = db.query(User).filter(User.email == email).first()
+        if existing_user:
+            if not User.verify_password(password, existing_user.hashed_password):
+                raise HTTPException(status_code=401, detail="Invalid credentials.")
+            return {
+                "ok": True,
+                "status": "authenticated",
+                "user": {
+                    "id": existing_user.id,
+                    "name": existing_user.name,
+                    "email": existing_user.email,
+                },
+            }
+
+        hashed_password = User.hash_password(password)
+        new_user = User(
+            name=full_name,
+            email=email,
+            hashed_password=hashed_password,
+            creation_date=datetime.datetime.now(datetime.timezone.utc),
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return {
+            "ok": True,
+            "status": "registered",
+            "user": {
+                "id": new_user.id,
+                "name": new_user.name,
+                "email": new_user.email,
+            },
+        }
+    finally:
+        db.close()
+
+
+@app.post("/order-summary")
+def order_summary(payload: OrderSummaryRequest):
+    order = _build_order_from_session(payload.session_id)
+    totals = _compute_order_totals(order)
+    return {
+        "ok": True,
+        "session_id": payload.session_id,
+        "items_count": len(order.items),
+        **totals,
+        "zelle": {
+            "name": ZELLE_PAYEE_NAME,
+            "email": ZELLE_PAYEE_EMAIL,
+            "phone": ZELLE_PAYEE_PHONE,
+        },
+    }
 
 @app.post("/create-checkout-session")
-def create_checkout_session(order: Order, email: str, name: Optional[str] = None, password: Optional[str] = None):
+def create_checkout_session(payload: CheckoutSessionRequest):
     """
-    Create a checkout session via Stripe. If the user is not registered, prompt for registration.
+    Create Stripe checkout session after user has already registered/authenticated.
     """
+    order = payload.order
+    email = str(payload.email)
+    name = payload.name
+    password = payload.password
+    session_id = payload.session_id
+    allergies_selected = [str(a).strip().lower() for a in (payload.allergies_selected or []) if str(a).strip()]
+    allergies_other_note = (payload.allergies_other_note or "").strip()
+
+    if session_id and session_id in sessions:
+        state = SessionState(**sessions[session_id])
+        if not allergies_selected:
+            allergies_selected = [str(a).strip().lower() for a in (state.allergies or []) if str(a).strip()]
+        if not allergies_other_note:
+            allergies_other_note = (state.allergy_note or "").strip()
+
+    if not order:
+        if not session_id:
+            raise HTTPException(status_code=422, detail="Either order or session_id is required.")
+        order = _build_order_from_session(session_id)
+
+    totals = _compute_order_totals(order)
+
     # Create a database session
     db = SessionLocal()
     try:
         # Check if the user already exists in the database
         user = db.query(User).filter(User.email == email).first()
 
-        if not user:  # If user is not registered
+        if not user:  # Fallback for clients not using /register-or-authenticate
             if not name or not password:  # Ensure name and password are provided
                 raise HTTPException(
                     status_code=400,
@@ -3385,24 +3607,20 @@ def create_checkout_session(order: Order, email: str, name: Optional[str] = None
                 name=name,
                 email=email,
                 hashed_password=hashed_password,
-                creation_date=datetime.datetime.utcnow(),
+                creation_date=datetime.datetime.now(datetime.timezone.utc),
             )
             db.add(user)
             db.commit()
             db.refresh(user)
+        elif password and not User.verify_password(password, user.hashed_password):
+            raise HTTPException(status_code=401, detail="Invalid credentials.")
 
         # Initialize the product list for Stripe
         line_items = []
 
         # Add each product in the order to the Stripe line items
         for item in order.items:
-            # Standard pricing: Breakfast = $11, Main Meal = $15
-            if item.item_type == "main_menu":
-                price = 15
-            elif item.item_type == "breakfast":
-                price = 11
-            else:
-                raise HTTPException(status_code=400, detail="Invalid item type")
+            price = _item_price(item.item_type)
             
             line_items.append({
                 "price_data": {
@@ -3416,6 +3634,31 @@ def create_checkout_session(order: Order, email: str, name: Optional[str] = None
                 "quantity": item.quantity,  # Quantity of the product
             })
 
+        tax_amount_cents = int(round(totals["tax"] * 100))
+        if tax_amount_cents > 0:
+            line_items.append({
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {
+                        "name": "Washington State Tax (10.25%)",
+                    },
+                    "unit_amount": tax_amount_cents,
+                },
+                "quantity": 1,
+            })
+
+        order_id = str(uuid4())
+        PENDING_ORDERS[order_id] = {
+            "order_id": order_id,
+            "email": email,
+            "full_name": name or (user.name if user else "Customer"),
+            "session_id": session_id,
+            "totals": totals,
+            "allergies_selected": allergies_selected,
+            "allergies_other_note": allergies_other_note,
+            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+
         # Create the checkout session in Stripe
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -3423,20 +3666,121 @@ def create_checkout_session(order: Order, email: str, name: Optional[str] = None
             mode="payment",
             success_url="https://chontaduro-backend.onrender.com/success",
             cancel_url="https://chontaduro-backend.onrender.com/cancel",
+            customer_email=email,
+            metadata={
+                "order_id": order_id,
+                "allergies_selected": ",".join(allergies_selected)[:500],
+                "allergies_other_note": allergies_other_note[:500],
+                "session_id": (session_id or "")[:120],
+            },
         )
 
         # Return the checkout URL to the client
-        return {"checkout_url": session.url}
+        return {
+            "checkout_url": session.url,
+            "order_id": order_id,
+            "summary": totals,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
+
+@app.post("/upload-payment-proof")
+async def upload_payment_proof(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+    email: str = Form(...),
+):
+    if not file:
+        raise HTTPException(status_code=400, detail="No file uploaded.")
+    allowed = {"image/png", "image/jpeg", "image/webp"}
+    if file.content_type not in allowed:
+        raise HTTPException(status_code=415, detail="Only PNG/JPEG/WEBP screenshots are allowed.")
+
+    ext = ".png"
+    if file.filename and "." in file.filename:
+        ext = "." + file.filename.rsplit(".", 1)[-1].lower()
+    proof_dir = os.path.join("uploads", "payment_proofs")
+    os.makedirs(proof_dir, exist_ok=True)
+    filename = f"{uuid4().hex}{ext}"
+    dest = os.path.join(proof_dir, filename)
+    contents = await file.read()
+    with open(dest, "wb") as out:
+        out.write(contents)
+
+    url = f"/uploads/payment_proofs/{filename}"
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "email": email,
+        "payment_proof_url": url,
+    }
+
+
+@app.post("/confirm-zelle-payment")
+def confirm_zelle_payment(payload: ZelleConfirmRequest):
+    order = _build_order_from_session(payload.session_id)
+    totals = _compute_order_totals(order)
+
+    sent = _send_confirmation_email(
+        to_email=str(payload.email),
+        full_name=payload.full_name,
+        order_summary=totals,
+        payment_method="Zelle",
+        payment_reference=payload.payment_proof_url,
+    )
+
+    return {
+        "ok": True,
+        "message": "Payment confirmed. Your order is confirmed and being prepared.",
+        "email_sent": sent,
+        "summary": totals,
+    }
+
+
+@app.post("/stripe-webhook")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+
+    try:
+        if STRIPE_WEBHOOK_SECRET:
+            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        else:
+            event = json.loads(payload.decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid webhook payload: {str(e)}")
+
+    if event.get("type") == "checkout.session.completed":
+        session_obj = event.get("data", {}).get("object", {})
+        metadata = session_obj.get("metadata", {}) or {}
+        order_id = metadata.get("order_id")
+        pending = PENDING_ORDERS.get(order_id)
+        if pending:
+            _send_confirmation_email(
+                to_email=pending.get("email", ""),
+                full_name=pending.get("full_name", "Customer"),
+                order_summary=pending.get("totals", {}),
+                payment_method="Card (Stripe)",
+                payment_reference=session_obj.get("id"),
+            )
+            PENDING_ORDERS.pop(order_id, None)
+
+    return {"received": True}
     
 @app.post("/register")
-async def register_user(name: str, email: str, password: str):
+async def register_user(payload: RegisterRequest):
     """
     Register a new user upon finalizing the order with their name, email, and password.
     """
+    name = payload.name
+    email = str(payload.email)
+    password = payload.password
+
     # Create a database session
     db = SessionLocal()
     try:
@@ -3451,7 +3795,7 @@ async def register_user(name: str, email: str, password: str):
             name=name,
             email=email,
             hashed_password=hashed_password,
-            creation_date=datetime.datetime.utcnow(),
+            creation_date=datetime.datetime.now(datetime.timezone.utc),
         )
         
         # Save the user to the database
@@ -3471,6 +3815,69 @@ async def register_user(name: str, email: str, password: str):
         }
     finally:
         db.close()   
+
+
+def _remaining_lockout_seconds(lockout_until: datetime.datetime, now: datetime.datetime) -> int:
+    return max(1, int((lockout_until - now).total_seconds()))
+
+
+@app.post("/login")
+async def login_user(payload: LoginRequest):
+    """
+    Authenticate user credentials and apply temporary lockout after repeated failures.
+    """
+    email = str(payload.email).strip().lower()
+    password = payload.password
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    attempt_info = LOGIN_ATTEMPTS.get(email, {"failed_attempts": 0, "lockout_until": None})
+    lockout_until = attempt_info.get("lockout_until")
+
+    if isinstance(lockout_until, datetime.datetime) and now < lockout_until:
+        retry_after = _remaining_lockout_seconds(lockout_until, now)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Account temporarily locked. Try again in {retry_after} seconds."
+        )
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        is_valid = bool(user and User.verify_password(password, user.hashed_password))
+
+        if not is_valid:
+            failed_attempts = int(attempt_info.get("failed_attempts") or 0) + 1
+            lockout = None
+
+            if failed_attempts >= MAX_FAILED_LOGIN_ATTEMPTS:
+                lockout = now + datetime.timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
+                LOGIN_ATTEMPTS[email] = {
+                    "failed_attempts": 0,
+                    "lockout_until": lockout,
+                }
+                retry_after = _remaining_lockout_seconds(lockout, now)
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Too many failed login attempts. Try again in {retry_after} seconds."
+                )
+
+            LOGIN_ATTEMPTS[email] = {
+                "failed_attempts": failed_attempts,
+                "lockout_until": None,
+            }
+            raise HTTPException(status_code=401, detail="Invalid credentials.")
+
+        LOGIN_ATTEMPTS.pop(email, None)
+        return {
+            "message": "Login successful",
+            "user": {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+            },
+        }
+    finally:
+        db.close()
 
 def calculate_price(menu: List[Meal], extra_protein: int) -> float:
     """
@@ -3494,6 +3901,80 @@ def calculate_price(menu: List[Meal], extra_protein: int) -> float:
     # Extra protein cost (if applicable)
     prot_cost = (extra_protein or 0) * 1.0
     return round(base + prot_cost, 2)
+
+
+def _item_price(item_type: str) -> int:
+    t = (item_type or "").strip().lower()
+    if t == "main_menu":
+        return 15
+    if t == "breakfast":
+        return 11
+    raise HTTPException(status_code=400, detail="Invalid item type")
+
+
+def _build_order_from_session(session_id: str) -> Order:
+    if not session_id or session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    state = SessionState(**sessions[session_id])
+    if not state.menu:
+        raise HTTPException(status_code=422, detail="No generated menu found in session.")
+
+    items: List[OrderItem] = []
+    for meal in state.menu:
+        meal_type = str((meal.get("type") if isinstance(meal, dict) else getattr(meal, "type", "")) or "").lower()
+        item_type = "breakfast" if "breakfast" in meal_type else "main_menu"
+        items.append(OrderItem(item_type=item_type, quantity=1, less_protein=False))
+    return Order(items=items)
+
+
+def _compute_order_totals(order: Order) -> Dict[str, float]:
+    subtotal = 0.0
+    for item in order.items:
+        subtotal += float(_item_price(item.item_type) * int(item.quantity))
+    tax = round(subtotal * WA_TAX_RATE, 2)
+    total = round(subtotal + tax, 2)
+    return {
+        "subtotal": round(subtotal, 2),
+        "tax": tax,
+        "tax_rate": WA_TAX_RATE,
+        "total": total,
+    }
+
+
+def _send_confirmation_email(to_email: str, full_name: str, order_summary: Dict[str, Any], payment_method: str, payment_reference: Optional[str] = None) -> bool:
+    if not (SMTP_HOST and SMTP_FROM_EMAIL):
+        print("[EMAIL] SMTP not configured. Skipping confirmation email.")
+        return False
+
+    subject = "Your Chontaduro order is confirmed ✅"
+    body = (
+        f"Hi {full_name},\n\n"
+        "Thank you for your order. Your order is confirmed and is being prepared.\n\n"
+        f"Payment method: {payment_method}\n"
+        f"Subtotal: ${order_summary.get('subtotal', 0):.2f}\n"
+        f"Washington tax (10.25%): ${order_summary.get('tax', 0):.2f}\n"
+        f"Total: ${order_summary.get('total', 0):.2f}\n"
+    )
+    if payment_reference:
+        body += f"Payment reference: {payment_reference}\n"
+    body += "\nWe appreciate your trust in Chontaduro!\n"
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = SMTP_FROM_EMAIL
+    msg["To"] = to_email
+    msg.set_content(body)
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            if SMTP_USERNAME and SMTP_PASSWORD:
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(msg)
+        return True
+    except Exception as exc:
+        print(f"[EMAIL] Failed to send confirmation: {exc}")
+        return False
 
 
 # Note: At startup we already loaded meals and templates.
