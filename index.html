@@ -211,7 +211,7 @@ html.in-iframe .app-card {
 
       <div id="app" class="text-center">
         <div id="loading" class="py-10">
-          <div class="loader mx-auto"></div>
+            <div class="loader mx-auto" style="border-top-color: #ff7b00; animation: spin 1s linear infinite; border: 4px solid #e5e7eb; border-top-width:4px; border-radius:9999px; width:48px; height:48px;"></div>
           <p class="text-gray-600 mt-4">Loading...</p>
         </div>
       </div>
@@ -628,6 +628,16 @@ html.in-iframe .app-card {
 
     // Main form rendering function
     function renderForm(question, fields){
+      const toText = (value) => {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+        if (Array.isArray(value)) return value.map(toText).filter(Boolean).join(', ');
+        if (typeof value === 'object') {
+          return String(value.label ?? value.value ?? value.name ?? value.text ?? value.title ?? value.question ?? '');
+        }
+        return String(value);
+      };
+
       // Check for special rendering cases
       if (currentStep === "diet_preference" && fields.length === 1 && fields[0].name === "Diet Preference") {
         return renderDietPreference(question, fields[0]);
@@ -655,10 +665,11 @@ html.in-iframe .app-card {
       }
 
       // Default form rendering for other steps
-      let html = `<form id="f"><h2 class="text-lg font-semibold mb-4">${question}</h2>`;
+      let html = `<form id="f"><h2 class="text-lg font-semibold mb-4">${toText(question)}</h2>`;
       const enhanced = (fields || []).map(f => {
-        const payloadKey = f.name.replace(/\s+/g, "_");
-        return { ...f, payloadKey };
+        const name = toText(f.name);
+        const payloadKey = name.replace(/\s+/g, "_");
+        return { ...f, payloadKey, name, placeholder: toText(f.placeholder), unit: toText(f.unit) };
       });
 
       enhanced.forEach(f => {
@@ -666,13 +677,17 @@ html.in-iframe .app-card {
         html += `<div class="mb-3 text-left"><label class="block text-sm font-medium mb-1">${f.name}${f.unit ? ` (${f.unit})` : ''}${f.required ? ' *' : ''}</label>`;
         if (f.type === "select") {
           html += `<select name="${f.payloadKey}" class="w-full p-2 border rounded" ${requiredAttr}>`;
-          (f.options || []).forEach(o => html += `<option value="${o}">${o}</option>`);
+          (f.options || []).forEach(o => {
+            const optionValue = toText(o);
+            html += `<option value="${optionValue}">${optionValue}</option>`;
+          });
           html += `</select>`;
         } else if (f.type === "multiselect") {
           html += `<div class="grid gap-2">`;
           (f.options || []).forEach(o => {
-            const id = `c-${f.payloadKey}-${o.replace(/\s+/g, "-")}`;
-            html += `<label class="inline-flex items-center"><input type="checkbox" id="${id}" name="${f.payloadKey}" value="${o}" class="mr-2"> <span class="text-sm">${o}</span></label>`;
+            const optionValue = toText(o);
+            const id = `c-${f.payloadKey}-${optionValue.replace(/\s+/g, "-")}`;
+            html += `<label class="inline-flex items-center"><input type="checkbox" id="${id}" name="${f.payloadKey}" value="${optionValue}" class="mr-2"> <span class="text-sm">${optionValue}</span></label>`;
           });
           html += `</div>`;
         } else {
@@ -1452,7 +1467,8 @@ html.in-iframe .app-card {
       const userPlan = data.plan || 0;
       const isPlan4 = userPlan === 4;
       
-      let html = `<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">Your Menu</h2><div><button onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Adjust Preferences</button></div></div>`;
+      let html = `<div class="mb-4 p-4 rounded-lg border-2 border-orange-200 bg-orange-50 text-orange-900 font-medium">Our weekly menu rotates with a variety of proteins. Medical allergies are accommodated..</div>`;
+      html += `<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">Your Menu</h2><div><button onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Adjust Preferences</button></div></div>`;
       html += `<div class="mb-4">Estimated price: <strong>$${(data.price || 0).toFixed(2)}</strong></div>`;
       if (isPlan4 && data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal — Target: ${data.nutrition.calorie_target||'N/A'} kcal</div>`;
       
@@ -1600,9 +1616,7 @@ html.in-iframe .app-card {
                 ${modificationsHTML}
                 ${perMealInfo}
               </div>
-              <div class="flex flex-col items-end gap-2 ml-4">
-                <button onclick="swapMeal('${safeName}')" class="px-3 py-1 bg-yellow-400 rounded text-xs font-medium hover:bg-yellow-500">Swap</button>
-              </div>
+              <div class="flex flex-col items-end gap-2 ml-4"></div>
             </div>
           </div>`;
           
@@ -1618,7 +1632,6 @@ html.in-iframe .app-card {
       html += `<div id="daily-summary-section"></div>`;
 
       html += `<div class="mt-4 flex gap-3 justify-center flex-wrap">
-          <button onclick="redoMenu()" class="px-3 py-2 bg-blue-600 text-white rounded">Regenerate Full Menu</button>
           <button onclick="proceedToCheckout()" class="px-4 py-3 bg-green-600 text-white rounded font-bold text-lg">🛒 Order Now</button>
         </div>`;
       
@@ -1781,18 +1794,21 @@ html.in-iframe .app-card {
 
       document.getElementById('checkoutCancelBtn').onclick = hideCheckoutModal;
       document.getElementById('checkoutRegisterBtn').onclick = handleRegistrationAndSummary;
-      document.getElementById('toggleCheckoutPasswordBtn').onclick = () => {
+      document.getElementById('toggleCheckoutPasswordBtn').addEventListener('click', (e) => {
+        e.preventDefault();
         const pwd = document.getElementById('checkoutPassword');
         const eyeBtn = document.getElementById('toggleCheckoutPasswordBtn');
         if (!pwd || !eyeBtn) return;
         if (pwd.type === 'password') {
           pwd.type = 'text';
           eyeBtn.textContent = '🙈';
+          eyeBtn.setAttribute('aria-pressed', 'true');
         } else {
           pwd.type = 'password';
           eyeBtn.textContent = '👁️';
+          eyeBtn.setAttribute('aria-pressed', 'false');
         }
-      };
+      });
       setTimeout(() => {
         const fullNameInput = document.getElementById('checkoutFullName');
         if (fullNameInput) fullNameInput.focus();
