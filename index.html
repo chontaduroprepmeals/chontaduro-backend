@@ -497,8 +497,10 @@ html.in-iframe .app-card {
 
       html += `</div>
         <input type="hidden" name="Objective" id="objective_input" required>
-        <div class="flex justify-between mt-4">
+        <div class="mt-6 flex justify-center">
           <button type="button" id="back" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button>
+        </div>
+        <div class="mt-3 text-center">
           <button type="submit" class="px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition">Continue →</button>
         </div>
       </form>`;
@@ -592,8 +594,10 @@ html.in-iframe .app-card {
         
         <input type="hidden" name="Allergies_and_Restrictions" id="restrictions_input" value="">
         
-        <div class="flex justify-between mt-4">
+        <div class="mt-6 flex justify-center">
           <button type="button" id="back" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button>
+        </div>
+        <div class="mt-3 text-center">
           <button type="submit" class="px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition">Continue →</button>
         </div>
       </form>`;
@@ -733,10 +737,10 @@ html.in-iframe .app-card {
         html += `</div>`;
       });
 
-      html += `<div class="flex justify-between mt-4">`;
-      if (currentStep !== "pick_plan") html += `<button type="button" id="back" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button>`;
-      else html += `<div></div>`;
-      html += `<button type="submit" class="px-4 py-2 bg-orange-500 text-white rounded">Next →</button></div></form>`;
+      if (currentStep !== "pick_plan") {
+        html += `<div class="mt-6 flex justify-center"><button type="button" id="back" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button></div>`;
+      }
+      html += `<div class="mt-3 text-center"><button type="submit" class="px-4 py-2 bg-orange-500 text-white rounded">Continue →</button></div></form>`;
 
       document.getElementById("app").innerHTML = html;
 
@@ -950,9 +954,11 @@ html.in-iframe .app-card {
       </div>`;
       
       // Submit Buttons
-      html += `<div class="flex justify-between mt-6">
+      html += `<div class="mt-6 flex justify-center">
         <button type="button" onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button>
-        <button type="submit" class="px-6 py-3 bg-orange-500 text-white rounded-lg font-medium">Next →</button>
+      </div>
+      <div class="mt-3 text-center">
+        <button type="submit" class="px-6 py-3 bg-orange-500 text-white rounded-lg font-medium">Continue →</button>
       </div>`;
       
       html += `</form></div>`;
@@ -1209,12 +1215,6 @@ html.in-iframe .app-card {
       const daysOptions = [1, 2, 3, 4, 5, 6, 7];
       
       let html = `<form id="f">
-        <div class="mb-4">
-          <button type="button" onclick="step({}, 'back')" 
-                  class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">
-            ← Back
-          </button>
-        </div>
         <div class="space-y-6">
           <div class="text-center mb-6">
             <h2 class="text-2xl font-bold text-gray-800 mb-2">📅 How many days of meal prep?</h2>
@@ -1254,9 +1254,13 @@ html.in-iframe .app-card {
       html += `
           </div>
           <input type="hidden" id="selected_days_input" value="5">
+
+          <div class="mt-8 flex justify-center">
+            <button type="button" onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button>
+          </div>
           
           <!-- Submit Button -->
-          <div class="mt-8 text-center">
+          <div class="mt-3 text-center">
             <button type="submit" 
                     class="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xl font-bold rounded-xl
                            shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200
@@ -1404,9 +1408,6 @@ html.in-iframe .app-card {
       
       let html = `<form id="f">
         <div class="space-y-6">
-          <div class="mb-2">
-            <button type="button" onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button>
-          </div>
           <!-- Inspirational Header -->
           <div class="bg-gradient-to-r from-orange-100 to-yellow-100 border-2 border-orange-300 rounded-xl p-6 text-center shadow-md">
             <div class="text-2xl font-bold text-gray-800 mb-3">
@@ -1502,7 +1503,10 @@ html.in-iframe .app-card {
           </div>
           
           <!-- Enhanced Generate Button -->
-          <div class="mt-6 text-center">
+          <div class="mt-6 flex justify-center">
+            <button type="button" onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button>
+          </div>
+          <div class="mt-3 text-center">
             <button type="submit" 
                     class="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xl font-bold rounded-xl
                            shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200
@@ -1707,7 +1711,7 @@ html.in-iframe .app-card {
                   <span class="text-2xl">${mealTypeEmoji}</span>
                   <div>
                     <div class="font-bold text-sm text-gray-600">${mealType}</div>
-                    <div class="text-base font-semibold leading-snug">${m.name}</div>
+                    <div style="font-size:16px;font-weight:500;line-height:1.35;">${m.name}</div>
                   </div>
                 </div>
                 <div class="text-sm text-gray-600">${m.type}${isPlan4 ? ` • ${Math.round(displayCalories)} kcal` : ''} • $${(m.price||0).toFixed(2)}</div>
