@@ -374,6 +374,36 @@ html.in-iframe .app-card {
       }
     }
 
+    async function navigateBackSteps(stepsCount) {
+      const total = Math.max(1, Number(stepsCount) || 1);
+      document.getElementById("app").innerHTML = `<div class="py-8"><div class="loader mx-auto"></div><p class="text-gray-600 mt-4">Loading...</p></div>`;
+      let data = null;
+      for (let idx = 0; idx < total; idx++) {
+        data = await api("/next-step", { session_id: sessionId, step: "back", answer: {} });
+      }
+      if (!data) return;
+      if (data.menu) {
+        renderMenu(data);
+      } else {
+        if (data.current_step) currentStep = data.current_step;
+        renderForm(data.question, data.fields || []);
+      }
+    }
+
+    window.editFromReview = function(section) {
+      const hops = {
+        plan: 5,
+        diet: 6,
+        body: 2,
+        activity: 2,
+        allergies: 3,
+      };
+      navigateBackSteps(hops[section] || 1).catch((err) => {
+        console.error(err);
+        alert('Could not open edit step. Please try again.');
+      });
+    };
+
     /* === The rest of your JS (renderForm, renderMenu, zip modal handlers etc.)
        is unchanged from your original file. Keep the existing functions below as-is. === */
 
@@ -1223,6 +1253,7 @@ html.in-iframe .app-card {
       
       html += `
           </div>
+          <input type="hidden" id="selected_days_input" value="5">
           
           <!-- Submit Button -->
           <div class="mt-8 text-center">
@@ -1240,7 +1271,9 @@ html.in-iframe .app-card {
       document.getElementById("app").innerHTML = html;
       
       // Set default selection to 5 days
-      window.selectedDays = window.selectedDays || 5;
+      window.selectedDays = Number(window.selectedDays) || 5;
+      const selectedInput = document.getElementById('selected_days_input');
+      if (selectedInput) selectedInput.value = String(window.selectedDays);
       
       // Highlight default selection
       setTimeout(() => {
@@ -1255,8 +1288,10 @@ html.in-iframe .app-card {
       const form = document.getElementById("f");
       form.onsubmit = (e) => {
         e.preventDefault();
-        const selectedDays = window.selectedDays || 5;
-        step({ days: selectedDays }, "next");
+        const selectedFromInput = Number(document.getElementById('selected_days_input')?.value || window.selectedDays || 5);
+        const selectedDays = Number.isFinite(selectedFromInput) ? selectedFromInput : 5;
+        window.selectedDays = selectedDays;
+        step({ days: selectedDays, Days: selectedDays }, "next");
       };
     }
     
@@ -1277,6 +1312,8 @@ html.in-iframe .app-card {
       
       // Store the value
       window.selectedDays = days;
+      const selectedInput = document.getElementById('selected_days_input');
+      if (selectedInput) selectedInput.value = String(days);
       
       // Enable next button
       const nextBtn = document.querySelector('button[type="submit"]');
@@ -1350,8 +1387,9 @@ html.in-iframe .app-card {
       const sd = stateField ? stateField.value : {};
       
       // Format data for display
+      window.selectedDays = Number(sd.days || window.selectedDays || 5);
       const planText = `Plan ${sd.plan_number || 'N/A'}`;
-      const daysText = `${sd.days || 'N/A'} days/week`;
+      const daysText = `${window.selectedDays || 'N/A'} days/week`;
       const dietText = sd.diet_preference || 'Not specified';
       
       const weightText = sd.weight_value ? `${sd.weight_value} ${sd.weight_unit || 'kg'}` : 'N/A';
@@ -1366,6 +1404,9 @@ html.in-iframe .app-card {
       
       let html = `<form id="f">
         <div class="space-y-6">
+          <div class="mb-2">
+            <button type="button" onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button>
+          </div>
           <!-- Inspirational Header -->
           <div class="bg-gradient-to-r from-orange-100 to-yellow-100 border-2 border-orange-300 rounded-xl p-6 text-center shadow-md">
             <div class="text-2xl font-bold text-gray-800 mb-3">
@@ -1384,9 +1425,12 @@ html.in-iframe .app-card {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <!-- Plan Card -->
             <div class="border-2 border-blue-200 rounded-xl p-4 bg-white shadow">
-              <div class="flex items-center gap-2 mb-3">
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <div class="flex items-center gap-2">
                 <span class="text-2xl">🍽️</span>
                 <span class="font-bold text-lg text-gray-800">Your Plan</span>
+                </div>
+                <button type="button" onclick="editFromReview('plan')" class="text-xs font-semibold text-orange-600 hover:text-orange-700 underline">Edit</button>
               </div>
               <div class="text-gray-700">
                 <div class="text-xl font-semibold text-blue-600">${planText}</div>
@@ -1396,9 +1440,12 @@ html.in-iframe .app-card {
             
             <!-- Diet Card -->
             <div class="border-2 border-green-200 rounded-xl p-4 bg-white shadow">
-              <div class="flex items-center gap-2 mb-3">
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <div class="flex items-center gap-2">
                 <span class="text-2xl">🥗</span>
                 <span class="font-bold text-lg text-gray-800">Diet Type</span>
+                </div>
+                <button type="button" onclick="editFromReview('diet')" class="text-xs font-semibold text-orange-600 hover:text-orange-700 underline">Edit</button>
               </div>
               <div class="text-gray-700">
                 <div class="text-xl font-semibold text-green-600">${dietText}</div>
@@ -1407,9 +1454,12 @@ html.in-iframe .app-card {
             
             <!-- Body Stats Card -->
             <div class="border-2 border-purple-200 rounded-xl p-4 bg-white shadow">
-              <div class="flex items-center gap-2 mb-3">
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <div class="flex items-center gap-2">
                 <span class="text-2xl">⚖️</span>
                 <span class="font-bold text-lg text-gray-800">Body Stats</span>
+                </div>
+                <button type="button" onclick="editFromReview('body')" class="text-xs font-semibold text-orange-600 hover:text-orange-700 underline">Edit</button>
               </div>
               <div class="text-gray-700 space-y-1">
                 <div><span class="text-sm text-gray-600">Weight:</span> <span class="font-semibold">${weightText}</span></div>
@@ -1420,9 +1470,12 @@ html.in-iframe .app-card {
             
             <!-- Activity Card -->
             <div class="border-2 border-red-200 rounded-xl p-4 bg-white shadow">
-              <div class="flex items-center gap-2 mb-3">
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <div class="flex items-center gap-2">
                 <span class="text-2xl">🏃‍♂️</span>
                 <span class="font-bold text-lg text-gray-800">Activity Level</span>
+                </div>
+                <button type="button" onclick="editFromReview('activity')" class="text-xs font-semibold text-orange-600 hover:text-orange-700 underline">Edit</button>
               </div>
               <div class="text-gray-700 space-y-1">
                 <div><span class="text-sm text-gray-600">Frequency:</span> <span class="font-semibold">${exerciseDays} days/week</span></div>
@@ -1434,9 +1487,12 @@ html.in-iframe .app-card {
           
           <!-- Restrictions Card (Full Width) -->
           <div class="border-2 border-yellow-200 rounded-xl p-4 bg-white shadow">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="text-2xl">🚫</span>
-              <span class="font-bold text-lg text-gray-800">Allergies & Restrictions</span>
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🚫</span>
+                <span class="font-bold text-lg text-gray-800">Allergies & Restrictions</span>
+              </div>
+              <button type="button" onclick="editFromReview('allergies')" class="text-xs font-semibold text-orange-600 hover:text-orange-700 underline">Edit</button>
             </div>
             <div class="text-gray-700">
               ${restrictions === 'None' || !restrictions || restrictions === '' 
@@ -1651,7 +1707,7 @@ html.in-iframe .app-card {
                   <span class="text-2xl">${mealTypeEmoji}</span>
                   <div>
                     <div class="font-bold text-sm text-gray-600">${mealType}</div>
-                    <div class="text-lg font-semibold">${m.name}</div>
+                    <div class="text-base font-semibold leading-snug">${m.name}</div>
                   </div>
                 </div>
                 <div class="text-sm text-gray-600">${m.type}${isPlan4 ? ` • ${Math.round(displayCalories)} kcal` : ''} • $${(m.price||0).toFixed(2)}</div>
@@ -1830,30 +1886,39 @@ html.in-iframe .app-card {
       const mode = checkoutContext.mode || 'signin';
       document.getElementById('checkoutModalTitle').textContent = mode === 'signin' ? 'Sign In to Place Your Order' : 'Create Account to Place Your Order';
       document.getElementById('checkoutModalContent').innerHTML = `
-        <div style="background:#fff7ed;border:2px solid #fdba74;padding:14px;border-radius:10px;">
-          <div style="display:flex;gap:8px;margin-bottom:14px;">
-            <button type="button" id="checkoutSignInTab" style="flex:1;padding:10px;border-radius:8px;border:1px solid #fdba74;font-weight:700;cursor:pointer;${mode === 'signin' ? 'background:#ea580c;color:#fff;' : 'background:#fff;color:#9a3412;'}">Sign In</button>
-            <button type="button" id="checkoutCreateTab" style="flex:1;padding:10px;border-radius:8px;border:1px solid #fdba74;font-weight:700;cursor:pointer;${mode === 'create' ? 'background:#ea580c;color:#fff;' : 'background:#fff;color:#9a3412;'}">Create Account</button>
+        <div class="rounded-2xl border-2 border-orange-200 bg-gradient-to-b from-orange-50 to-white p-5 shadow-sm">
+          <div class="mb-4">
+            <div class="text-xs uppercase tracking-[0.18em] text-orange-600 font-semibold mb-1">Secure Checkout</div>
+            <div class="text-lg font-bold text-orange-900">${mode === 'signin' ? 'Welcome back' : 'Create your account'}</div>
           </div>
 
-          <div id="checkoutFullNameWrap" style="display:${mode === 'create' ? 'block' : 'none'};">
-          <label for="checkoutFullName" style="display:block;font-weight:600;color:#9a3412;margin-bottom:6px;">Full Name *</label>
-          <input id="checkoutFullName" type="text" placeholder="John Doe" aria-label="Full name" style="width:100%;padding:10px;border:1px solid #fdba74;border-radius:8px;margin-bottom:10px;">
+          <div class="grid grid-cols-2 gap-2 mb-5 rounded-xl bg-white p-1 border border-orange-200">
+            <button type="button" id="checkoutSignInTab" class="rounded-lg px-3 py-2 text-sm font-bold transition ${mode === 'signin' ? 'bg-orange-500 text-white shadow' : 'text-orange-700 hover:bg-orange-100'}">Sign In</button>
+            <button type="button" id="checkoutCreateTab" class="rounded-lg px-3 py-2 text-sm font-bold transition ${mode === 'create' ? 'bg-orange-500 text-white shadow' : 'text-orange-700 hover:bg-orange-100'}">Create Account</button>
           </div>
 
-          <label for="checkoutEmail" style="display:block;font-weight:600;color:#9a3412;margin-bottom:6px;">Email *</label>
-          <input id="checkoutEmail" type="email" placeholder="john@example.com" aria-label="Email" style="width:100%;padding:10px;border:1px solid #fdba74;border-radius:8px;margin-bottom:10px;">
-
-          <label for="checkoutPassword" style="display:block;font-weight:600;color:#9a3412;margin-bottom:6px;">Password *</label>
-          <div style="position:relative;margin-bottom:8px;">
-            <input id="checkoutPassword" type="password" placeholder="Minimum 8 characters" aria-label="Password" style="width:100%;padding:10px 44px 10px 10px;border:1px solid #fdba74;border-radius:8px;">
-            <button type="button" id="toggleCheckoutPasswordBtn" aria-label="Show or hide password" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:#fff;border:1px solid #fdba74;border-radius:6px;padding:4px 8px;cursor:pointer;">👁️</button>
+          <div id="checkoutFullNameWrap" class="mb-3" style="display:${mode === 'create' ? 'block' : 'none'};">
+            <label for="checkoutFullName" class="block text-sm font-semibold text-orange-900 mb-1">Full Name *</label>
+            <input id="checkoutFullName" type="text" placeholder="John Doe" aria-label="Full name" class="w-full rounded-lg border border-orange-300 bg-white px-3 py-2 text-gray-900 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200">
           </div>
 
-          <div id="checkoutModeHint" style="font-size:0.85rem;color:#6b7280;margin-bottom:10px;">${mode === 'signin' ? 'Already have an account? Sign in with your email and password.' : 'Create a new account to save your order history.'}</div>
+          <div class="mb-3">
+            <label for="checkoutEmail" class="block text-sm font-semibold text-orange-900 mb-1">Email *</label>
+            <input id="checkoutEmail" type="email" placeholder="john@example.com" aria-label="Email" class="w-full rounded-lg border border-orange-300 bg-white px-3 py-2 text-gray-900 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200">
+          </div>
+
+          <div class="mb-3">
+            <label for="checkoutPassword" class="block text-sm font-semibold text-orange-900 mb-1">Password *</label>
+            <div class="relative">
+              <input id="checkoutPassword" type="password" placeholder="Minimum 8 characters" aria-label="Password" class="w-full rounded-lg border border-orange-300 bg-white px-3 py-2 pr-20 text-gray-900 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-200">
+              <button type="button" id="toggleCheckoutPasswordBtn" aria-label="Show or hide password" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-orange-300 bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700 hover:bg-orange-100">Show</button>
+            </div>
+          </div>
+
+          <div id="checkoutModeHint" class="text-xs text-gray-600 mb-4">${mode === 'signin' ? 'Already have an account? Use your existing credentials to continue.' : 'Create a new account to place and track your weekly orders.'}</div>
 
           <div class="actions">
-            <button id="checkoutCancelBtn" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">Cancel</button>
+            <button id="checkoutCancelBtn" class="px-4 py-2 bg-white text-orange-700 border border-orange-300 font-semibold rounded-lg hover:bg-orange-50 transition">Cancel</button>
             <button id="checkoutRegisterBtn" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">${mode === 'signin' ? 'Sign In →' : 'Create Account →'}</button>
           </div>
         </div>
@@ -1876,11 +1941,11 @@ html.in-iframe .app-card {
         if (!pwd || !eyeBtn) return;
         if (pwd.type === 'password') {
           pwd.type = 'text';
-          eyeBtn.textContent = '🙈';
+          eyeBtn.textContent = 'Hide';
           eyeBtn.setAttribute('aria-pressed', 'true');
         } else {
           pwd.type = 'password';
-          eyeBtn.textContent = '👁️';
+          eyeBtn.textContent = 'Show';
           eyeBtn.setAttribute('aria-pressed', 'false');
         }
       });
@@ -2160,17 +2225,7 @@ html.in-iframe .app-card {
       try {
         const resp = await callCheckZip(savedZip);
         if (resp && !resp.error) {
-          if (resp.can_deliver) {
-            const banner = document.getElementById('zipBanner');
-            banner.style.display='block';
-            banner.textContent = `We deliver to ${savedZip}.`;
-            return true;
-          } else {
-            const banner = document.getElementById('zipBanner');
-            banner.style.display='block';
-            banner.textContent = `We do not deliver to ${savedZip}. Pickup only.`;
-            return true; // treat as OK (user confirmed previously)
-          }
+          return true;
         }
         return false;
       } catch (e) {
@@ -2250,8 +2305,7 @@ html.in-iframe .app-card {
           if (resp.can_deliver) {
             localStorage.setItem('user_zip', zip);
             checkoutContext.deliveryOption = 'delivery';
-            const banner = document.getElementById('zipBanner');
-            banner.style.display='block'; banner.textContent = resp.message || `Great! We deliver to ${zip}.`;
+            zipMessage.textContent = resp.message || `Great! We deliver to ${zip}.`;
             cleanupAndResolve();
           } else {
             checkoutContext.deliveryOption = 'pickup';
@@ -2265,8 +2319,7 @@ html.in-iframe .app-card {
           if (!zip) { zipMessage.textContent = 'Enter a postal code to continue.'; return; }
           localStorage.setItem('user_zip', zip);
           checkoutContext.deliveryOption = 'pickup';
-          const banner = document.getElementById('zipBanner');
-          banner.style.display='block'; banner.textContent = `You continued with ${zip}. Note: pickup only.`;
+          zipMessage.textContent = `You continued with ${zip}. Note: pickup only.`;
           cleanupAndResolve();
         };
 
