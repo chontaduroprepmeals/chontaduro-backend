@@ -1,4 +1,5 @@
 import os
+import copy
 import csv
 import io
 import threading
@@ -2986,6 +2987,7 @@ def get_form_fields(step_name: str, state: Optional[SessionState] = None):
         state_data = {
             "plan_number": state.plan,
             "days": state.days,
+            "objective": state.objective,
             "diet_preference": state.diet_preference or "Omnivore",
             "allergies_and_restrictions": state.allergies_and_restrictions or "None",
             "selected_allergies": state.allergies,
@@ -3027,12 +3029,12 @@ async def next_step(request: Request):
 
     # handle back (special)
     if step_name == "back" and state.history:
-        prev = state.history.pop()
-        sessions[session_id] = prev
-        return get_form_fields(prev.get("current_step","start"), SessionState(**prev))
+        prev = copy.deepcopy(state.history.pop())
+        sessions[session_id] = copy.deepcopy(prev)
+        return get_form_fields(prev.get("current_step","start"), SessionState(**copy.deepcopy(prev)))
 
     if step_name != "start":
-        state.history.append(sessions[session_id].copy())
+        state.history.append(copy.deepcopy(sessions[session_id]))
 
     step_to_render_name = state.current_step
 

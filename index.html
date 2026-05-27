@@ -1397,6 +1397,17 @@ html.in-iframe .app-card {
       const planText = `Plan ${sd.plan_number || 'N/A'}`;
       const daysText = `${window.selectedDays || 'N/A'} days/week`;
       const dietText = sd.diet_preference || 'Not specified';
+      const objectiveRaw = String(sd.objective || sd.Objective || window.selectedObjective || '').trim();
+      const goalMap = {
+        'Lose Fat': { emoji: '🔥', label: 'Lose Fat' },
+        'Gain Muscle': { emoji: '💪', label: 'Gain Muscle' },
+        'Maintain Shape': { emoji: '⚖️', label: 'Maintain Shape' },
+        'Body Recomposition': { emoji: '✨', label: 'Body Recomposition' },
+        'Body Recomposition (Lose Fat & Gain Muscle)': { emoji: '✨', label: 'Body Recomposition' }
+      };
+      const goalInfo = goalMap[objectiveRaw] || null;
+      const goalText = goalInfo ? goalInfo.label : (objectiveRaw || 'Not specified');
+      const goalEmoji = goalInfo ? goalInfo.emoji : '🎯';
       
       const weightText = sd.weight_value ? `${sd.weight_value} ${sd.weight_unit || 'kg'}` : 'N/A';
       const heightText = sd.height_value ? `${sd.height_value} ${sd.height_unit || 'cm'}` : 'N/A';
@@ -1453,6 +1464,17 @@ html.in-iframe .app-card {
               </div>
               <div class="text-gray-700">
                 <div class="text-xl font-semibold text-green-600">${dietText}</div>
+              </div>
+            </div>
+
+            <!-- Goal Card -->
+            <div class="border-2 border-amber-200 rounded-xl p-4 bg-white shadow md:col-span-2">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="text-2xl">${goalEmoji}</span>
+                <span class="font-bold text-lg text-gray-800">Goal</span>
+              </div>
+              <div class="text-gray-700">
+                <div class="text-xl font-semibold text-amber-700">${goalText}</div>
               </div>
             </div>
             
