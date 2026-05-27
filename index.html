@@ -516,6 +516,7 @@ html.in-iframe .app-card {
           alert("Please select your goal");
           return;
         }
+        window.selectedObjective = selectedValue;
         step({ Objective: selectedValue }, "next");
       };
 
@@ -802,6 +803,7 @@ html.in-iframe .app-card {
       }
       // Set hidden input
       document.getElementById('objective_input').value = value;
+      window.selectedObjective = value;
     };
 
     window.selectDiet = function(value) {
@@ -1405,6 +1407,7 @@ html.in-iframe .app-card {
       const intensity = sd.intensity || 'N/A';
       
       const restrictions = sd.allergies_and_restrictions || 'None';
+      window.selectedObjective = sd.objective || sd.Objective || window.selectedObjective;
       
       let html = `<form id="f">
         <div class="space-y-6">
@@ -1569,6 +1572,23 @@ html.in-iframe .app-card {
       const planPrice = planPriceMap[userPlan] || (data.price || 0);
       html += `<div class="mb-4">Estimated plan price: <strong>$${Number(planPrice).toFixed(2)}</strong></div>`;
       if (isPlan4 && data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal — Target: ${data.nutrition.calorie_target||'N/A'} kcal</div>`;
+      if (isPlan4 && data.nutrition) {
+        const selectedGoalRaw = String(data.objective || data.goal || window.selectedObjective || '').trim();
+        let goalLine = '';
+        if (selectedGoalRaw === 'Lose Fat') {
+          goalLine = '🔥 Goal: Lose Fat — 20% calorie deficit from your TDEE';
+        } else if (selectedGoalRaw === 'Gain Muscle') {
+          goalLine = '💪 Goal: Gain Muscle — 15% calorie surplus from your TDEE';
+        } else if (selectedGoalRaw === 'Maintain Shape') {
+          goalLine = '⚖️ Goal: Maintain Shape — eating at your TDEE';
+        } else if (selectedGoalRaw === 'Body Recomposition' || selectedGoalRaw === 'Body Recomposition (Lose Fat & Gain Muscle)') {
+          goalLine = '✨ Goal: Body Recomposition — 15% deficit with high protein priority';
+        }
+
+        if (goalLine) {
+          html += `<div class="mb-4 text-left p-3 bg-amber-50 border border-amber-200 rounded text-amber-900 text-sm font-medium">${goalLine}</div>`;
+        }
+      }
       
       // Show daily macro totals panel only for Plan 4
       if (isPlan4 && data.nutrition && data.nutrition.totals) {
