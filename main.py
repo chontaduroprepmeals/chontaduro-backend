@@ -3033,6 +3033,20 @@ async def next_step(request: Request):
         sessions[session_id] = copy.deepcopy(prev)
         return get_form_fields(prev.get("current_step","start"), SessionState(**copy.deepcopy(prev)))
 
+    # Guard: menu generation is only valid from the Review step.
+    # This prevents accidental reset-like behavior when the frontend sends
+    # an out-of-sequence "review" action.
+    if step_name == "review" and state.current_step != "review":
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "invalid_generate_step",
+                "detail": "Generate menu is only allowed from the Review step.",
+                "current_step": state.current_step,
+                "expected_step": "review",
+            },
+        )
+
     if step_name != "start":
         state.history.append(copy.deepcopy(sessions[session_id]))
 
@@ -3218,6 +3232,89 @@ async def next_step(request: Request):
 
     elif step_name == "review":
             try:
+                # Accept full state payload at generate time to preserve data integrity
+                # even if client-side step tracking drifts.
+                plan_val = answer.get("plan")
+                if plan_val is not None:
+                    try:
+                        if isinstance(plan_val, str) and ":" in plan_val:
+                            plan_num = int(plan_val.split(":")[0].replace("Plan", "").strip())
+                        else:
+                            plan_num = int(plan_val)
+                        if plan_num in (1, 2, 3, 4):
+                            state.plan = plan_num
+                    except Exception:
+                        pass
+
+                days_val = answer.get("days") or answer.get("Days")
+                if days_val is not None:
+                    try:
+                        state.days = int(days_val)
+                    except Exception:
+                        pass
+
+                if answer.get("diet_preference"):
+                    state.diet_preference = str(answer.get("diet_preference"))
+                if answer.get("objective"):
+                    state.objective = str(answer.get("objective"))
+
+                selected_allergies = (
+                    answer.get("selected_allergies")
+                    or answer.get("Selected Allergies")
+                    or answer.get("allergies")
+                    or []
+                )
+                if isinstance(selected_allergies, str):
+                    selected_allergies = [s.strip() for s in selected_allergies.split(",") if s.strip()]
+                if isinstance(selected_allergies, list):
+                    state.allergies = [str(s).strip().lower() for s in selected_allergies if str(s).strip()]
+
+                note_val = (
+                    answer.get("allergy_note")
+                    or answer.get("Any other allergy or note?")
+                    or answer.get("allergies_and_restrictions")
+                    or ""
+                )
+                state.allergy_note = str(note_val).strip() or None
+                combined_parts = []
+                if state.allergies:
+                    combined_parts.append(", ".join(state.allergies))
+                if state.allergy_note:
+                    combined_parts.append(state.allergy_note)
+                if combined_parts:
+                    state.allergies_and_restrictions = " | ".join(combined_parts)
+
+                try:
+                    if answer.get("weight_value") is not None:
+                        state.weight = float(answer.get("weight_value"))
+                except Exception:
+                    pass
+                if answer.get("weight_unit"):
+                    state.weight_unit = str(answer.get("weight_unit"))
+
+                try:
+                    if answer.get("height_value") is not None:
+                        state.height = float(answer.get("height_value"))
+                except Exception:
+                    pass
+                if answer.get("height_unit"):
+                    state.height_unit = str(answer.get("height_unit"))
+
+                try:
+                    if answer.get("age") is not None:
+                        state.age = int(answer.get("age"))
+                except Exception:
+                    pass
+                if answer.get("sex"):
+                    state.sex = str(answer.get("sex"))
+
+                if answer.get("days_per_week"):
+                    state.activity_days_bucket = str(answer.get("days_per_week"))
+                if answer.get("avg_session_duration"):
+                    state.activity_duration_bucket = str(answer.get("avg_session_duration"))
+                if answer.get("intensity"):
+                    state.activity_intensity = str(answer.get("intensity"))
+
                 # Si el usuario seleccionó un template, configúralo y calcula el target
                 if "template_id" in answer:
                     state.template_id = answer.get("template_id")

@@ -77,8 +77,12 @@ test('smoke: zip banner scope, review back button, days persistence, and per-sec
 test('smoke: meal card title sizing and checkout auth modal redesign + password toggle', async ({ page }) => {
   await completeToReview(page, 6);
 
+  await expect(page.getByText('Goal')).toBeVisible();
+  await expect(page.getByText('Lose Fat')).toBeVisible();
+
   await page.getByRole('button', { name: '✨ Generate My Personalized Menu ✨' }).click();
   await expect(page.getByRole('button', { name: '🛒 Order Now' })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText('Reviewing Your Information')).toHaveCount(0);
 
   await expect(page.locator('.text-base.font-semibold.leading-snug').first()).toBeVisible();
 
@@ -104,4 +108,24 @@ test('smoke: meal card title sizing and checkout auth modal redesign + password 
   await toggleButton.click();
   await expect(passwordInput).toHaveAttribute('type', 'password');
   await expect(toggleButton).toHaveText('Show');
+});
+
+test('smoke: generate recovers automatically from invalid review step (409)', async ({ page }) => {
+  await completeToReview(page, 6);
+
+  await page.evaluate(async () => {
+    const sid = (window as any).userSession?.session_id;
+    if (!sid) throw new Error('Missing session id for recovery test');
+
+    await fetch('/next-step', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sid, step: 'back', answer: {} }),
+    });
+  });
+
+  await page.getByRole('button', { name: '✨ Generate My Personalized Menu ✨' }).click();
+
+  await expect(page.getByRole('button', { name: '🛒 Order Now' })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText('Reviewing Your Information')).toHaveCount(0);
 });

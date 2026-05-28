@@ -285,6 +285,11 @@ html.in-iframe .app-card {
     const BASE = "";
     let sessionId = Math.random().toString(36).substring(2);
     let currentStep = "start";
+    window.userSession = {
+      session_id: sessionId,
+      current_step: currentStep,
+      answers: {}
+    };
 
     // --- Utility: fetch with timeout to handle cold starts gracefully ---
     function fetchWithTimeout(resource, options = {}, timeout = 9000) {
@@ -338,10 +343,92 @@ html.in-iframe .app-card {
         body: JSON.stringify(payload)
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || res.statusText);
+        let body = null;
+        let text = '';
+        try {
+          body = await res.json();
+          text = body?.detail || body?.error || JSON.stringify(body);
+        } catch (_) {
+          text = await res.text();
+        }
+        const err = new Error(text || res.statusText);
+        err.status = res.status;
+        err.body = body;
+        throw err;
       }
       return res.json();
+    }
+
+    async function recoverGenerateFlowFromServer(currentStepFromServer) {
+      const stepOrder = [
+        'diet_preference',
+        'pick_plan',
+        'objective',
+        'allergies_and_restrictions',
+        'personal_info',
+        'duration',
+        'review'
+      ];
+
+      let stepName = String(currentStepFromServer || '').trim();
+      if (!stepName || !stepOrder.includes(stepName)) {
+        throw new Error('Could not recover flow state. Please restart the form.');
+      }
+
+      let attempts = 0;
+      while (attempts < 10) {
+        attempts += 1;
+        let answer = {};
+        if (stepName !== 'review') {
+          answer = window.userSession?.answers?.[stepName] || {};
+          if (!answer || Object.keys(answer).length === 0) {
+            currentStep = stepName;
+            if (window.userSession) window.userSession.current_step = stepName;
+            throw new Error('Some previous answers are missing. Please continue from the current step.');
+          }
+        }
+
+        const data = await api('/next-step', {
+          session_id: window.userSession?.session_id || sessionId,
+          step: stepName,
+          answer
+        });
+
+        if (data.menu) {
+          renderMenu(data);
+          return;
+        }
+
+        if (data.current_step) {
+          currentStep = data.current_step;
+          if (window.userSession) window.userSession.current_step = data.current_step;
+          stepName = data.current_step;
+        }
+
+        if (data.question || data.fields) {
+          renderForm(data.question, data.fields || []);
+        }
+
+        if (stepName === 'review') {
+          const generated = await api('/next-step', {
+            session_id: window.userSession?.session_id || sessionId,
+            step: 'review',
+            answer: {}
+          });
+          if (generated.menu) {
+            renderMenu(generated);
+            return;
+          }
+          if (generated.current_step) {
+            currentStep = generated.current_step;
+            if (window.userSession) window.userSession.current_step = generated.current_step;
+          }
+          renderForm(generated.question, generated.fields || []);
+          return;
+        }
+      }
+
+      throw new Error('Could not recover generation flow automatically.');
     }
 
     window.addEventListener('load', () => {
@@ -359,13 +446,24 @@ html.in-iframe .app-card {
 
     async function step(answer = {}, action = "next"){
       document.getElementById("app").innerHTML = `<div class="py-8"><div class="loader mx-auto"></div><p class="text-gray-600 mt-4">Loading...</p></div>`;
-      const payload = { session_id: sessionId, step: (action === "back" ? "back" : currentStep), answer: answer };
+      const stepToSend = action === "back" ? "back" : (window.userSession?.current_step || currentStep);
+      const payload = {
+        session_id: window.userSession?.session_id || sessionId,
+        step: stepToSend,
+        answer: answer || {}
+      };
+      if (action !== "back" && window.userSession && stepToSend && answer && Object.keys(answer).length > 0) {
+        window.userSession.answers[stepToSend] = { ...answer };
+      }
       try {
         const data = await api("/next-step", payload);
         if (data.menu) {
           renderMenu(data);
         } else {
-          if (data.current_step) currentStep = data.current_step;
+          if (data.current_step) {
+            currentStep = data.current_step;
+            if (window.userSession) window.userSession.current_step = data.current_step;
+          }
           renderForm(data.question, data.fields || []);
         }
       } catch (err) {
@@ -379,13 +477,16 @@ html.in-iframe .app-card {
       document.getElementById("app").innerHTML = `<div class="py-8"><div class="loader mx-auto"></div><p class="text-gray-600 mt-4">Loading...</p></div>`;
       let data = null;
       for (let idx = 0; idx < total; idx++) {
-        data = await api("/next-step", { session_id: sessionId, step: "back", answer: {} });
+        data = await api("/next-step", { session_id: window.userSession?.session_id || sessionId, step: "back", answer: {} });
       }
       if (!data) return;
       if (data.menu) {
         renderMenu(data);
       } else {
-        if (data.current_step) currentStep = data.current_step;
+        if (data.current_step) {
+          currentStep = data.current_step;
+          if (window.userSession) window.userSession.current_step = data.current_step;
+        }
         renderForm(data.question, data.fields || []);
       }
     }
@@ -1388,6 +1489,9 @@ html.in-iframe .app-card {
 
     // Inspirational Review Section with visual cards
     function renderReviewSection(question, fields) {
+      currentStep = "review";
+      if (window.userSession) window.userSession.current_step = "review";
+
       // Get state data from fields
       const stateField = fields.find(f => f.name === "state_data");
       const sd = stateField ? stateField.value : {};
@@ -1546,9 +1650,67 @@ html.in-iframe .app-card {
       
       // Setup form submit handler
       const form = document.getElementById("f");
-      form.onsubmit = (e) => {
+      form.onsubmit = async (e) => {
         e.preventDefault();
-        step({}, "next");
+        document.getElementById("app").innerHTML = `<div class="py-8"><div class="loader mx-auto"></div><p class="text-gray-600 mt-4">Generating your personalized menu...</p></div>`;
+        try {
+          const saved = window.userSession?.answers || {};
+          const reviewAnswer = {
+            plan: saved.pick_plan?.plan ?? sd.plan_number,
+            days: saved.duration?.days ?? saved.duration?.Days ?? sd.days,
+            diet_preference: saved.diet_preference?.Diet_Preference ?? saved.diet_preference?.diet_preference ?? sd.diet_preference,
+            objective: saved.objective?.Objective ?? saved.objective?.objective ?? sd.objective,
+            selected_allergies: saved.allergies_and_restrictions?.selected_allergies
+              ?? saved.allergies_and_restrictions?.['Selected Allergies']
+              ?? sd.selected_allergies
+              ?? [],
+            allergy_note: saved.allergies_and_restrictions?.allergy_note
+              ?? saved.allergies_and_restrictions?.['Any other allergy or note?']
+              ?? sd.allergy_note
+              ?? '',
+            allergies_and_restrictions: saved.allergies_and_restrictions?.allergies_and_restrictions
+              ?? sd.allergies_and_restrictions
+              ?? '',
+            weight_value: saved.personal_info?.weight_value ?? saved.personal_info?.weightvalue ?? sd.weight_value,
+            weight_unit: saved.personal_info?.weight_unit ?? sd.weight_unit,
+            height_value: saved.personal_info?.height_value ?? saved.personal_info?.heightvalue ?? sd.height_value,
+            height_unit: saved.personal_info?.height_unit ?? sd.height_unit,
+            age: saved.personal_info?.age ?? sd.age,
+            sex: saved.personal_info?.sex ?? sd.sex,
+            days_per_week: saved.personal_info?.days_per_week ?? saved.personal_info?.activity_days_bucket ?? sd.days_per_week,
+            avg_session_duration: saved.personal_info?.avg_session_duration ?? saved.personal_info?.activity_duration_bucket ?? sd.avg_session_duration,
+            intensity: saved.personal_info?.intensity ?? saved.personal_info?.activity_intensity ?? sd.intensity,
+          };
+
+          const payload = {
+            session_id: window.userSession?.session_id || sessionId,
+            step: "review",
+            answer: reviewAnswer
+          };
+          const data = await api("/next-step", payload);
+          if (data.menu) {
+            renderMenu(data);
+            return;
+          }
+          if (data.current_step) {
+            currentStep = data.current_step;
+            if (window.userSession) window.userSession.current_step = data.current_step;
+          }
+          renderForm(data.question, data.fields || []);
+        } catch (err) {
+          if (err?.status === 409 && err?.body?.error === 'invalid_generate_step') {
+            try {
+              await recoverGenerateFlowFromServer(err.body.current_step);
+              return;
+            } catch (recoveryErr) {
+              document.getElementById("app").innerHTML = `<div class="text-red-600 p-4">Error: ${recoveryErr.message}</div>`;
+              console.error(recoveryErr);
+              return;
+            }
+          }
+          document.getElementById("app").innerHTML = `<div class="text-red-600 p-4">Error: ${err.message}</div>`;
+          console.error(err);
+        }
       };
     }
 
