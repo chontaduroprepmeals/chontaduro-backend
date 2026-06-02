@@ -5,7 +5,12 @@ Unit tests for:
 3. generate_flexible_snack_message() – snack guidance carb range
 """
 import pytest
-from main import adjust_meal_for_protein_target, validate_daily_macros, generate_flexible_snack_message
+from main import (
+    adjust_meal_for_protein_target,
+    validate_daily_macros,
+    generate_flexible_snack_message,
+    enforce_daily_calorie_window,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +270,23 @@ class TestValidateDailyMacros:
         result = validate_daily_macros(menu, target_protein=133, target_carbs=198, target_fat=55, target_calories=1650)
         for meal in result:
             assert meal["portion_multiplier"] > 0.7
+
+
+class TestDailyCalorieWindow:
+    """Tests for strict +/-10% per-day calorie window enforcement."""
+
+    def test_enforce_daily_calorie_window_brings_day_within_10_percent(self):
+        # 3 meals x 950 kcal = 2850 kcal, which is far above a 2000 kcal target.
+        menu = [
+            _meal_entry_with_macros(protein=40, carbs=110, fat=30, calories=950, portion_multiplier=1.2),
+            _meal_entry_with_macros(protein=40, carbs=110, fat=30, calories=950, portion_multiplier=1.2),
+            _meal_entry_with_macros(protein=40, carbs=110, fat=30, calories=950, portion_multiplier=1.2),
+        ]
+        result = enforce_daily_calorie_window(menu, target_daily_calories=2000, tolerance_ratio=0.10)
+        total_calories = sum(m["final_macros"]["calories"] for m in result)
+
+        assert total_calories <= 2200, f"Expected <= 2200 kcal, got {total_calories}"
+        assert total_calories >= 1800, f"Expected >= 1800 kcal, got {total_calories}"
 
     def test_empty_menu_returns_unchanged(self):
         """Empty menu list must be returned without error."""

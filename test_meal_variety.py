@@ -6,7 +6,7 @@ Verifies that:
 - Graceful fallback when not enough unique meals exist
 """
 import pytest
-from main import generate_menu, SessionState
+from main import generate_menu, SessionState, filter_meals
 
 
 def _make_state(plan: int, days: int) -> SessionState:
@@ -71,6 +71,32 @@ class TestVarietyAcrossDays:
         state = _make_state(plan=1, days=3)
         menu = generate_menu(state, protein_per_meal=35, calories_per_meal=600, variety_window=3)
         assert len(menu) == 3
+
+    def test_no_duplicate_day_meal_combinations_across_week_plan4(self):
+        """Every day must have a unique combination of meals across the week."""
+        state = _make_state(plan=4, days=7)
+        menu = generate_menu(state, protein_per_meal=35, calories_per_meal=600, variety_window=3)
+        names = [m.name for m in menu]
+        meals_per_day = 3
+
+        day_signatures = []
+        for day in range(state.days):
+            day_names = names[day * meals_per_day : (day + 1) * meals_per_day]
+            day_signatures.append(tuple(sorted(day_names)))
+
+        assert len(day_signatures) == len(set(day_signatures)), (
+            f"Duplicate day combinations found: {day_signatures}"
+        )
+
+
+class TestMealPoolExclusions:
+    """Ensure explicitly excluded high-density meals are never selected."""
+
+    def test_excluded_high_density_meals_not_in_filtered_pool(self):
+        meals = filter_meals(dislikes=[], allergies=[], dietary_restrictions=[], diet=None)
+        names = {m.name.strip().lower() for m in meals}
+        assert "lentil stew with rice" not in names
+        assert "black bean rice bowl" not in names
 
 
 class TestEdgeCases:

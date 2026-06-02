@@ -1788,6 +1788,64 @@ def validate_daily_calories(daily_menu: List[Dict], target_daily_calories: int) 
     return daily_menu
 
 
+def enforce_daily_calorie_window(
+    daily_menu: List[Dict[str, Any]],
+    target_daily_calories: int,
+    tolerance_ratio: float = 0.10,
+) -> List[Dict[str, Any]]:
+    """
+    Enforce a hard daily calorie window around the user's target (default +/-10%).
+
+    This function scales carbs/fat/calories (not protein) so each day is always
+    kept inside the allowed calorie window.
+    """
+    if not daily_menu or target_daily_calories <= 0:
+        return daily_menu
+
+    total_calories = sum(m.get("final_macros", {}).get("calories", 0) for m in daily_menu)
+    if total_calories <= 0:
+        return daily_menu
+
+    lower_bound = int(round(target_daily_calories * (1 - tolerance_ratio)))
+    upper_bound = int(round(target_daily_calories * (1 + tolerance_ratio)))
+
+    if lower_bound <= total_calories <= upper_bound:
+        return daily_menu
+
+    desired_total = target_daily_calories
+    scale_factor = desired_total / total_calories
+
+    for meal in daily_menu:
+        final_macros = meal.get("final_macros")
+        if not final_macros:
+            continue
+        # Protein is intentionally not scaled here.
+        final_macros["carbs_g"] = round(final_macros.get("carbs_g", 0) * scale_factor, 1)
+        final_macros["fat_g"] = round(final_macros.get("fat_g", 0) * scale_factor, 1)
+        final_macros["calories"] = round(final_macros.get("calories", 0) * scale_factor)
+        if "portion_multiplier" in meal:
+            meal["portion_multiplier"] = round(meal["portion_multiplier"] * scale_factor, 2)
+
+    adjusted_total = sum(m.get("final_macros", {}).get("calories", 0) for m in daily_menu)
+    if adjusted_total <= 0:
+        return daily_menu
+
+    if adjusted_total < lower_bound or adjusted_total > upper_bound:
+        correction_target = lower_bound if adjusted_total < lower_bound else upper_bound
+        correction_factor = correction_target / adjusted_total
+        for meal in daily_menu:
+            final_macros = meal.get("final_macros")
+            if not final_macros:
+                continue
+            final_macros["carbs_g"] = round(final_macros.get("carbs_g", 0) * correction_factor, 1)
+            final_macros["fat_g"] = round(final_macros.get("fat_g", 0) * correction_factor, 1)
+            final_macros["calories"] = round(final_macros.get("calories", 0) * correction_factor)
+            if "portion_multiplier" in meal:
+                meal["portion_multiplier"] = round(meal["portion_multiplier"] * correction_factor, 2)
+
+    return daily_menu
+
+
 def validate_daily_macros(
     daily_menu: List[Dict],
     target_protein: int,
@@ -1959,6 +2017,13 @@ SOY_KEYWORDS = {"soy","tofu","soy sauce"}
 SESAME_KEYWORDS = {"sesame"}
 CORN_KEYWORDS = {"corn"}
 
+# These meals tend to become excessively calorie/carbohydrate dense after macro scaling.
+# Keep them out of the generated pool to protect daily macro targets.
+EXCLUDED_HIGH_DENSITY_MEALS = {
+    "lentil stew with rice",
+    "black bean rice bowl",
+}
+
 # Expanded vegetable synonyms/keywords to better detect 'Vegetables' dislike
 VEGETABLE_KEYWORDS = {
     "broccoli","spinach","lettuce","carrot","zucchini","eggplant","tomato","bell pepper",
@@ -2044,6 +2109,82 @@ def _meal_preparation_signature(meal_like: Any) -> str:
     return signature or name.lower()
 
 
+def _enforce_unique_day_combinations(menu_objs: List[Meal], state: SessionState) -> List[Meal]:
+    """
+    Ensure no two days share the exact same meal-name combination.
+    """
+    if not menu_objs or not state.plan:
+        return menu_objs
+
+    plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
+    num_main, num_break = plan_map.get(state.plan, (1, 0))
+    meals_per_day = max(1, num_main + num_break)
+    day_count = max(1, len(menu_objs) // meals_per_day)
+
+    available = filter_meals(state.dislikes, state.allergies, state.dietary_restrictions, state.diet_preference)
+    by_type: Dict[str, List[Meal]] = {}
+    for candidate in available:
+        by_type.setdefault((candidate.type or "Main Meal").lower(), []).append(candidate)
+
+    adjusted = list(menu_objs)
+    seen_signatures: set[tuple[str, ...]] = set()
+
+    for day_idx in range(day_count):
+        start = day_idx * meals_per_day
+        end = start + meals_per_day
+        day_slice = adjusted[start:end]
+        if not day_slice:
+            continue
+
+        def _signature(items: List[Meal]) -> tuple[str, ...]:
+            return tuple(sorted((m.name or "").strip().lower() for m in items))
+
+        day_signature = _signature(day_slice)
+        if day_signature not in seen_signatures:
+            seen_signatures.add(day_signature)
+            continue
+
+        # Try replacing one slot to make this day combination unique.
+        replaced = False
+        for slot_idx, original_meal in enumerate(day_slice):
+            meal_type = (original_meal.type or "Main Meal").lower()
+            type_pool = by_type.get(meal_type, available)
+            if not type_pool:
+                continue
+
+            used_today = {
+                (meal.name or "").strip().lower()
+                for i, meal in enumerate(day_slice)
+                if i != slot_idx
+            }
+            original_name = (original_meal.name or "").strip().lower()
+
+            for candidate in type_pool:
+                cand_name = (candidate.name or "").strip().lower()
+                if not cand_name or cand_name == original_name:
+                    continue
+                if cand_name in used_today:
+                    continue
+                trial_slice = list(day_slice)
+                trial_slice[slot_idx] = candidate
+                trial_sig = _signature(trial_slice)
+                if trial_sig in seen_signatures:
+                    continue
+                adjusted[start:end] = trial_slice
+                seen_signatures.add(trial_sig)
+                replaced = True
+                break
+
+            if replaced:
+                break
+
+        if not replaced:
+            # Keep current day if uniqueness is impossible with remaining pool.
+            seen_signatures.add(day_signature)
+
+    return adjusted
+
+
 def _enforce_weekly_protein_variety(menu_objs: List[Meal], state: SessionState) -> List[Meal]:
     if not menu_objs or not state.plan:
         return menu_objs
@@ -2111,7 +2252,7 @@ def _enforce_weekly_protein_variety(menu_objs: List[Meal], state: SessionState) 
             protein_preparations.setdefault(family, set()).add(_meal_preparation_signature(selected))
         adjusted_menu.append(selected)
 
-    return adjusted_menu
+    return _enforce_unique_day_combinations(adjusted_menu, state)
 
 
 def is_meal_compatible_with_diet(ingredients: List[str], diet: Optional[str]) -> bool:
@@ -2202,6 +2343,9 @@ def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions
 
     out = []
     for m in MEALS_DATA:
+        meal_name = str(m.get("name", "") or "").strip().lower()
+        if meal_name in EXCLUDED_HIGH_DENSITY_MEALS:
+            continue
         ings = [i.lower() for i in m.get("ingredients", [])]
         # diet compatibility first
         if not is_meal_compatible_with_diet(ings, diet):
@@ -2523,7 +2667,7 @@ def generate_menu_using_template(state: SessionState) -> List[Meal]:
                     menu_objs.append(Meal(name=name or "Unknown", type="Main Meal", ingredients=[], calories=0, price=0.0))
             else:
                 menu_objs.append(Meal(name=name or "Unknown", type="Main Meal", ingredients=[], calories=0, price=0.0))
-    return _enforce_weekly_protein_variety(menu_objs, state)
+    return _enforce_unique_day_combinations(_enforce_weekly_protein_variety(menu_objs, state), state)
 
 def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily_protein: Optional[int], calorie_target: int) -> List[Dict[str, Any]]:
     """
@@ -2706,7 +2850,7 @@ def generate_menu(state: SessionState, protein_per_meal: Optional[int] = None, c
             day_items.append(random.choice(available))
         menu.extend(day_items)
     final_menu = menu[: state.days * (num_main + num_break)]
-    return _enforce_weekly_protein_variety(final_menu, state)
+    return _enforce_unique_day_combinations(_enforce_weekly_protein_variety(final_menu, state), state)
 
 
 def assess_menu_possibility(state: SessionState) -> Dict[str, Any]:
@@ -3519,7 +3663,12 @@ async def next_step(request: Request):
                         target_protein=macros.get("protein_grams", 0),
                         target_carbs=macros.get("carbs_grams", 0),
                         target_fat=macros.get("fat_grams", 0),
-                        target_calories=calorie_dist["total_meal_calories"],
+                        target_calories=int(calorie_target or 2000),
+                    )
+                    enforce_daily_calorie_window(
+                        daily_menu=day_meals,
+                        target_daily_calories=int(calorie_target or 2000),
+                        tolerance_ratio=0.10,
                     )
 
                 daily_summaries: Dict[str, Any] = {}
