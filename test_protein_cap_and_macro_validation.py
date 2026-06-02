@@ -7,7 +7,9 @@ Unit tests for:
 import pytest
 from main import (
     adjust_meal_for_protein_target,
+    adjust_meal_for_macro_budgets,
     validate_daily_macros,
+    validate_daily_macro_windows_strict,
     generate_flexible_snack_message,
     enforce_daily_calorie_window,
 )
@@ -287,6 +289,74 @@ class TestDailyCalorieWindow:
 
         assert total_calories <= 2200, f"Expected <= 2200 kcal, got {total_calories}"
         assert total_calories >= 1800, f"Expected >= 1800 kcal, got {total_calories}"
+
+
+class TestBudgetConstrainedMealAdjustment:
+    """Algorithmic meal adjustment using per-day carb/fat budget shares."""
+
+    def test_adjust_meal_respects_carb_and_fat_budget_share(self):
+        meal = {
+            "name": "Bean and Rice Test",
+            "ingredients": ["black beans", "white rice", "chicken"],
+        }
+        result = adjust_meal_for_macro_budgets(
+            meal_data=meal,
+            target_protein_per_meal=40,
+            target_carbs_per_meal=55,
+            target_fat_per_meal=18,
+        )
+        final = result["final_macros"]
+
+        assert final["carbs_g"] <= 55.0 + 2.0, f"Carbs exceeded budget: {final['carbs_g']}"
+        assert final["fat_g"] <= 18.0 + 2.0, f"Fat exceeded budget: {final['fat_g']}"
+        assert final["protein_g"] >= 30.0, f"Protein dropped too low: {final['protein_g']}"
+
+    def test_carb_heavy_components_get_reduced(self):
+        meal = {
+            "name": "Rice + Beans + Lentils",
+            "ingredients": ["white rice", "black beans", "lentils", "chicken"],
+        }
+        result = adjust_meal_for_macro_budgets(
+            meal_data=meal,
+            target_protein_per_meal=40,
+            target_carbs_per_meal=45,
+            target_fat_per_meal=16,
+        )
+        reduction_reasons = [m.get("reason") for m in result["modifications"] if m.get("type") == "reduce_component"]
+        final_carbs = result["final_macros"].get("carbs_g", 0)
+        assert (
+            any("carb_budget" in str(r) for r in reduction_reasons)
+            or final_carbs <= 47
+        ), "Expected carb reduction step or an already-compliant final carb result"
+
+
+class TestStrictDailyMacroWindowValidation:
+    """Ensure every day gets normalized to +/-10% macro windows."""
+
+    def test_daily_totals_normalized_within_10_percent(self):
+        day_meals = [
+            _meal_entry_with_macros(protein=55, carbs=110, fat=35, calories=900),
+            _meal_entry_with_macros(protein=55, carbs=110, fat=35, calories=900),
+            _meal_entry_with_macros(protein=55, carbs=110, fat=35, calories=900),
+        ]
+        validate_daily_macro_windows_strict(
+            daily_menu=day_meals,
+            target_protein=120,
+            target_carbs=180,
+            target_fat=55,
+            target_calories=1900,
+            tolerance_ratio=0.10,
+        )
+
+        protein = sum(m["final_macros"]["protein_g"] for m in day_meals)
+        carbs = sum(m["final_macros"]["carbs_g"] for m in day_meals)
+        fat = sum(m["final_macros"]["fat_g"] for m in day_meals)
+        calories = sum(m["final_macros"]["calories"] for m in day_meals)
+
+        assert 108 <= protein <= 132, f"Protein out of +/-10%: {protein}"
+        assert 162 <= carbs <= 198, f"Carbs out of +/-10%: {carbs}"
+        assert 49.5 <= fat <= 60.7, f"Fat out of +/-10%: {fat}"
+        assert 1710 <= calories <= 2090, f"Calories out of +/-10%: {calories}"
 
     def test_empty_menu_returns_unchanged(self):
         """Empty menu list must be returned without error."""

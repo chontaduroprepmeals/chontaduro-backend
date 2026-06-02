@@ -1760,6 +1760,404 @@ def adjust_meal_for_protein_target(meal_data: Dict, target_protein_per_meal: flo
     }
 
 
+def _build_working_ingredients(ingredients: List[str]) -> List[Dict[str, Any]]:
+    """Build mutable ingredient rows with per-gram macro density for optimization."""
+    rows: List[Dict[str, Any]] = []
+    for ingredient_str in ingredients or []:
+        canonical_name = find_ingredient(ingredient_str)
+        if not canonical_name:
+            continue
+        data = INGREDIENT_DATABASE.get(canonical_name)
+        if not data:
+            continue
+        if data.get("unit") == "ml":
+            amount = float(data.get("typical_serving_ml", 0) or 0)
+            protein_per_g = float(data.get("protein_per_100ml", 0) or 0) / 100.0
+            carbs_per_g = float(data.get("carbs_per_100ml", 0) or 0) / 100.0
+            fat_per_g = float(data.get("fat_per_100ml", 0) or 0) / 100.0
+            calories_per_g = float(data.get("calories_per_100ml", 0) or 0) / 100.0
+            unit = "ml"
+        else:
+            amount = float(data.get("typical_serving_g", 0) or 0)
+            protein_per_g = float(data.get("protein_per_100g", 0) or 0) / 100.0
+            carbs_per_g = float(data.get("carbs_per_100g", 0) or 0) / 100.0
+            fat_per_g = float(data.get("fat_per_100g", 0) or 0) / 100.0
+            calories_per_g = float(data.get("calories_per_100g", 0) or 0) / 100.0
+            unit = "g"
+
+        rows.append(
+            {
+                "name": canonical_name,
+                "amount": amount,
+                "unit": unit,
+                "protein_per_g": protein_per_g,
+                "carbs_per_g": carbs_per_g,
+                "fat_per_g": fat_per_g,
+                "calories_per_g": calories_per_g,
+            }
+        )
+    return rows
+
+
+def _compute_working_totals(rows: List[Dict[str, Any]]) -> Dict[str, float]:
+    protein = sum(r["amount"] * r["protein_per_g"] for r in rows)
+    carbs = sum(r["amount"] * r["carbs_per_g"] for r in rows)
+    fat = sum(r["amount"] * r["fat_per_g"] for r in rows)
+    calories = sum(r["amount"] * r["calories_per_g"] for r in rows)
+    total_weight = sum(r["amount"] for r in rows)
+    return {
+        "protein_g": protein,
+        "carbs_g": carbs,
+        "fat_g": fat,
+        "calories": calories,
+        "total_weight_g": total_weight,
+    }
+
+
+def _scale_working_rows(rows: List[Dict[str, Any]], factor: float) -> None:
+    if factor <= 0:
+        return
+    for r in rows:
+        r["amount"] *= factor
+
+
+def _is_carb_heavy_name(name: str) -> bool:
+    n = (name or "").lower()
+    carb_keywords = {
+        "rice",
+        "beans",
+        "lentil",
+        "oats",
+        "pasta",
+        "potato",
+        "quinoa",
+        "bread",
+        "tortilla",
+        "cereal",
+        "plantain",
+        "arepa",
+        "honey",
+    }
+    return any(k in n for k in carb_keywords)
+
+
+def _trim_macro_excess(
+    rows: List[Dict[str, Any]],
+    macro_key: str,
+    max_allowed: float,
+    min_factor_default: float,
+    prefer_carb_heavy: bool = False,
+) -> None:
+    totals = _compute_working_totals(rows)
+    current = float(totals.get(macro_key, 0))
+    if current <= max_allowed:
+        return
+    excess = current - max_allowed
+
+    if macro_key == "carbs_g":
+        per_g_key = "carbs_per_g"
+    elif macro_key == "fat_g":
+        per_g_key = "fat_per_g"
+    else:
+        return
+
+    def _sort_key(row: Dict[str, Any]) -> tuple[float, float]:
+        macro_density = float(row.get(per_g_key, 0))
+        protein_density = float(row.get("protein_per_g", 0))
+        preference_boost = 1.0 if (prefer_carb_heavy and _is_carb_heavy_name(row.get("name", ""))) else 0.0
+        return (preference_boost, macro_density - (protein_density * 0.35))
+
+    candidates = sorted(rows, key=_sort_key, reverse=True)
+    for row in candidates:
+        if excess <= 0:
+            break
+        macro_per_g = float(row.get(per_g_key, 0))
+        if macro_per_g <= 0:
+            continue
+        min_factor = 0.25 if (prefer_carb_heavy and _is_carb_heavy_name(row.get("name", ""))) else min_factor_default
+        min_amount = float(row.get("amount", 0)) * min_factor
+        reducible_g = max(0.0, float(row.get("amount", 0)) - min_amount)
+        reducible_macro = reducible_g * macro_per_g
+        if reducible_macro <= 0:
+            continue
+        use_macro = min(excess, reducible_macro)
+        reduce_g = use_macro / macro_per_g
+        row["amount"] -= reduce_g
+        excess -= use_macro
+
+
+def _enrich_with_protein_under_budgets(
+    rows: List[Dict[str, Any]],
+    protein_target: float,
+    carb_budget: float,
+    fat_budget: float,
+    meal_name: str,
+    modifications: List[Dict[str, Any]],
+) -> None:
+    totals = _compute_working_totals(rows)
+    deficit = max(0.0, protein_target - float(totals.get("protein_g", 0)))
+    if deficit <= 0.3:
+        return
+
+    protein_powder = INGREDIENT_DATABASE.get("protein powder", {})
+    egg_whites = INGREDIENT_DATABASE.get("egg whites", {})
+    supplements = []
+    if egg_whites:
+        supplements.append(
+            {
+                "name": "egg whites",
+                "protein_per_g": float(egg_whites.get("protein_per_100g", 0)) / 100.0,
+                "carbs_per_g": float(egg_whites.get("carbs_per_100g", 0)) / 100.0,
+                "fat_per_g": float(egg_whites.get("fat_per_100g", 0)) / 100.0,
+                "calories_per_g": float(egg_whites.get("calories_per_100g", 0)) / 100.0,
+                "unit": "g",
+            }
+        )
+    if protein_powder:
+        supplements.append(
+            {
+                "name": "protein powder",
+                "protein_per_g": float(protein_powder.get("protein_per_100g", 0)) / 100.0,
+                "carbs_per_g": float(protein_powder.get("carbs_per_100g", 0)) / 100.0,
+                "fat_per_g": float(protein_powder.get("fat_per_100g", 0)) / 100.0,
+                "calories_per_g": float(protein_powder.get("calories_per_100g", 0)) / 100.0,
+                "unit": "g",
+            }
+        )
+
+    for supp in supplements:
+        totals = _compute_working_totals(rows)
+        deficit = max(0.0, protein_target - float(totals.get("protein_g", 0)))
+        if deficit <= 0.3:
+            break
+
+        protein_per_g = float(supp.get("protein_per_g", 0))
+        carbs_per_g = float(supp.get("carbs_per_g", 0))
+        fat_per_g = float(supp.get("fat_per_g", 0))
+        if protein_per_g <= 0:
+            continue
+
+        remaining_carb = max(0.0, carb_budget - float(totals.get("carbs_g", 0)))
+        remaining_fat = max(0.0, fat_budget - float(totals.get("fat_g", 0)))
+
+        max_from_protein = deficit / protein_per_g
+        max_from_carbs = (remaining_carb / carbs_per_g) if carbs_per_g > 0 else max_from_protein
+        max_from_fat = (remaining_fat / fat_per_g) if fat_per_g > 0 else max_from_protein
+        add_amount = max(0.0, min(max_from_protein, max_from_carbs, max_from_fat))
+
+        # Keep additions realistic.
+        add_amount = min(add_amount, 120.0 if supp["name"] == "egg whites" else 35.0)
+        if add_amount <= 0.5:
+            continue
+
+        rows.append(
+            {
+                "name": supp["name"],
+                "amount": add_amount,
+                "unit": supp["unit"],
+                "protein_per_g": protein_per_g,
+                "carbs_per_g": carbs_per_g,
+                "fat_per_g": fat_per_g,
+                "calories_per_g": float(supp.get("calories_per_g", 0)),
+            }
+        )
+        modifications.append(
+            {
+                "type": "add",
+                "ingredient": supp["name"],
+                "amount": round(add_amount, 1),
+                "unit": supp["unit"],
+                "internal": True,
+                "note": f"Added to restore protein target in macro-constrained meal: {meal_name}",
+            }
+        )
+
+
+def _build_final_macros_from_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    totals = _compute_working_totals(rows)
+    return {
+        "protein_g": round(float(totals.get("protein_g", 0)), 1),
+        "carbs_g": round(float(totals.get("carbs_g", 0)), 1),
+        "fat_g": round(float(totals.get("fat_g", 0)), 1),
+        "calories": round(float(totals.get("calories", 0))),
+        "total_weight_g": round(float(totals.get("total_weight_g", 0))),
+        "ingredient_breakdown": [
+            {
+                "name": r["name"],
+                "amount": round(float(r["amount"]), 1),
+                "unit": r["unit"],
+                "protein": round(float(r["amount"]) * float(r["protein_per_g"]), 1),
+                "carbs": round(float(r["amount"]) * float(r["carbs_per_g"]), 1),
+                "fat": round(float(r["amount"]) * float(r["fat_per_g"]), 1),
+                "calories": round(float(r["amount"]) * float(r["calories_per_g"])),
+            }
+            for r in rows
+        ],
+        "missing_ingredients": [],
+    }
+
+
+def adjust_meal_for_macro_budgets(
+    meal_data: Dict[str, Any],
+    target_protein_per_meal: float,
+    target_carbs_per_meal: float,
+    target_fat_per_meal: float,
+) -> Dict[str, Any]:
+    """
+    Adjust a meal using day-level macro budgets per meal.
+
+    Priority:
+    1) hit protein target (capped at 40g)
+    2) keep carbs and fats inside per-meal budget shares
+    3) trim carb-heavy ingredients first when carbs are too high
+    """
+    protein_target = min(40.0, max(0.0, float(target_protein_per_meal or 0.0)))
+    carb_budget = max(0.0, float(target_carbs_per_meal or 0.0))
+    fat_budget = max(0.0, float(target_fat_per_meal or 0.0))
+
+    base_macros = calculate_meal_macros_from_ingredients(meal_data.get("ingredients", []))
+    rows = _build_working_ingredients(meal_data.get("ingredients", []))
+    modifications: List[Dict[str, Any]] = []
+
+    if not rows:
+        return {
+            "base_macros": base_macros,
+            "modifications": modifications,
+            "final_macros": base_macros,
+        }
+
+    start_totals = _compute_working_totals(rows)
+    if float(start_totals.get("protein_g", 0)) > 0 and protein_target > 0:
+        protein_scale = protein_target / float(start_totals.get("protein_g", 0))
+        _scale_working_rows(rows, protein_scale)
+        if abs(protein_scale - 1.0) > 0.02:
+            modifications.append(
+                {
+                    "type": "scale_for_protein",
+                    "internal": True,
+                    "factor": round(protein_scale, 3),
+                }
+            )
+
+    # Constrain carbs/fat using day-level budget shares.
+    _trim_macro_excess(rows, "carbs_g", carb_budget, min_factor_default=0.65, prefer_carb_heavy=True)
+    _trim_macro_excess(rows, "fat_g", fat_budget, min_factor_default=0.60, prefer_carb_heavy=False)
+
+    # Recover protein without violating carb/fat budgets.
+    _enrich_with_protein_under_budgets(
+        rows=rows,
+        protein_target=protein_target,
+        carb_budget=carb_budget,
+        fat_budget=fat_budget,
+        meal_name=str(meal_data.get("name", "Meal")),
+        modifications=modifications,
+    )
+
+    # Final hard clamp if rounding caused tiny overshoots.
+    _trim_macro_excess(rows, "carbs_g", carb_budget, min_factor_default=0.40, prefer_carb_heavy=True)
+    _trim_macro_excess(rows, "fat_g", fat_budget, min_factor_default=0.40, prefer_carb_heavy=False)
+
+    final_macros = _build_final_macros_from_rows(rows)
+    return {
+        "base_macros": base_macros,
+        "modifications": modifications,
+        "final_macros": final_macros,
+    }
+
+
+def validate_daily_macro_windows_strict(
+    daily_menu: List[Dict[str, Any]],
+    target_protein: int,
+    target_carbs: int,
+    target_fat: int,
+    target_calories: int,
+    tolerance_ratio: float = 0.10,
+) -> List[Dict[str, Any]]:
+    """Normalize each day so protein/carbs/fat/calories are within +/-10% of target."""
+    if not daily_menu:
+        return daily_menu
+
+    keys = [
+        ("protein_g", float(target_protein or 0)),
+        ("carbs_g", float(target_carbs or 0)),
+        ("fat_g", float(target_fat or 0)),
+    ]
+
+    def _totals() -> Dict[str, float]:
+        protein = sum(float(m.get("final_macros", {}).get("protein_g", 0)) for m in daily_menu)
+        carbs = sum(float(m.get("final_macros", {}).get("carbs_g", 0)) for m in daily_menu)
+        fat = sum(float(m.get("final_macros", {}).get("fat_g", 0)) for m in daily_menu)
+        calories = (protein * 4.0) + (carbs * 4.0) + (fat * 9.0)
+        return {"protein_g": protein, "carbs_g": carbs, "fat_g": fat, "calories": calories}
+
+    totals = _totals()
+
+    def _within(metric: str, target: float, value: float) -> bool:
+        if target <= 0:
+            return True
+        lo = target * (1 - tolerance_ratio)
+        hi = target * (1 + tolerance_ratio)
+        return lo <= value <= hi
+
+    # First normalize P/C/F independently at day level.
+    for metric, target in keys:
+        if target <= 0:
+            continue
+        current = float(totals.get(metric, 0))
+        if current <= 0 or _within(metric, target, current):
+            continue
+        factor = target / current
+        for meal in daily_menu:
+            fm = meal.get("final_macros", {})
+            fm[metric] = round(float(fm.get(metric, 0)) * factor, 1)
+            if metric in {"carbs_g", "fat_g"} and "portion_multiplier" in meal:
+                meal["portion_multiplier"] = round(float(meal["portion_multiplier"]) * factor, 2)
+        totals = _totals()
+
+    # Then enforce calories with carbs/fat only to preserve protein targeting strategy.
+    target_cal = float(target_calories or 0)
+    if target_cal > 0 and not _within("calories", target_cal, float(totals.get("calories", 0))):
+        current_cal = float(totals.get("calories", 0))
+        if current_cal > 0:
+            cal_factor = target_cal / current_cal
+            for meal in daily_menu:
+                fm = meal.get("final_macros", {})
+                fm["carbs_g"] = round(float(fm.get("carbs_g", 0)) * cal_factor, 1)
+                fm["fat_g"] = round(float(fm.get("fat_g", 0)) * cal_factor, 1)
+                if "portion_multiplier" in meal:
+                    meal["portion_multiplier"] = round(float(meal["portion_multiplier"]) * cal_factor, 2)
+            totals = _totals()
+
+    # Final clamp pass to guarantee each macro lands inside +/- tolerance.
+    totals = _totals()
+    for metric, target in keys:
+        if target <= 0:
+            continue
+        current = float(totals.get(metric, 0))
+        lo = target * (1 - tolerance_ratio)
+        hi = target * (1 + tolerance_ratio)
+        if current < lo and current > 0:
+            factor = lo / current
+        elif current > hi and current > 0:
+            factor = hi / current
+        else:
+            continue
+        for meal in daily_menu:
+            fm = meal.get("final_macros", {})
+            fm[metric] = round(float(fm.get(metric, 0)) * factor, 1)
+        totals = _totals()
+
+    # Recompute displayed calories from normalized macros.
+    for meal in daily_menu:
+        fm = meal.get("final_macros", {})
+        p = float(fm.get("protein_g", 0))
+        c = float(fm.get("carbs_g", 0))
+        f = float(fm.get("fat_g", 0))
+        fm["calories"] = round((p * 4.0) + (c * 4.0) + (f * 9.0))
+
+    return daily_menu
+
+
 def validate_daily_calories(daily_menu: List[Dict], target_daily_calories: int) -> List[Dict]:
     """
     Ensures daily total doesn't exceed target by more than 5%.
@@ -3617,25 +4015,33 @@ async def next_step(request: Request):
                     meal_entry["meal_type"] = meal_type
                     meal_entry["day_label"] = f"DAY {day_num} - {meal_type}"
                     
-                    # Use the values already calculated by allocate_protein_to_menu
-                    # These are already correct and evenly distributed
-                    meal_entry["protein_assigned"] = int(meal.get("provided_protein", 0))
-                    meal_entry["fat_assigned"] = int(meal.get("fat_assigned", 0))
-                    meal_entry["carbs_assigned"] = int(meal.get("carbs_assigned", 0))
-                    meal_entry["calories_assigned"] = int(meal.get("calories", 0))
+                    # Per-meal macro targets derived from daily budget split.
+                    protein_target_for_meal = float(meal.get("provided_protein", 0) or 0)
+                    carb_budget_for_meal = float(meal.get("carbs_assigned", 0) or 0)
+                    fat_budget_for_meal = float(meal.get("fat_assigned", 0) or 0)
 
-                    # Calculate real ingredient-based macros (dynamic calculation)
-                    protein_target_for_meal = meal_entry["protein_assigned"]
-                    adjusted = adjust_meal_for_protein_target(meal, protein_target_for_meal)
+                    # Algorithmic constrained adjustment: protein target + carb/fat budget share.
+                    adjusted = adjust_meal_for_macro_budgets(
+                        meal_data=meal,
+                        target_protein_per_meal=protein_target_for_meal,
+                        target_carbs_per_meal=carb_budget_for_meal,
+                        target_fat_per_meal=fat_budget_for_meal,
+                    )
                     meal_entry["base_macros"] = adjusted["base_macros"]
                     meal_entry["modifications"] = adjusted["modifications"]
                     meal_entry["final_macros"] = adjusted["final_macros"]
 
+                    # Sync exposed assigned values with constrained final result.
+                    meal_entry["protein_assigned"] = round(float(adjusted["final_macros"].get("protein_g", 0)), 1)
+                    meal_entry["fat_assigned"] = round(float(adjusted["final_macros"].get("fat_g", 0)), 1)
+                    meal_entry["carbs_assigned"] = round(float(adjusted["final_macros"].get("carbs_g", 0)), 1)
+                    meal_entry["calories_assigned"] = int(adjusted["final_macros"].get("calories", 0))
+
                     # Calculate portion multiplier using real ingredient-based protein
                     # (replaces the previous use of hardcoded protein_g from meals.json)
-                    base_protein = adjusted["base_macros"]["protein_g"]
+                    base_protein = float(adjusted["base_macros"].get("protein_g", 0) or 0)
                     if base_protein > 0:
-                        portion_multiplier = meal_entry["protein_assigned"] / base_protein
+                        portion_multiplier = float(meal_entry["protein_assigned"]) / base_protein
                         meal_entry["portion_multiplier"] = round(portion_multiplier, 2)
                         meal_entry["serving_size_adjusted"] = int(meal.get("serving_size_g", 300) * portion_multiplier)
                     else:
@@ -3658,12 +4064,22 @@ async def next_step(request: Request):
                 days_in_menu = set(m.get("day_number", 1) for m in response_menu)
                 for day_num in days_in_menu:
                     day_meals = [m for m in response_menu if m.get("day_number", 1) == day_num]
+                    # Legacy guardrails for non-protein macros.
                     validate_daily_macros(
                         daily_menu=day_meals,
                         target_protein=macros.get("protein_grams", 0),
                         target_carbs=macros.get("carbs_grams", 0),
                         target_fat=macros.get("fat_grams", 0),
                         target_calories=int(calorie_target or 2000),
+                    )
+                    # Strict algorithmic validation: each day's macros must be within +/-10%.
+                    validate_daily_macro_windows_strict(
+                        daily_menu=day_meals,
+                        target_protein=int(macros.get("protein_grams", 0) or 0),
+                        target_carbs=int(macros.get("carbs_grams", 0) or 0),
+                        target_fat=int(macros.get("fat_grams", 0) or 0),
+                        target_calories=int(calorie_target or 2000),
+                        tolerance_ratio=0.10,
                     )
                     enforce_daily_calorie_window(
                         daily_menu=day_meals,
