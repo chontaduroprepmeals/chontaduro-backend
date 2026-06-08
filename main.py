@@ -784,6 +784,62 @@ def to_cm(height: float, unit: str) -> Optional[float]:
         return round(float(height) * 2.54, 1)
     return float(height)
 
+
+def validate_body_stats_input(
+    weight: Optional[float],
+    weight_unit: Optional[str],
+    height: Optional[float],
+    height_unit: Optional[str],
+    age: Optional[int],
+) -> Dict[str, Any]:
+    """Validate realistic body-stat ranges before progressing in the flow."""
+    issues: List[str] = []
+
+    # Weight validation
+    if weight is None:
+        issues.append("Weight is required")
+    else:
+        wu = str(weight_unit or "kg").strip().lower()
+        w = float(weight)
+        if wu in {"lbs", "lb"}:
+            if not (88 <= w <= 330):
+                issues.append("Weight must be between 88 and 330 lbs")
+        else:
+            if not (40 <= w <= 150):
+                issues.append("Weight must be between 40 and 150 kg")
+
+    # Height validation
+    if height is None:
+        issues.append("Height is required")
+    else:
+        hu = str(height_unit or "cm").strip().lower()
+        h = float(height)
+        if hu in {"in", "inch", "inches"}:
+            if not (55 <= h <= 87):
+                issues.append("Height must be between 55 and 87 in")
+        else:
+            if not (140 <= h <= 220):
+                issues.append("Height must be between 140 and 220 cm")
+
+    # Age validation
+    if age is None:
+        issues.append("Age is required")
+    else:
+        a = int(age)
+        if not (16 <= a <= 80):
+            issues.append("Age must be between 16 and 80")
+
+    if issues:
+        return {
+            "valid": False,
+            "warning": (
+                "Some values look unrealistic. "
+                "Please correct them before continuing: " + "; ".join(issues) + "."
+            ),
+            "issues": issues,
+        }
+    return {"valid": True, "warning": "", "issues": []}
+
 def normalize_days_bucket(days_val) -> str:
     """Convert a raw days value (numeric string or bucket string) to a standard bucket string.
     
@@ -2422,6 +2478,19 @@ EXCLUDED_HIGH_DENSITY_MEALS = {
     "black bean rice bowl",
 }
 
+# Hard exclusions from lunch/dinner (main meal) pool per policy.
+STRICT_EXCLUDED_MAIN_MEAL_NAMES = {
+    "chickpea curry with brown rice",
+    "red beans and rice",
+    "lentil stew with rice",
+    "black bean rice bowl",
+}
+
+# Allowed animal proteins for lunch/dinner policy.
+REQUIRED_MAIN_MEAL_ANIMAL_FAMILIES = {
+    "chicken", "turkey", "beef", "pork", "tuna", "sardines", "eggs"
+}
+
 # Expanded vegetable synonyms/keywords to better detect 'Vegetables' dislike
 VEGETABLE_KEYWORDS = {
     "broccoli","spinach","lettuce","carrot","zucchini","eggplant","tomato","bell pepper",
@@ -2443,6 +2512,14 @@ PROTEIN_FAMILY_PATTERNS = [
     ("shrimp", {"shrimp", "prawn", "prawns", "shellfish"}),
     ("other_fish", {"fish", "cod", "trout"}),
 ]
+
+ANIMAL_PROTEIN_FAMILIES = {
+    "chicken", "turkey", "beef", "pork", "tuna", "sardines", "eggs", "salmon", "shrimp", "other_fish"
+}
+SPECIAL_VEG_PAIRING_NAMES = {
+    "chickpea curry with brown rice",
+    "red beans and rice",
+}
 
 
 def _meal_text_blob(meal_like: Any) -> str:
@@ -2507,12 +2584,172 @@ def _meal_preparation_signature(meal_like: Any) -> str:
     return signature or name.lower()
 
 
+def _is_animal_protein_meal(meal_like: Any) -> bool:
+    return any(fam in ANIMAL_PROTEIN_FAMILIES for fam in _extract_protein_families(meal_like))
+
+
+def _ingredient_list_from_meal(meal_like: Any) -> List[str]:
+    if isinstance(meal_like, dict):
+        return [str(x or "") for x in (meal_like.get("ingredients") or [])]
+    return [str(x or "") for x in (getattr(meal_like, "ingredients", None) or [])]
+
+
+def _main_meal_has_required_animal_protein(meal_like: Any) -> bool:
+    """
+    Lunch/dinner policy:
+    - Main meals must include allowed animal protein.
+    - Eggs alone are not sufficient; eggs must be combined with another allowed animal protein.
+    - Animal protein must appear as a primary ingredient (first two ingredients).
+    """
+    name = _meal_name_lower(meal_like)
+    if name in STRICT_EXCLUDED_MAIN_MEAL_NAMES:
+        return False
+
+    meal_type = ""
+    if isinstance(meal_like, dict):
+        meal_type = str(meal_like.get("type", "") or "").strip().lower()
+    else:
+        meal_type = str(getattr(meal_like, "type", "") or "").strip().lower()
+
+    if meal_type != "main meal":
+        return True
+
+    ingredients = _ingredient_list_from_meal(meal_like)
+    if not ingredients:
+        return False
+
+    detected = set(_extract_protein_families(ingredients))
+    allowed_detected = detected.intersection(REQUIRED_MAIN_MEAL_ANIMAL_FAMILIES)
+    if not allowed_detected:
+        return False
+
+    # Disallow animal families outside the explicit allowed list.
+    disallowed_animals = [
+        fam for fam in detected
+        if fam in ANIMAL_PROTEIN_FAMILIES and fam not in REQUIRED_MAIN_MEAL_ANIMAL_FAMILIES
+    ]
+    if disallowed_animals:
+        return False
+
+    non_egg_allowed = REQUIRED_MAIN_MEAL_ANIMAL_FAMILIES - {"eggs"}
+    has_non_egg = bool(allowed_detected.intersection(non_egg_allowed))
+
+    # Eggs are only valid when combined with another animal protein.
+    if "eggs" in allowed_detected and not has_non_egg:
+        return False
+
+    # Primary-ingredient enforcement: first two ingredients must include non-egg animal protein,
+    # or egg + another non-egg protein somewhere in the meal.
+    primary_detected = set(_extract_protein_families(ingredients[:2]))
+    if primary_detected.intersection(non_egg_allowed):
+        return True
+    if "eggs" in primary_detected and has_non_egg:
+        return True
+    return False
+
+
+def _meal_name_lower(meal_like: Any) -> str:
+    if isinstance(meal_like, dict):
+        return str(meal_like.get("name", "") or "").strip().lower()
+    return str(getattr(meal_like, "name", "") or "").strip().lower()
+
+
+def _enforce_omnivore_daily_pairing_rules(menu_objs: List[Meal], state: SessionState) -> List[Meal]:
+    """
+    For Omnivore / No Red Meat:
+    - at most one vegetarian meal per day
+    - never place Chickpea Curry and Red Beans together on the same day
+    - if Chickpea Curry or Red Beans appears, that day must include >=1 animal-protein meal
+    """
+    diet = str(state.diet_preference or "").strip().lower()
+    if diet not in {"omnivore", "no red meat", "no_red_meat"}:
+        return menu_objs
+    if not menu_objs or not state.plan:
+        return menu_objs
+
+    plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
+    num_main, num_break = plan_map.get(state.plan, (1, 0))
+    meals_per_day = max(1, num_main + num_break)
+
+    available = filter_meals(state.dislikes, state.allergies, state.dietary_restrictions, state.diet_preference)
+    animal_candidates = [m for m in available if _is_animal_protein_meal(m) and _has_only_allowed_proteins(m, state.diet_preference)]
+    by_type: Dict[str, List[Meal]] = {}
+    for candidate in animal_candidates:
+        by_type.setdefault((candidate.type or "Main Meal").lower(), []).append(candidate)
+
+    adjusted = list(menu_objs)
+    days = max(1, len(adjusted) // meals_per_day)
+
+    for day_idx in range(days):
+        start = day_idx * meals_per_day
+        end = start + meals_per_day
+        day_slice = adjusted[start:end]
+        if not day_slice:
+            continue
+
+        def _day_used(exclude_idx: Optional[int] = None) -> set[str]:
+            used = set()
+            for i, m in enumerate(day_slice):
+                if exclude_idx is not None and i == exclude_idx:
+                    continue
+                used.add(_meal_name_lower(m))
+            return used
+
+        def _replace_with_animal(slot_idx: int) -> bool:
+            meal_type = str(getattr(day_slice[slot_idx], "type", "Main Meal") or "Main Meal").lower()
+            pools = [by_type.get(meal_type, []), animal_candidates]
+            used = _day_used(exclude_idx=slot_idx)
+            for pool in pools:
+                for cand in pool:
+                    cand_name = _meal_name_lower(cand)
+                    if not cand_name or cand_name in used:
+                        continue
+                    day_slice[slot_idx] = cand
+                    adjusted[start:end] = day_slice
+                    return True
+            return False
+
+        veg_indices = [i for i, m in enumerate(day_slice) if not _is_animal_protein_meal(m)]
+        special_indices = [
+            i for i, m in enumerate(day_slice)
+            if _meal_name_lower(m) in SPECIAL_VEG_PAIRING_NAMES
+        ]
+        has_animal = any(_is_animal_protein_meal(m) for m in day_slice)
+
+        # Never allow both special vegetarian meals on same day.
+        if len(special_indices) > 1:
+            # Keep first, replace others with animal meals.
+            for idx in special_indices[1:]:
+                _replace_with_animal(idx)
+
+        # Recompute after special replacements.
+        veg_indices = [i for i, m in enumerate(day_slice) if not _is_animal_protein_meal(m)]
+        special_indices = [i for i, m in enumerate(day_slice) if _meal_name_lower(m) in SPECIAL_VEG_PAIRING_NAMES]
+        has_animal = any(_is_animal_protein_meal(m) for m in day_slice)
+
+        # If special veg meal appears, enforce at least one animal-protein meal that day.
+        if special_indices and not has_animal:
+            _replace_with_animal(special_indices[0])
+
+        # Never assign two vegetarian meals on same day.
+        veg_indices = [i for i, m in enumerate(day_slice) if not _is_animal_protein_meal(m)]
+        if len(veg_indices) > 1:
+            for idx in veg_indices[1:]:
+                _replace_with_animal(idx)
+
+        adjusted[start:end] = day_slice
+
+    return adjusted
+
+
 def _enforce_unique_day_combinations(menu_objs: List[Meal], state: SessionState) -> List[Meal]:
     """
     Ensure no two days share the exact same meal-name combination.
     """
     if not menu_objs or not state.plan:
         return menu_objs
+
+    menu_objs = _enforce_omnivore_daily_pairing_rules(menu_objs, state)
 
     plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
     num_main, num_break = plan_map.get(state.plan, (1, 0))
@@ -2743,6 +2980,10 @@ def filter_meals(dislikes: List[str], allergies: List[str], dietary_restrictions
     for m in MEALS_DATA:
         meal_name = str(m.get("name", "") or "").strip().lower()
         if meal_name in EXCLUDED_HIGH_DENSITY_MEALS:
+            continue
+        if meal_name in STRICT_EXCLUDED_MAIN_MEAL_NAMES:
+            continue
+        if not _main_meal_has_required_animal_protein(m):
             continue
         ings = [i.lower() for i in m.get("ingredients", [])]
         # diet compatibility first
@@ -3756,6 +3997,21 @@ async def next_step(request: Request):
                 state.activity_intensity = str(answer.get("intensity"))
             elif "activity_intensity" in answer:
                 state.activity_intensity = str(answer.get("activity_intensity"))
+
+            body_stats_validation = validate_body_stats_input(
+                weight=state.weight,
+                weight_unit=state.weight_unit,
+                height=state.height,
+                height_unit=state.height_unit,
+                age=state.age,
+            )
+            if not body_stats_validation["valid"]:
+                state.current_step = "personal_info"
+                sessions[session_id] = state.model_dump()
+                response = get_form_fields("personal_info", state)
+                response["question"] = body_stats_validation["warning"]
+                response["warning"] = body_stats_validation["warning"]
+                return response
                 
             # Go directly to duration (no restrictions step anymore)
             step_to_render_name = STEPS["personal_info"]
@@ -3856,6 +4112,21 @@ async def next_step(request: Request):
                     state.activity_duration_bucket = str(answer.get("avg_session_duration"))
                 if answer.get("intensity"):
                     state.activity_intensity = str(answer.get("intensity"))
+
+                body_stats_validation = validate_body_stats_input(
+                    weight=state.weight,
+                    weight_unit=state.weight_unit,
+                    height=state.height,
+                    height_unit=state.height_unit,
+                    age=state.age,
+                )
+                if not body_stats_validation["valid"]:
+                    state.current_step = "personal_info"
+                    sessions[session_id] = state.model_dump()
+                    response = get_form_fields("personal_info", state)
+                    response["question"] = body_stats_validation["warning"]
+                    response["warning"] = body_stats_validation["warning"]
+                    return response
 
                 # Si el usuario seleccionó un template, configúralo y calcula el target
                 if "template_id" in answer:

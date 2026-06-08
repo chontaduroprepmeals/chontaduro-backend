@@ -6,7 +6,13 @@ Verifies that:
 - Graceful fallback when not enough unique meals exist
 """
 import pytest
-from main import generate_menu, SessionState, filter_meals
+from main import (
+    SPECIAL_VEG_PAIRING_NAMES,
+    _is_animal_protein_meal,
+    generate_menu,
+    SessionState,
+    filter_meals,
+)
 
 
 def _make_state(plan: int, days: int) -> SessionState:
@@ -99,6 +105,38 @@ class TestMealPoolExclusions:
         assert "black bean rice bowl" not in names
 
 
+class TestStrictMainMealAnimalProteinPolicy:
+    """Lunch/dinner (main meal) must always have allowed animal protein."""
+
+    def test_main_meals_all_have_allowed_animal_protein(self):
+        meals = filter_meals(dislikes=[], allergies=[], dietary_restrictions=[], diet=None)
+        mains = [m for m in meals if m.type.lower() == "main meal"]
+
+        disallowed_names = {
+            "chickpea curry with brown rice",
+            "red beans and rice",
+            "lentil stew with rice",
+            "black bean rice bowl",
+            "egg fried rice with mixed vegetables",
+            "egg and potato hash",
+            "lentil and vegetable soup with bread",
+            "black bean and sweet plantain bowl",
+            "pasta with white beans and spinach",
+            "red bean and rice burrito",
+        }
+
+        main_names = {m.name.strip().lower() for m in mains}
+        assert not (main_names.intersection(disallowed_names)), (
+            f"Found non-compliant main meals: {sorted(main_names.intersection(disallowed_names))}"
+        )
+
+    def test_breakfast_pool_stays_flexible(self):
+        meals = filter_meals(dislikes=[], allergies=[], dietary_restrictions=[], diet=None)
+        breakfasts = [m.name.strip().lower() for m in meals if m.type.lower() == "breakfast"]
+        assert "oatmeal with banana and peanut butter" in breakfasts
+        assert "greek yogurt with apple and granola" in breakfasts
+
+
 class TestEdgeCases:
     """Edge cases: missing data, 0 days, etc."""
 
@@ -117,3 +155,50 @@ class TestEdgeCases:
         state = _make_state(plan=2, days=3)
         menu = generate_menu(state, protein_per_meal=35, calories_per_meal=600)
         assert len(menu) == 6
+
+
+class TestOmnivoreDailyPairingRules:
+    """Omnivore and No Red Meat plans must include animal-protein pairing constraints."""
+
+    @pytest.mark.parametrize("diet", ["omnivore", "no red meat"])
+    def test_no_two_vegetarian_meals_per_day(self, diet):
+        state = _make_state(plan=4, days=7)
+        state.diet_preference = diet
+
+        menu = generate_menu(state, protein_per_meal=35, calories_per_meal=600, variety_window=3)
+        meals_per_day = 3
+
+        for day in range(state.days):
+            day_slice = menu[day * meals_per_day : (day + 1) * meals_per_day]
+            vegetarian_count = sum(1 for m in day_slice if not _is_animal_protein_meal(m))
+            assert vegetarian_count <= 1, (
+                f"Day {day + 1} has too many vegetarian meals for diet={diet}: "
+                f"{[m.name for m in day_slice]}"
+            )
+
+    @pytest.mark.parametrize("diet", ["omnivore", "no red meat"])
+    def test_special_legume_meals_not_together_and_paired_with_animal(self, diet):
+        state = _make_state(plan=4, days=7)
+        state.diet_preference = diet
+
+        menu = generate_menu(state, protein_per_meal=35, calories_per_meal=600, variety_window=3)
+        meals_per_day = 3
+
+        for day in range(state.days):
+            day_slice = menu[day * meals_per_day : (day + 1) * meals_per_day]
+            day_names = {m.name.strip().lower() for m in day_slice}
+            day_has_special = any(name in SPECIAL_VEG_PAIRING_NAMES for name in day_names)
+            day_has_animal = any(_is_animal_protein_meal(m) for m in day_slice)
+
+            # Never include both special vegetarian meals in the same day.
+            assert not (
+                "chickpea curry with brown rice" in day_names
+                and "red beans and rice" in day_names
+            ), f"Day {day + 1} contains both special meals: {[m.name for m in day_slice]}"
+
+            # If one of these appears, ensure at least one animal-protein meal is present.
+            if day_has_special:
+                assert day_has_animal, (
+                    f"Day {day + 1} has special vegetarian meal without animal pairing: "
+                    f"{[m.name for m in day_slice]}"
+                )
