@@ -9,10 +9,10 @@
       "salt"
     ],
     "serving_size_g": 250,
-    "protein_g": 35,
-    "carbs_g": 30,
-    "fat_g": 14,
-    "calories": 386,
+    "protein_g": 22,
+    "carbs_g": 27,
+    "fat_g": 26,
+    "calories": 426,
     "price": 11.0,
     "tags": [
       "high protein",
@@ -30,10 +30,10 @@
       "regular milk"
     ],
     "serving_size_g": 350,
-    "protein_g": 35,
-    "carbs_g": 52,
-    "fat_g": 10,
-    "calories": 438,
+    "protein_g": 8,
+    "carbs_g": 46,
+    "fat_g": 15,
+    "calories": 350,
     "price": 11.0,
     "tags": [
       "vegetarian",
@@ -51,10 +51,10 @@
       "honey"
     ],
     "serving_size_g": 300,
-    "protein_g": 35,
-    "carbs_g": 45,
-    "fat_g": 5,
-    "calories": 365,
+    "protein_g": 19,
+    "carbs_g": 69,
+    "fat_g": 1,
+    "calories": 350,
     "price": 11.0,
     "tags": [
       "vegetarian",
@@ -72,10 +72,10 @@
       "olive oil"
     ],
     "serving_size_g": 280,
-    "protein_g": 35,
-    "carbs_g": 35,
-    "fat_g": 16,
-    "calories": 424,
+    "protein_g": 23,
+    "carbs_g": 40,
+    "fat_g": 28,
+    "calories": 500,
     "price": 11.0,
     "tags": [
       "high protein",
@@ -93,10 +93,10 @@
       "fresh cheese"
     ],
     "serving_size_g": 300,
-    "protein_g": 35,
-    "carbs_g": 40,
-    "fat_g": 12,
-    "calories": 408,
+    "protein_g": 31,
+    "carbs_g": 52,
+    "fat_g": 19,
+    "calories": 500,
     "price": 11.0,
     "tags": [
       "high protein",
@@ -113,10 +113,10 @@
       "banana"
     ],
     "serving_size_g": 350,
-    "protein_g": 35,
-    "carbs_g": 35,
+    "protein_g": 16,
+    "carbs_g": 64,
     "fat_g": 4,
-    "calories": 316,
+    "calories": 350,
     "price": 11.0,
     "tags": [
       "high protein",
@@ -133,10 +133,10 @@
       "banana"
     ],
     "serving_size_g": 300,
-    "protein_g": 35,
-    "carbs_g": 55,
-    "fat_g": 5,
-    "calories": 405,
+    "protein_g": 7,
+    "carbs_g": 77,
+    "fat_g": 8,
+    "calories": 407,
     "price": 11.0,
     "tags": [
       "budget friendly"
@@ -154,10 +154,10 @@
       "regular milk"
     ],
     "serving_size_g": 350,
-    "protein_g": 35,
-    "carbs_g": 48,
-    "fat_g": 8,
-    "calories": 404,
+    "protein_g": 40,
+    "carbs_g": 36,
+    "fat_g": 14,
+    "calories": 428,
     "price": 11.0,
     "tags": [
       "high protein"
@@ -176,9 +176,9 @@
     ],
     "serving_size_g": 450,
     "protein_g": 40,
-    "carbs_g": 48,
-    "fat_g": 10,
-    "calories": 442,
+    "carbs_g": 39,
+    "fat_g": 15,
+    "calories": 466,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -199,60 +199,12 @@
     ],
     "serving_size_g": 500,
     "protein_g": 35,
-    "carbs_g": 55,
-    "fat_g": 18,
-    "calories": 522,
+    "carbs_g": 40,
+    "fat_g": 32,
+    "calories": 600,
     "price": 15.0,
     "tags": [
       "high protein"
-    ],
-    "image_url": ""
-  },
-  {
-    "name": "Lentil Stew with Rice",
-    "type": "main meal",
-    "ingredients": [
-      "lentils",
-      "white rice",
-      "carrots",
-      "onion",
-      "celery",
-      "olive oil"
-    ],
-    "serving_size_g": 500,
-    "protein_g": 35,
-    "carbs_g": 68,
-    "fat_g": 8,
-    "calories": 484,
-    "price": 15.0,
-    "tags": [
-      "vegetarian",
-      "budget friendly",
-      "high fiber"
-    ],
-    "image_url": ""
-  },
-  {
-    "name": "Black Bean Rice Bowl",
-    "type": "main meal",
-    "ingredients": [
-      "black beans",
-      "white rice",
-      "red bell pepper",
-      "onion",
-      "corn",
-      "lime"
-    ],
-    "serving_size_g": 450,
-    "protein_g": 35,
-    "carbs_g": 75,
-    "fat_g": 5,
-    "calories": 485,
-    "price": 15.0,
-    "tags": [
-      "vegetarian",
-      "budget friendly",
-      "high fiber"
     ],
     "image_url": ""
   },
@@ -267,10 +219,10 @@
       "mixed frozen vegetables"
     ],
     "serving_size_g": 480,
-    "protein_g": 35,
-    "carbs_g": 45,
-    "fat_g": 14,
-    "calories": 446,
+    "protein_g": 37,
+    "carbs_g": 40,
+    "fat_g": 32,
+    "calories": 600,
     "price": 15.0,
     "tags": [
       "high protein"
@@ -289,10 +241,10 @@
       "olive oil"
     ],
     "serving_size_g": 400,
-    "protein_g": 35,
-    "carbs_g": 48,
-    "fat_g": 12,
-    "calories": 440,
+    "protein_g": 40,
+    "carbs_g": 58,
+    "fat_g": 16,
+    "calories": 536,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -302,7 +254,7 @@
   },
   {
     "name": "Egg Fried Rice with Mixed Vegetables",
-    "type": "main meal",
+    "type": "side",
     "ingredients": [
       "white rice",
       "eggs",
@@ -312,10 +264,10 @@
       "olive oil"
     ],
     "serving_size_g": 450,
-    "protein_g": 35,
-    "carbs_g": 62,
-    "fat_g": 14,
-    "calories": 514,
+    "protein_g": 21,
+    "carbs_g": 49,
+    "fat_g": 22,
+    "calories": 485,
     "price": 15.0,
     "tags": [
       "budget friendly",
@@ -333,39 +285,14 @@
       "onion",
       "bell pepper"
     ],
-    "serving_size_g": 500,
-    "protein_g": 35,
-    "carbs_g": 70,
-    "fat_g": 10,
-    "calories": 510,
+    "serving_size_g": 450,
+    "protein_g": 37,
+    "carbs_g": 65,
+    "fat_g": 15,
+    "calories": 533,
     "price": 15.0,
     "tags": [
       "high protein"
-    ],
-    "image_url": ""
-  },
-  {
-    "name": "Chickpea Curry with Brown Rice",
-    "type": "main meal",
-    "ingredients": [
-      "chickpeas",
-      "brown rice",
-      "tomato",
-      "onion",
-      "spinach",
-      "olive oil",
-      "spices"
-    ],
-    "serving_size_g": 480,
-    "protein_g": 35,
-    "carbs_g": 72,
-    "fat_g": 10,
-    "calories": 518,
-    "price": 15.0,
-    "tags": [
-      "vegetarian",
-      "budget friendly",
-      "high fiber"
     ],
     "image_url": ""
   },
@@ -381,37 +308,13 @@
     ],
     "serving_size_g": 480,
     "protein_g": 40,
-    "carbs_g": 42,
-    "fat_g": 12,
-    "calories": 436,
+    "carbs_g": 33,
+    "fat_g": 15,
+    "calories": 435,
     "price": 15.0,
     "tags": [
       "high protein",
       "budget friendly"
-    ],
-    "image_url": ""
-  },
-  {
-    "name": "Red Beans and Rice",
-    "type": "main meal",
-    "ingredients": [
-      "red beans",
-      "white rice",
-      "onion",
-      "bell pepper",
-      "celery",
-      "olive oil"
-    ],
-    "serving_size_g": 450,
-    "protein_g": 35,
-    "carbs_g": 70,
-    "fat_g": 6,
-    "calories": 474,
-    "price": 15.0,
-    "tags": [
-      "vegetarian",
-      "budget friendly",
-      "high fiber"
     ],
     "image_url": ""
   },
@@ -427,10 +330,10 @@
       "olive oil"
     ],
     "serving_size_g": 480,
-    "protein_g": 36,
-    "carbs_g": 52,
-    "fat_g": 12,
-    "calories": 460,
+    "protein_g": 37,
+    "carbs_g": 19,
+    "fat_g": 36,
+    "calories": 553,
     "price": 15.0,
     "tags": [
       "high protein"
@@ -442,16 +345,17 @@
     "type": "main meal",
     "ingredients": [
       "whole chicken",
+      "white rice",
       "cauliflower",
       "olive oil",
       "garlic",
       "lemon"
     ],
-    "serving_size_g": 450,
-    "protein_g": 35,
-    "carbs_g": 12,
-    "fat_g": 20,
-    "calories": 368,
+    "serving_size_g": 500,
+    "protein_g": 40,
+    "carbs_g": 50,
+    "fat_g": 18,
+    "calories": 524,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -471,10 +375,10 @@
       "olive oil"
     ],
     "serving_size_g": 500,
-    "protein_g": 35,
-    "carbs_g": 58,
-    "fat_g": 14,
-    "calories": 498,
+    "protein_g": 40,
+    "carbs_g": 46,
+    "fat_g": 25,
+    "calories": 574,
     "price": 15.0,
     "tags": [
       "high protein"
@@ -493,10 +397,10 @@
       "lemon"
     ],
     "serving_size_g": 420,
-    "protein_g": 35,
-    "carbs_g": 48,
-    "fat_g": 15,
-    "calories": 467,
+    "protein_g": 40,
+    "carbs_g": 46,
+    "fat_g": 27,
+    "calories": 600,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -517,38 +421,14 @@
       "olive oil"
     ],
     "serving_size_g": 480,
-    "protein_g": 38,
-    "carbs_g": 55,
-    "fat_g": 10,
-    "calories": 462,
+    "protein_g": 40,
+    "carbs_g": 47,
+    "fat_g": 15,
+    "calories": 497,
     "price": 15.0,
     "tags": [
       "high protein",
       "budget friendly"
-    ],
-    "image_url": ""
-  },
-  {
-    "name": "Lentil and Vegetable Soup with Bread",
-    "type": "main meal",
-    "ingredients": [
-      "lentils",
-      "carrots",
-      "celery",
-      "onion",
-      "tomato",
-      "whole wheat bread"
-    ],
-    "serving_size_g": 500,
-    "protein_g": 35,
-    "carbs_g": 62,
-    "fat_g": 6,
-    "calories": 442,
-    "price": 15.0,
-    "tags": [
-      "vegetarian",
-      "budget friendly",
-      "high fiber"
     ],
     "image_url": ""
   },
@@ -564,10 +444,10 @@
       "fresh cheese"
     ],
     "serving_size_g": 400,
-    "protein_g": 35,
-    "carbs_g": 42,
-    "fat_g": 16,
-    "calories": 452,
+    "protein_g": 40,
+    "carbs_g": 37,
+    "fat_g": 32,
+    "calories": 600,
     "price": 15.0,
     "tags": [
       "high protein"
@@ -585,10 +465,10 @@
       "olive oil"
     ],
     "serving_size_g": 450,
-    "protein_g": 40,
-    "carbs_g": 45,
-    "fat_g": 11,
-    "calories": 439,
+    "protein_g": 33,
+    "carbs_g": 65,
+    "fat_g": 23,
+    "calories": 600,
     "price": 15.0,
     "tags": [
       "high protein"
@@ -597,7 +477,7 @@
   },
   {
     "name": "Egg and Potato Hash",
-    "type": "main meal",
+    "type": "side",
     "ingredients": [
       "eggs",
       "white potatoes",
@@ -606,10 +486,10 @@
       "olive oil"
     ],
     "serving_size_g": 420,
-    "protein_g": 35,
-    "carbs_g": 45,
-    "fat_g": 18,
-    "calories": 482,
+    "protein_g": 18,
+    "carbs_g": 33,
+    "fat_g": 22,
+    "calories": 401,
     "price": 15.0,
     "tags": [
       "vegetarian",
@@ -629,35 +509,13 @@
       "olive oil"
     ],
     "serving_size_g": 400,
-    "protein_g": 35,
-    "carbs_g": 35,
-    "fat_g": 12,
-    "calories": 388,
+    "protein_g": 40,
+    "carbs_g": 32,
+    "fat_g": 16,
+    "calories": 443,
     "price": 15.0,
     "tags": [
       "high protein",
-      "budget friendly"
-    ],
-    "image_url": ""
-  },
-  {
-    "name": "Black Bean and Sweet Plantain Bowl",
-    "type": "main meal",
-    "ingredients": [
-      "black beans",
-      "ripe plantain",
-      "white rice",
-      "onion",
-      "avocado"
-    ],
-    "serving_size_g": 480,
-    "protein_g": 35,
-    "carbs_g": 78,
-    "fat_g": 12,
-    "calories": 560,
-    "price": 15.0,
-    "tags": [
-      "vegetarian",
       "budget friendly"
     ],
     "image_url": ""
@@ -674,36 +532,13 @@
       "mozzarella cheese"
     ],
     "serving_size_g": 450,
-    "protein_g": 35,
+    "protein_g": 39,
     "carbs_g": 42,
-    "fat_g": 14,
-    "calories": 434,
+    "fat_g": 29,
+    "calories": 600,
     "price": 15.0,
     "tags": [
       "high protein"
-    ],
-    "image_url": ""
-  },
-  {
-    "name": "Pasta with White Beans and Spinach",
-    "type": "main meal",
-    "ingredients": [
-      "white pasta",
-      "chickpeas",
-      "spinach",
-      "garlic",
-      "olive oil",
-      "lemon"
-    ],
-    "serving_size_g": 450,
-    "protein_g": 35,
-    "carbs_g": 68,
-    "fat_g": 10,
-    "calories": 502,
-    "price": 15.0,
-    "tags": [
-      "vegetarian",
-      "budget friendly"
     ],
     "image_url": ""
   },
@@ -720,8 +555,8 @@
     "serving_size_g": 450,
     "protein_g": 40,
     "carbs_g": 18,
-    "fat_g": 12,
-    "calories": 340,
+    "fat_g": 17,
+    "calories": 384,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -741,10 +576,10 @@
       "olive oil"
     ],
     "serving_size_g": 450,
-    "protein_g": 35,
-    "carbs_g": 22,
-    "fat_g": 18,
-    "calories": 390,
+    "protein_g": 34,
+    "carbs_g": 19,
+    "fat_g": 36,
+    "calories": 542,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -764,10 +599,10 @@
       "olive oil"
     ],
     "serving_size_g": 450,
-    "protein_g": 35,
-    "carbs_g": 58,
-    "fat_g": 8,
-    "calories": 444,
+    "protein_g": 21,
+    "carbs_g": 52,
+    "fat_g": 12,
+    "calories": 400,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -786,9 +621,9 @@
     ],
     "serving_size_g": 480,
     "protein_g": 40,
-    "carbs_g": 48,
-    "fat_g": 10,
-    "calories": 442,
+    "carbs_g": 31,
+    "fat_g": 15,
+    "calories": 429,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -809,10 +644,10 @@
       "lemon"
     ],
     "serving_size_g": 400,
-    "protein_g": 35,
-    "carbs_g": 38,
-    "fat_g": 14,
-    "calories": 418,
+    "protein_g": 40,
+    "carbs_g": 43,
+    "fat_g": 17,
+    "calories": 485,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -832,10 +667,10 @@
       "spices"
     ],
     "serving_size_g": 480,
-    "protein_g": 35,
-    "carbs_g": 45,
-    "fat_g": 10,
-    "calories": 410,
+    "protein_g": 40,
+    "carbs_g": 36,
+    "fat_g": 13,
+    "calories": 417,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -853,11 +688,11 @@
       "olive oil",
       "garlic"
     ],
-    "serving_size_g": 480,
-    "protein_g": 36,
-    "carbs_g": 52,
-    "fat_g": 16,
-    "calories": 496,
+    "serving_size_g": 445,
+    "protein_g": 40,
+    "carbs_g": 45,
+    "fat_g": 18,
+    "calories": 502,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -877,9 +712,9 @@
     ],
     "serving_size_g": 450,
     "protein_g": 40,
-    "carbs_g": 35,
-    "fat_g": 8,
-    "calories": 372,
+    "carbs_g": 46,
+    "fat_g": 5,
+    "calories": 389,
     "price": 15.0,
     "tags": [
       "high protein",
@@ -888,25 +723,68 @@
     "image_url": ""
   },
   {
-    "name": "Red Bean and Rice Burrito",
+    "name": "Pork Tenderloin with Rice and Green Beans",
     "type": "main meal",
     "ingredients": [
-      "red beans",
+      "pork tenderloin",
       "white rice",
-      "flour tortilla",
-      "fresh cheese",
-      "salsa"
+      "green beans",
+      "garlic",
+      "olive oil"
     ],
-    "serving_size_g": 450,
-    "protein_g": 35,
-    "carbs_g": 72,
-    "fat_g": 10,
-    "calories": 518,
+    "serving_size_g": 435,
     "price": 15.0,
     "tags": [
-      "vegetarian",
+      "high protein"
+    ],
+    "image_url": "",
+    "protein_g": 40,
+    "carbs_g": 34,
+    "fat_g": 14,
+    "calories": 431
+  },
+  {
+    "name": "Chicken Soup with Rice and Vegetables",
+    "type": "main meal",
+    "ingredients": [
+      "chicken breast",
+      "white rice",
+      "carrots",
+      "celery",
+      "onion"
+    ],
+    "serving_size_g": 550,
+    "price": 15.0,
+    "tags": [
+      "high protein",
       "budget friendly"
     ],
-    "image_url": ""
+    "image_url": "",
+    "protein_g": 40,
+    "carbs_g": 55,
+    "fat_g": 5,
+    "calories": 440
+  },
+  {
+    "name": "Sardine Pasta with Tomatoes",
+    "type": "main meal",
+    "ingredients": [
+      "canned sardines",
+      "white pasta",
+      "cherry tomatoes",
+      "garlic",
+      "olive oil"
+    ],
+    "serving_size_g": 365,
+    "price": 15.0,
+    "tags": [
+      "high protein",
+      "omega-3"
+    ],
+    "image_url": "",
+    "protein_g": 40,
+    "carbs_g": 39,
+    "fat_g": 27,
+    "calories": 565
   }
 ]
