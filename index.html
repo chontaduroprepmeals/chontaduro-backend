@@ -226,7 +226,7 @@ html.in-iframe .app-card {
     <div id="zipModal" role="dialog" aria-modal="true" aria-labelledby="zipModalTitle">
       <h2 id="zipModalTitle">What is your postal code?</h2>
       <p>To verify if we deliver to your area, please enter your postal code.</p>
-      <input id="zipInput" type="text" inputmode="numeric" maxlength="10" placeholder="Ex: 90210" aria-label="Zip code">
+      <input id="zipInput" type="text" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" placeholder="Ex: 90210" aria-label="Zip code">
       <div id="zipMessage"></div>
 
       <div class="actions">
@@ -2461,7 +2461,7 @@ html.in-iframe .app-card {
         const tryHandler = async () => {
           zipMessage.textContent = '';
           const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
-          if (!zip || zip.length < 3) { zipMessage.textContent = 'Please enter a valid postal code.'; return; }
+          if (!/^\d{5}$/.test(zip)) { zipMessage.textContent = 'Please enter a valid 5-digit zip code'; return; }
           zipTryBtn.disabled = true; zipTryBtn.textContent = 'Verifying...';
           const resp = await callCheckZip(zip);
           zipTryBtn.disabled = false; zipTryBtn.textContent = 'Verify';
@@ -2484,7 +2484,7 @@ html.in-iframe .app-card {
 
         const continueHandler = () => {
           const zip = (zipInput && zipInput.value && zipInput.value.trim()) || '';
-          if (!zip) { zipMessage.textContent = 'Enter a postal code to continue.'; return; }
+          if (!/^\d{5}$/.test(zip)) { zipMessage.textContent = 'Please enter a valid 5-digit zip code'; return; }
           localStorage.setItem('user_zip', zip);
           checkoutContext.deliveryOption = 'pickup';
           zipMessage.textContent = `You continued with ${zip}. Note: pickup only.`;
