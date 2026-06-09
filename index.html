@@ -491,18 +491,257 @@ html.in-iframe .app-card {
       }
     }
 
-    window.editFromReview = function(section) {
-      const hops = {
-        plan: 5,
-        diet: 6,
-        body: 2,
-        activity: 2,
-        allergies: 3,
+    const REVIEW_PLAN_OPTIONS = [
+      'Plan 1: 1 main meal per day',
+      'Plan 2: 2 main meals per day',
+      'Plan 3: 1 main meal + 1 breakfast',
+      'Plan 4: 2 main meals + 1 breakfast (full day)'
+    ];
+    const REVIEW_DIET_OPTIONS = ['Omnivore', 'No Red Meat'];
+    const REVIEW_GOAL_OPTIONS = [
+      'Lose Fat',
+      'Gain Muscle',
+      'Maintain Shape',
+      'Body Recomposition (Lose Fat & Gain Muscle)'
+    ];
+    const REVIEW_DURATION_OPTIONS = ['none', '<30', '30-60', '60-120', '120+'];
+    const REVIEW_INTENSITY_OPTIONS = ['none', 'low', 'moderate', 'high'];
+    const REVIEW_ALLERGY_OPTIONS = ['dairy', 'nuts', 'seafood', 'gluten', 'soy', 'eggs'];
+
+    window.reviewInlineState = {
+      activeSection: null,
+      question: '',
+      fields: []
+    };
+
+    function ensureUserSessionAnswers() {
+      if (!window.userSession) {
+        window.userSession = { session_id: sessionId, current_step: currentStep, answers: {} };
+      }
+      if (!window.userSession.answers) {
+        window.userSession.answers = {};
+      }
+      return window.userSession.answers;
+    }
+
+    function parsePlanNumber(value) {
+      const text = String(value || '').trim();
+      const match = text.match(/Plan\s*(\d+)/i);
+      if (match) return Number(match[1]);
+      const onlyNum = Number(text);
+      return Number.isFinite(onlyNum) && onlyNum > 0 ? onlyNum : null;
+    }
+
+    function parseListFromAny(value) {
+      if (Array.isArray(value)) return value.map(v => String(v).trim()).filter(Boolean);
+      const text = String(value || '').trim();
+      if (!text) return [];
+      return text.split(',').map(v => v.trim()).filter(Boolean);
+    }
+
+    function buildAllergiesSummary(selectedAllergies, allergyNote) {
+      const selected = (selectedAllergies || []).map(v => String(v).trim()).filter(Boolean);
+      const note = String(allergyNote || '').trim();
+      if (selected.length === 0 && !note) return 'None';
+      const joined = selected.join(', ');
+      return note ? (joined ? `${joined}. Note: ${note}` : `Note: ${note}`) : joined;
+    }
+
+    function getReviewMergedData(sd = {}) {
+      const saved = window.userSession?.answers || {};
+      const planValue = saved.pick_plan?.Plan || saved.pick_plan?.plan || sd.plan || sd.Plan || '';
+      const planNumber = parsePlanNumber(planValue) || parsePlanNumber(sd.plan_number) || null;
+      const planText = planNumber ? `Plan ${planNumber}` : (String(planValue || '').trim() || 'Not specified');
+      const daysValue = Number(saved.duration?.days || saved.duration?.Days || sd.days || window.selectedDays || 5);
+
+      const dietValue = saved.diet_preference?.Diet_Preference || saved.diet_preference?.diet_preference || sd.diet_preference || '';
+      const objectiveValue = saved.objective?.Objective || saved.objective?.objective || sd.objective || sd.Objective || window.selectedObjective || '';
+
+      const goalMap = {
+        'Lose Fat': { emoji: '🔥', label: 'Lose Fat' },
+        'Gain Muscle': { emoji: '💪', label: 'Gain Muscle' },
+        'Maintain Shape': { emoji: '⚖️', label: 'Maintain Shape' },
+        'Body Recomposition': { emoji: '✨', label: 'Body Recomposition' },
+        'Body Recomposition (Lose Fat & Gain Muscle)': { emoji: '✨', label: 'Body Recomposition' }
       };
-      navigateBackSteps(hops[section] || 1).catch((err) => {
-        console.error(err);
-        alert('Could not open edit step. Please try again.');
+      const goalInfo = goalMap[String(objectiveValue || '').trim()] || null;
+
+      const weightValue = saved.personal_info?.weight_value ?? sd.weight_value ?? '';
+      const weightUnit = saved.personal_info?.weight_unit ?? sd.weight_unit ?? 'kg';
+      const heightValue = saved.personal_info?.height_value ?? sd.height_value ?? '';
+      const heightUnit = saved.personal_info?.height_unit ?? sd.height_unit ?? 'cm';
+      const ageValue = saved.personal_info?.age ?? sd.age ?? '';
+      const sexValue = saved.personal_info?.sex ?? sd.sex ?? '';
+
+      const daysPerWeek = saved.personal_info?.days_per_week ?? saved.personal_info?.activity_days_bucket ?? sd.days_per_week ?? 0;
+      const avgDuration = saved.personal_info?.avg_session_duration ?? saved.personal_info?.activity_duration_bucket ?? sd.avg_session_duration ?? 'N/A';
+      const intensity = saved.personal_info?.intensity ?? saved.personal_info?.activity_intensity ?? sd.intensity ?? 'N/A';
+
+      const selectedAllergies = parseListFromAny(
+        saved.allergies_and_restrictions?.selected_allergies
+        ?? saved.allergies_and_restrictions?.['Selected Allergies']
+        ?? sd.selected_allergies
+      );
+      const allergyNote = saved.allergies_and_restrictions?.allergy_note
+        ?? saved.allergies_and_restrictions?.['Any other allergy or note?']
+        ?? sd.allergy_note
+        ?? '';
+      const allergiesText = saved.allergies_and_restrictions?.allergies_and_restrictions
+        ?? saved.allergies_and_restrictions?.Allergies_and_Restrictions
+        ?? sd.allergies_and_restrictions
+        ?? buildAllergiesSummary(selectedAllergies, allergyNote);
+
+      return {
+        planValue,
+        planNumber,
+        planText,
+        daysValue,
+        dietValue,
+        objectiveValue,
+        goalText: goalInfo ? goalInfo.label : (String(objectiveValue || '').trim() || 'Not specified'),
+        goalEmoji: goalInfo ? goalInfo.emoji : '🎯',
+        weightValue,
+        weightUnit,
+        heightValue,
+        heightUnit,
+        ageValue,
+        sexValue,
+        daysPerWeek,
+        avgDuration,
+        intensity,
+        selectedAllergies,
+        allergyNote,
+        allergiesText
+      };
+    }
+
+    window.editFromReview = function(section) {
+      if (!window.reviewInlineState) return;
+      window.reviewInlineState.activeSection = section;
+      renderReviewSection(window.reviewInlineState.question, window.reviewInlineState.fields);
+    };
+
+    window.cancelReviewInline = function() {
+      if (!window.reviewInlineState) return;
+      window.reviewInlineState.activeSection = null;
+      renderReviewSection(window.reviewInlineState.question, window.reviewInlineState.fields);
+    };
+
+    window.setReviewChoice = function(choiceGroup, value) {
+      const hidden = document.getElementById(`review-${choiceGroup}-input`);
+      if (hidden) hidden.value = value;
+
+      const buttons = document.querySelectorAll(`button[data-review-group="${choiceGroup}"]`);
+      buttons.forEach((btn) => {
+        const isSelected = btn.dataset.value === value;
+        btn.classList.toggle('bg-orange-500', isSelected);
+        btn.classList.toggle('text-white', isSelected);
+        btn.classList.toggle('border-orange-500', isSelected);
+        btn.classList.toggle('bg-white', !isSelected);
+        btn.classList.toggle('text-gray-700', !isSelected);
       });
+    };
+
+    window.saveReviewInline = function(section) {
+      const answers = ensureUserSessionAnswers();
+
+      if (section === 'plan') {
+        const planValue = document.getElementById('review-plan-select')?.value || '';
+        if (!planValue) {
+          alert('Please select a plan.');
+          return;
+        }
+        answers.pick_plan = {
+          ...(answers.pick_plan || {}),
+          Plan: planValue,
+          plan: planValue,
+          plan_number: parsePlanNumber(planValue)
+        };
+      }
+
+      if (section === 'diet') {
+        const dietValue = document.getElementById('review-diet-input')?.value || '';
+        if (!dietValue) {
+          alert('Please select a diet type.');
+          return;
+        }
+        answers.diet_preference = {
+          ...(answers.diet_preference || {}),
+          Diet_Preference: dietValue,
+          diet_preference: dietValue
+        };
+      }
+
+      if (section === 'goal') {
+        const goalValue = document.getElementById('review-goal-input')?.value || '';
+        if (!goalValue) {
+          alert('Please select a goal.');
+          return;
+        }
+        answers.objective = {
+          ...(answers.objective || {}),
+          Objective: goalValue,
+          objective: goalValue
+        };
+        window.selectedObjective = goalValue;
+      }
+
+      if (section === 'body') {
+        const weightValue = (document.getElementById('review-weight')?.value || '').trim();
+        const weightUnit = document.getElementById('review-weight-unit')?.value || 'kg';
+        const heightValue = (document.getElementById('review-height')?.value || '').trim();
+        const heightUnit = document.getElementById('review-height-unit')?.value || 'cm';
+        const ageValue = (document.getElementById('review-age')?.value || '').trim();
+        const sexValue = document.getElementById('review-sex')?.value || '';
+        if (!weightValue || !heightValue || !ageValue || !sexValue) {
+          alert('Please complete weight, height, age and sex.');
+          return;
+        }
+        answers.personal_info = {
+          ...(answers.personal_info || {}),
+          weight_value: weightValue,
+          weight_unit: weightUnit,
+          height_value: heightValue,
+          height_unit: heightUnit,
+          age: ageValue,
+          sex: sexValue
+        };
+      }
+
+      if (section === 'activity') {
+        const daysPerWeekRaw = document.getElementById('review-days-per-week')?.value || '0';
+        const daysPerWeek = Math.max(0, Math.min(7, Number(daysPerWeekRaw) || 0));
+        const avgDuration = document.getElementById('review-avg-duration')?.value || '';
+        const intensity = document.getElementById('review-intensity')?.value || '';
+        if (!avgDuration || !intensity) {
+          alert('Please select duration and intensity.');
+          return;
+        }
+        answers.personal_info = {
+          ...(answers.personal_info || {}),
+          days_per_week: daysPerWeek,
+          avg_session_duration: avgDuration,
+          intensity
+        };
+      }
+
+      if (section === 'allergies') {
+        const checked = Array.from(document.querySelectorAll('input[name="review-selected-allergies"]:checked')).map(el => el.value);
+        const note = (document.getElementById('review-allergy-note')?.value || '').trim();
+        const summary = buildAllergiesSummary(checked, note);
+        answers.allergies_and_restrictions = {
+          ...(answers.allergies_and_restrictions || {}),
+          selected_allergies: checked,
+          'Selected Allergies': checked,
+          allergy_note: note,
+          'Any other allergy or note?': note,
+          allergies_and_restrictions: summary,
+          Allergies_and_Restrictions: summary
+        };
+      }
+
+      window.reviewInlineState.activeSection = null;
+      renderReviewSection(window.reviewInlineState.question, window.reviewInlineState.fields);
     };
 
     /* === The rest of your JS (renderForm, renderMenu, zip modal handlers etc.)
@@ -1452,38 +1691,22 @@ html.in-iframe .app-card {
       currentStep = "review";
       if (window.userSession) window.userSession.current_step = "review";
 
-      // Get state data from fields
-      const stateField = fields.find(f => f.name === "state_data");
+      const stateField = (fields || []).find(f => f.name === "state_data");
       const sd = stateField ? stateField.value : {};
-      
-      // Format data for display
-      window.selectedDays = Number(sd.days || window.selectedDays || 5);
-      const planText = `Plan ${sd.plan_number || 'N/A'}`;
+      const reviewData = getReviewMergedData(sd);
+
+      window.selectedDays = Number(reviewData.daysValue || window.selectedDays || 5);
+      window.selectedObjective = reviewData.objectiveValue || window.selectedObjective;
+      window.reviewInlineState.question = question;
+      window.reviewInlineState.fields = fields;
+
+      const activeSection = window.reviewInlineState.activeSection;
       const daysText = `${window.selectedDays || 'N/A'} days/week`;
-      const dietText = sd.diet_preference || 'Not specified';
-      const objectiveRaw = String(sd.objective || sd.Objective || window.selectedObjective || '').trim();
-      const goalMap = {
-        'Lose Fat': { emoji: '🔥', label: 'Lose Fat' },
-        'Gain Muscle': { emoji: '💪', label: 'Gain Muscle' },
-        'Maintain Shape': { emoji: '⚖️', label: 'Maintain Shape' },
-        'Body Recomposition': { emoji: '✨', label: 'Body Recomposition' },
-        'Body Recomposition (Lose Fat & Gain Muscle)': { emoji: '✨', label: 'Body Recomposition' }
-      };
-      const goalInfo = goalMap[objectiveRaw] || null;
-      const goalText = goalInfo ? goalInfo.label : (objectiveRaw || 'Not specified');
-      const goalEmoji = goalInfo ? goalInfo.emoji : '🎯';
-      
-      const weightText = sd.weight_value ? `${sd.weight_value} ${sd.weight_unit || 'kg'}` : 'N/A';
-      const heightText = sd.height_value ? `${sd.height_value} ${sd.height_unit || 'cm'}` : 'N/A';
-      const ageText = sd.age || 'N/A';
-      
-      const exerciseDays = sd.days_per_week || 0;
-      const duration = sd.avg_session_duration || 'N/A';
-      const intensity = sd.intensity || 'N/A';
-      
-      const restrictions = sd.allergies_and_restrictions || 'None';
-      window.selectedObjective = sd.objective || sd.Objective || window.selectedObjective;
-      
+      const weightText = reviewData.weightValue ? `${reviewData.weightValue} ${reviewData.weightUnit || 'kg'}` : 'N/A';
+      const heightText = reviewData.heightValue ? `${reviewData.heightValue} ${reviewData.heightUnit || 'cm'}` : 'N/A';
+      const ageText = reviewData.ageValue || 'N/A';
+      const sexText = reviewData.sexValue ? String(reviewData.sexValue).charAt(0).toUpperCase() + String(reviewData.sexValue).slice(1) : 'N/A';
+
       let html = `<form id="f">
         <div class="space-y-6">
           <!-- Inspirational Header -->
@@ -1512,9 +1735,22 @@ html.in-iframe .app-card {
                 <button type="button" onclick="editFromReview('plan')" class="text-xs font-semibold text-orange-600 hover:text-orange-700 underline">Edit</button>
               </div>
               <div class="text-gray-700">
-                <div class="text-xl font-semibold text-blue-600">${planText}</div>
+                <div class="text-xl font-semibold text-blue-600">${reviewData.planText}</div>
                 <div class="text-sm text-gray-600">${daysText}</div>
               </div>
+              ${activeSection === 'plan' ? `
+                <div class="mt-4 border-t pt-3">
+                  <label class="block text-sm font-medium mb-2">Plan</label>
+                  <select id="review-plan-select" class="w-full p-2 border rounded-lg">
+                    <option value="">Select a plan</option>
+                    ${REVIEW_PLAN_OPTIONS.map(plan => `<option value="${plan}" ${reviewData.planValue === plan ? 'selected' : ''}>${plan}</option>`).join('')}
+                  </select>
+                  <div class="mt-3 flex gap-2 justify-end">
+                    <button type="button" onclick="cancelReviewInline()" class="px-3 py-2 border rounded-lg">Cancel</button>
+                    <button type="button" onclick="saveReviewInline('plan')" class="px-3 py-2 bg-orange-500 text-white rounded-lg">Save</button>
+                  </div>
+                </div>
+              ` : ''}
             </div>
             
             <!-- Diet Card -->
@@ -1527,19 +1763,50 @@ html.in-iframe .app-card {
                 <button type="button" onclick="editFromReview('diet')" class="text-xs font-semibold text-orange-600 hover:text-orange-700 underline">Edit</button>
               </div>
               <div class="text-gray-700">
-                <div class="text-xl font-semibold text-green-600">${dietText}</div>
+                <div class="text-xl font-semibold text-green-600">${reviewData.dietValue || 'Not specified'}</div>
               </div>
+              ${activeSection === 'diet' ? `
+                <div class="mt-4 border-t pt-3">
+                  <input type="hidden" id="review-diet-input" value="${reviewData.dietValue || ''}">
+                  <div class="flex flex-wrap gap-2">
+                    ${REVIEW_DIET_OPTIONS.map(opt => `
+                      <button type="button" data-review-group="diet" data-value="${opt}" onclick="setReviewChoice('diet', '${opt}')" class="px-3 py-2 border rounded-lg ${reviewData.dietValue === opt ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-700'}">${opt}</button>
+                    `).join('')}
+                  </div>
+                  <div class="mt-3 flex gap-2 justify-end">
+                    <button type="button" onclick="cancelReviewInline()" class="px-3 py-2 border rounded-lg">Cancel</button>
+                    <button type="button" onclick="saveReviewInline('diet')" class="px-3 py-2 bg-orange-500 text-white rounded-lg">Save</button>
+                  </div>
+                </div>
+              ` : ''}
             </div>
 
             <!-- Goal Card -->
             <div class="border-2 border-amber-200 rounded-xl p-4 bg-white shadow md:col-span-2">
-              <div class="flex items-center gap-2 mb-3">
-                <span class="text-2xl">${goalEmoji}</span>
-                <span class="font-bold text-lg text-gray-800">Goal</span>
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl">${reviewData.goalEmoji}</span>
+                  <span class="font-bold text-lg text-gray-800">Goal</span>
+                </div>
+                <button type="button" onclick="editFromReview('goal')" class="text-xs font-semibold text-orange-600 hover:text-orange-700 underline">Edit</button>
               </div>
               <div class="text-gray-700">
-                <div class="text-xl font-semibold text-amber-700">${goalText}</div>
+                <div class="text-xl font-semibold text-amber-700">${reviewData.goalText}</div>
               </div>
+              ${activeSection === 'goal' ? `
+                <div class="mt-4 border-t pt-3">
+                  <input type="hidden" id="review-goal-input" value="${reviewData.objectiveValue || ''}">
+                  <div class="flex flex-wrap gap-2">
+                    ${REVIEW_GOAL_OPTIONS.map(opt => `
+                      <button type="button" data-review-group="goal" data-value="${opt}" onclick="setReviewChoice('goal', '${opt}')" class="px-3 py-2 border rounded-lg ${reviewData.objectiveValue === opt ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-700'}">${opt}</button>
+                    `).join('')}
+                  </div>
+                  <div class="mt-3 flex gap-2 justify-end">
+                    <button type="button" onclick="cancelReviewInline()" class="px-3 py-2 border rounded-lg">Cancel</button>
+                    <button type="button" onclick="saveReviewInline('goal')" class="px-3 py-2 bg-orange-500 text-white rounded-lg">Save</button>
+                  </div>
+                </div>
+              ` : ''}
             </div>
             
             <!-- Body Stats Card -->
@@ -1555,7 +1822,36 @@ html.in-iframe .app-card {
                 <div><span class="text-sm text-gray-600">Weight:</span> <span class="font-semibold">${weightText}</span></div>
                 <div><span class="text-sm text-gray-600">Height:</span> <span class="font-semibold">${heightText}</span></div>
                 <div><span class="text-sm text-gray-600">Age:</span> <span class="font-semibold">${ageText}</span></div>
+                <div><span class="text-sm text-gray-600">Sex:</span> <span class="font-semibold">${sexText}</span></div>
               </div>
+              ${activeSection === 'body' ? `
+                <div class="mt-4 border-t pt-3 grid grid-cols-1 gap-3">
+                  <div class="grid grid-cols-2 gap-2">
+                    <input id="review-weight" type="number" step="0.1" min="1" class="p-2 border rounded-lg" placeholder="Weight" value="${reviewData.weightValue || ''}">
+                    <select id="review-weight-unit" class="p-2 border rounded-lg">
+                      <option value="kg" ${reviewData.weightUnit === 'kg' ? 'selected' : ''}>kg</option>
+                      <option value="lbs" ${reviewData.weightUnit === 'lbs' ? 'selected' : ''}>lbs</option>
+                    </select>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <input id="review-height" type="number" step="0.1" min="1" class="p-2 border rounded-lg" placeholder="Height" value="${reviewData.heightValue || ''}">
+                    <select id="review-height-unit" class="p-2 border rounded-lg">
+                      <option value="cm" ${reviewData.heightUnit === 'cm' ? 'selected' : ''}>cm</option>
+                      <option value="in" ${reviewData.heightUnit === 'in' ? 'selected' : ''}>in</option>
+                    </select>
+                  </div>
+                  <input id="review-age" type="number" min="1" class="p-2 border rounded-lg" placeholder="Age" value="${reviewData.ageValue || ''}">
+                  <select id="review-sex" class="p-2 border rounded-lg">
+                    <option value="">Select sex</option>
+                    <option value="male" ${String(reviewData.sexValue).toLowerCase() === 'male' ? 'selected' : ''}>Male</option>
+                    <option value="female" ${String(reviewData.sexValue).toLowerCase() === 'female' ? 'selected' : ''}>Female</option>
+                  </select>
+                  <div class="mt-1 flex gap-2 justify-end">
+                    <button type="button" onclick="cancelReviewInline()" class="px-3 py-2 border rounded-lg">Cancel</button>
+                    <button type="button" onclick="saveReviewInline('body')" class="px-3 py-2 bg-orange-500 text-white rounded-lg">Save</button>
+                  </div>
+                </div>
+              ` : ''}
             </div>
             
             <!-- Activity Card -->
@@ -1568,10 +1864,28 @@ html.in-iframe .app-card {
                 <button type="button" onclick="editFromReview('activity')" class="text-xs font-semibold text-orange-600 hover:text-orange-700 underline">Edit</button>
               </div>
               <div class="text-gray-700 space-y-1">
-                <div><span class="text-sm text-gray-600">Frequency:</span> <span class="font-semibold">${exerciseDays} days/week</span></div>
-                <div><span class="text-sm text-gray-600">Duration:</span> <span class="font-semibold">${duration} min</span></div>
-                <div><span class="text-sm text-gray-600">Intensity:</span> <span class="font-semibold">${intensity}</span></div>
+                <div><span class="text-sm text-gray-600">Frequency:</span> <span class="font-semibold">${reviewData.daysPerWeek} days/week</span></div>
+                <div><span class="text-sm text-gray-600">Duration:</span> <span class="font-semibold">${reviewData.avgDuration}</span></div>
+                <div><span class="text-sm text-gray-600">Intensity:</span> <span class="font-semibold">${reviewData.intensity}</span></div>
               </div>
+              ${activeSection === 'activity' ? `
+                <div class="mt-4 border-t pt-3 grid grid-cols-1 gap-3">
+                  <label class="text-sm font-medium">Exercise days per week</label>
+                  <input id="review-days-per-week" type="number" min="0" max="7" class="p-2 border rounded-lg" value="${reviewData.daysPerWeek}">
+                  <label class="text-sm font-medium">Average session duration</label>
+                  <select id="review-avg-duration" class="p-2 border rounded-lg">
+                    ${REVIEW_DURATION_OPTIONS.map(opt => `<option value="${opt}" ${String(reviewData.avgDuration) === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                  </select>
+                  <label class="text-sm font-medium">Intensity</label>
+                  <select id="review-intensity" class="p-2 border rounded-lg">
+                    ${REVIEW_INTENSITY_OPTIONS.map(opt => `<option value="${opt}" ${String(reviewData.intensity) === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                  </select>
+                  <div class="mt-1 flex gap-2 justify-end">
+                    <button type="button" onclick="cancelReviewInline()" class="px-3 py-2 border rounded-lg">Cancel</button>
+                    <button type="button" onclick="saveReviewInline('activity')" class="px-3 py-2 bg-orange-500 text-white rounded-lg">Save</button>
+                  </div>
+                </div>
+              ` : ''}
             </div>
           </div>
           
@@ -1585,10 +1899,26 @@ html.in-iframe .app-card {
               <button type="button" onclick="editFromReview('allergies')" class="text-xs font-semibold text-orange-600 hover:text-orange-700 underline">Edit</button>
             </div>
             <div class="text-gray-700">
-              ${restrictions === 'None' || !restrictions || restrictions === '' 
+              ${reviewData.allergiesText === 'None' || !reviewData.allergiesText || reviewData.allergiesText === '' 
                 ? '<span class="text-green-600 font-semibold">None - Ready to enjoy all meals! 🎉</span>' 
-                : `<span class="font-semibold text-orange-600">${restrictions}</span>`}
+                : `<span class="font-semibold text-orange-600">${reviewData.allergiesText}</span>`}
             </div>
+            ${activeSection === 'allergies' ? `
+              <div class="mt-4 border-t pt-3">
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  ${REVIEW_ALLERGY_OPTIONS.map(opt => {
+                    const checked = reviewData.selectedAllergies.includes(opt) ? 'checked' : '';
+                    return `<label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="review-selected-allergies" value="${opt}" ${checked}> ${opt}</label>`;
+                  }).join('')}
+                </div>
+                <label class="block text-sm font-medium mt-3 mb-1">Any other allergy or note?</label>
+                <input id="review-allergy-note" type="text" class="w-full p-2 border rounded-lg" placeholder="Optional note" value="${String(reviewData.allergyNote || '').replace(/"/g, '&quot;')}">
+                <div class="mt-3 flex gap-2 justify-end">
+                  <button type="button" onclick="cancelReviewInline()" class="px-3 py-2 border rounded-lg">Cancel</button>
+                  <button type="button" onclick="saveReviewInline('allergies')" class="px-3 py-2 bg-orange-500 text-white rounded-lg">Save</button>
+                </div>
+              </div>
+            ` : ''}
           </div>
           
           <!-- Enhanced Generate Button -->
@@ -1616,7 +1946,7 @@ html.in-iframe .app-card {
         try {
           const saved = window.userSession?.answers || {};
           const reviewAnswer = {
-            plan: saved.pick_plan?.plan ?? sd.plan_number,
+            plan: saved.pick_plan?.plan ?? saved.pick_plan?.Plan ?? sd.plan_number,
             days: saved.duration?.days ?? saved.duration?.Days ?? sd.days,
             diet_preference: saved.diet_preference?.Diet_Preference ?? saved.diet_preference?.diet_preference ?? sd.diet_preference,
             objective: saved.objective?.Objective ?? saved.objective?.objective ?? sd.objective,
