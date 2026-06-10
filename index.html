@@ -7,6 +7,9 @@
   <meta name="theme-color" content="#ea580c">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     /* --- Responsive typography & base --- */
@@ -21,8 +24,8 @@ html, body {
   height: 100%; /* Permitir tamaño dinámico */
   margin: 0;
   padding: 0;
-  background: #f7f3f0;
-  font-family: Inter, sans-serif;
+  background: #fff8f2;
+  font-family: Manrope, sans-serif;
   overflow-y: auto; /* Mantén solo el scroll vertical */  
   overflow-x: hidden; /* Evitar desplazamiento horizontal */
   -webkit-text-size-adjust: 100%; /* Desactiva el ajuste automático de texto */
@@ -34,6 +37,379 @@ html, body {
   line-height: 1.8;
 }
     *, *::before, *::after { box-sizing: inherit; }
+
+    html { scroll-behavior: smooth; }
+
+    .brand-display {
+      font-family: 'Cormorant Garamond', serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .landing-page {
+      position: relative;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(255, 128, 32, 0.18), transparent 32%),
+        radial-gradient(circle at top right, rgba(255, 190, 92, 0.2), transparent 24%),
+        linear-gradient(180deg, #fffaf5 0%, #fff3e7 46%, #fffdf9 100%);
+      color: #26170d;
+      transition: transform 0.65s ease, opacity 0.45s ease;
+      z-index: 2;
+    }
+
+    body.generator-active .landing-page {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-12vw);
+    }
+
+    .landing-nav {
+      position: sticky;
+      top: 0;
+      z-index: 60;
+      backdrop-filter: blur(14px);
+      background: rgba(255, 248, 242, 0.84);
+      border-bottom: 1px solid rgba(255, 107, 0, 0.12);
+    }
+
+    .landing-container {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      gap: 32px;
+      align-items: center;
+      padding: 48px 0 72px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #c75600;
+    }
+
+    .eyebrow::before {
+      content: '';
+      width: 38px;
+      height: 1px;
+      background: currentColor;
+    }
+
+    .hero-copy h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(3rem, 8vw, 6.5rem);
+      line-height: 0.92;
+      margin: 16px 0 18px;
+      color: #1f1209;
+    }
+
+    .hero-copy .tagline {
+      font-size: clamp(1.15rem, 2.6vw, 1.75rem);
+      color: #7a4318;
+      max-width: 28rem;
+    }
+
+    .hero-copy .subtitle {
+      margin-top: 20px;
+      color: #6f6256;
+      font-size: 1rem;
+    }
+
+    .hero-image-wrap,
+    .creator-image,
+    .final-cta-image,
+    .step-media {
+      overflow: hidden;
+      border-radius: 28px;
+      box-shadow: 0 24px 70px rgba(102, 53, 14, 0.18);
+    }
+
+    .hero-image-wrap {
+      position: relative;
+      min-height: 520px;
+      background: #f6dfcf;
+    }
+
+    .hero-image-wrap img,
+    .creator-image img,
+    .final-cta-image img,
+    .step-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .hero-image-wrap::after {
+      content: '';
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 42%;
+      background: linear-gradient(180deg, transparent 0%, rgba(21, 12, 6, 0.62) 100%);
+    }
+
+    .hero-stat {
+      position: absolute;
+      right: 24px;
+      bottom: 24px;
+      z-index: 1;
+      background: rgba(255, 248, 242, 0.92);
+      border: 1px solid rgba(255, 107, 0, 0.2);
+      color: #54280a;
+      border-radius: 18px;
+      padding: 14px 18px;
+      min-width: 190px;
+    }
+
+    .hero-stat strong {
+      display: block;
+      font-size: 1.3rem;
+      color: #ba4f00;
+    }
+
+    .landing-btn,
+    .landing-btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border-radius: 999px;
+      padding: 14px 24px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      text-decoration: none;
+    }
+
+    .landing-btn {
+      background: linear-gradient(135deg, #ff6b00 0%, #ff8b2d 100%);
+      color: #fff;
+      box-shadow: 0 18px 40px rgba(255, 107, 0, 0.28);
+    }
+
+    .landing-btn-secondary {
+      background: rgba(255, 255, 255, 0.72);
+      color: #7d3a0d;
+      border: 1px solid rgba(255, 107, 0, 0.18);
+    }
+
+    .landing-btn:hover,
+    .landing-btn-secondary:hover {
+      transform: translateY(-2px);
+    }
+
+    .landing-section {
+      padding: 76px 0;
+    }
+
+    .section-heading {
+      max-width: 760px;
+      margin-bottom: 30px;
+    }
+
+    .section-heading h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2.2rem, 5vw, 4rem);
+      line-height: 0.98;
+      margin: 10px 0 14px;
+      color: #1f1209;
+    }
+
+    .section-heading p {
+      color: #6b5b50;
+      max-width: 46rem;
+      font-size: 1.05rem;
+    }
+
+    .about-panel,
+    .creator-panel,
+    .final-cta-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+      gap: 28px;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(255, 107, 0, 0.08);
+      border-radius: 32px;
+      padding: 28px;
+      box-shadow: 0 18px 42px rgba(83, 43, 11, 0.08);
+    }
+
+    .about-copy,
+    .creator-copy,
+    .final-cta-copy {
+      font-size: 1.05rem;
+      color: #4f3a2a;
+    }
+
+    .steps-grid,
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px;
+    }
+
+    .step-card,
+    .pricing-card,
+    .contact-card {
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(255, 107, 0, 0.08);
+      border-radius: 26px;
+      overflow: hidden;
+      box-shadow: 0 18px 38px rgba(83, 43, 11, 0.08);
+    }
+
+    .step-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 100%;
+    }
+
+    .step-media {
+      aspect-ratio: 4 / 3;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .step-content,
+    .pricing-card-content,
+    .contact-card {
+      padding: 22px;
+    }
+
+    .step-index {
+      display: inline-flex;
+      width: 42px;
+      height: 42px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: rgba(255, 107, 0, 0.12);
+      color: #c65600;
+      font-weight: 800;
+      margin-bottom: 14px;
+    }
+
+    .step-card h3,
+    .pricing-card h3,
+    .creator-copy h3,
+    .final-cta-copy h3 {
+      margin: 0 0 10px 0;
+      font-size: 1.35rem;
+      color: #1f1209;
+    }
+
+    .step-card p,
+    .pricing-card p,
+    .contact-card p,
+    .creator-copy p,
+    .final-cta-copy p {
+      color: #675547;
+      margin: 0;
+    }
+
+    .pricing-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .pricing-card.featured {
+      background: linear-gradient(180deg, rgba(255, 244, 236, 0.96) 0%, rgba(255, 255, 255, 0.96) 100%);
+      border: 1px solid rgba(255, 107, 0, 0.26);
+      transform: translateY(-4px);
+    }
+
+    .plan-price {
+      font-size: 2rem;
+      line-height: 1;
+      font-weight: 800;
+      color: #ba4f00;
+      margin: 18px 0 10px;
+    }
+
+    .plan-meta {
+      color: #936848;
+      font-size: 0.95rem;
+      margin-bottom: 18px;
+    }
+
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .contact-card a {
+      font-size: 1rem;
+      color: #ba4f00;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .contact-card a:hover {
+      text-decoration: underline;
+    }
+
+    .final-cta-panel {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 241, 229, 0.95) 100%);
+    }
+
+    .landing-footer {
+      padding: 30px 0 48px;
+      text-align: center;
+      color: #7a695d;
+      font-size: 0.95rem;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(36px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .reveal.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .reveal.delay-1 { transition-delay: 0.08s; }
+    .reveal.delay-2 { transition-delay: 0.16s; }
+    .reveal.delay-3 { transition-delay: 0.24s; }
+
+    .generator-shell {
+      position: fixed;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(8vw);
+      transition: opacity 0.45s ease, transform 0.65s ease;
+      z-index: 3;
+      background: #f7f3f0;
+      overflow-y: auto;
+    }
+
+    body.generator-active .generator-shell {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
+
+    body.generator-active {
+      background: #f7f3f0;
+    }
 
     /* Consulta de medios para pantallas pequeñas (ancho máximo: 480px) */
 @media only screen and (max-width: 480px) {
@@ -165,6 +541,58 @@ a {
       #zipModal .actions button { width: 100%; }
     }
 
+    @media (max-width: 900px) {
+      .hero-grid,
+      .about-panel,
+      .creator-panel,
+      .final-cta-panel {
+        grid-template-columns: 1fr;
+      }
+
+      .steps-grid,
+      .pricing-grid,
+      .contact-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-image-wrap {
+        min-height: 360px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .landing-container {
+        width: min(100% - 24px, 1180px);
+      }
+
+      .hero-grid {
+        padding: 28px 0 56px;
+        gap: 20px;
+      }
+
+      .landing-section {
+        padding: 54px 0;
+      }
+
+      .hero-copy h1 {
+        font-size: clamp(2.8rem, 18vw, 4.4rem);
+      }
+
+      .about-panel,
+      .creator-panel,
+      .final-cta-panel {
+        padding: 20px;
+        border-radius: 24px;
+      }
+
+      .hero-stat {
+        right: 16px;
+        left: 16px;
+        bottom: 16px;
+        min-width: 0;
+      }
+    }
+
     @media (min-width: 1200px) {
       .app-shell { padding: 32px; }
       .app-card { padding: 40px; }
@@ -202,20 +630,238 @@ html.in-iframe .app-card {
   </style>
 </head>
 <body>
-  <div class="app-shell">
-    <div class="app-card" id="app-root">
-      <h1 class="text-center" style="color:#ff7b00;">🍽️ Chontaduro Menu Generator</h1>
-      
-      <!-- Version indicator (small, bottom right) -->
-      <div style="position: fixed; bottom: 5px; right: 5px; font-size: 9px; color: #999; z-index: 1000;">v2.1</div>
+  <div id="landingPage" class="landing-page">
+    <nav class="landing-nav">
+      <div class="landing-container flex items-center justify-between py-4 gap-4">
+        <a href="#top" class="brand-display text-2xl text-slate-900 no-underline">Chontaduro</a>
+        <button type="button" class="landing-btn js-start-generator">Start your order</button>
+      </div>
+    </nav>
 
-      <!-- Banner to show delivery state -->
-      <div id="zipBanner" role="status" aria-live="polite"></div>
+    <main id="top">
+      <section class="landing-container hero-grid">
+        <div class="hero-copy reveal is-visible">
+          <span class="eyebrow">Precision-driven nutrition</span>
+          <h1>CHONTADURO</h1>
+          <p class="tagline">The easiest way to stay healthy</p>
+          <div class="mt-8 flex flex-wrap gap-4">
+            <button type="button" class="landing-btn js-start-generator">Start your order</button>
+            <button type="button" class="landing-btn-secondary js-start-generator">Pick your plan</button>
+          </div>
+          <p class="subtitle">Born in Seattle, Washington.</p>
+        </div>
+        <div class="hero-image-wrap reveal delay-1 is-visible">
+          <img src="https://chontaduroprepmeals.com/assets/images/image02.jpg" alt="Prepared Chontaduro meal bowls">
+          <div class="hero-stat">
+            <strong>Starting at $15/day</strong>
+            Personalized meals built around your goals, routine, and delivery needs.
+          </div>
+        </div>
+      </div>
 
-      <div id="app" class="text-center">
-        <div id="loading" class="py-10">
-            <div class="loader mx-auto" style="border-top-color: #ff7b00; animation: spin 1s linear infinite; border: 4px solid #e5e7eb; border-top-width:4px; border-radius:9999px; width:48px; height:48px;"></div>
-          <p class="text-gray-600 mt-4">Loading...</p>
+      <section class="landing-section">
+        <div class="landing-container">
+          <div class="about-panel reveal">
+            <div class="about-copy">
+              <div class="section-heading mb-0">
+                <span class="eyebrow">About</span>
+                <h2>Dedicated to Nutritional Precision</h2>
+                <p>Revolutionizing healthy eating, Chontaduro's System is Powered by advanced algorithms and data-driven decisions, crafting meals perfectly aligned with your body, lifestyle, and goals. We take care of the details, you enjoy the results.</p>
+              </div>
+            </div>
+            <div class="rounded-[28px] overflow-hidden bg-[#fff1e6] p-8 min-h-[260px] flex items-end">
+              <div>
+                <div class="text-sm uppercase tracking-[0.3em] text-orange-600 font-bold mb-3">Why it works</div>
+                <div class="text-3xl font-bold text-slate-900 mb-3">Smarter meal prep, less guesswork.</div>
+                <p class="text-[#6b5b50] m-0">Every plan is shaped by real inputs, structured calculations, and kitchen execution designed to be repeatable in real life.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-section" id="how-it-works">
+        <div class="landing-container">
+          <div class="section-heading reveal">
+            <span class="eyebrow">How it works</span>
+            <h2>From your goals to meals on your table</h2>
+            <p>Every step is designed to feel simple on your side while the heavy lifting happens behind the scenes.</p>
+          </div>
+          <div class="steps-grid">
+            <article class="step-card reveal">
+              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image06.jpg" alt="Person filling out health information"></div>
+              <div class="step-content">
+                <span class="step-index">01</span>
+                <h3>Enter Your Info</h3>
+                <p>Tell us about yourself! Just fill out a quick form with your goals and preferences.</p>
+              </div>
+            </article>
+            <article class="step-card reveal delay-1">
+              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image08.jpg" alt="Healthy ingredients laid out for meal planning"></div>
+              <div class="step-content">
+                <span class="step-index">02</span>
+                <h3>Our System Does the Math 🤖✨</h3>
+                <p>Using smart, precision-focused algorithms and clear logic, we calculate your needs in seconds.</p>
+              </div>
+            </article>
+            <article class="step-card reveal delay-2">
+              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image05.jpg" alt="Fresh meals prepared in the kitchen"></div>
+              <div class="step-content">
+                <span class="step-index">03</span>
+                <h3>We Cook It Fresh 🍴</h3>
+                <p>Our kitchen turns those numbers into real food: Tasty, balanced, and ready for YOU.</p>
+              </div>
+            </article>
+            <article class="step-card reveal delay-3">
+              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image04.jpg" alt="Prepared meals ready for pickup or delivery"></div>
+              <div class="step-content">
+                <span class="step-index">04</span>
+                <h3>Delivery &amp; Enjoy 🚚</h3>
+                <p>Pick them up or get them delivered. No prep, no mess - Just eat, feel good, repeat.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-section" id="pricing">
+        <div class="landing-container">
+          <div class="section-heading reveal">
+            <span class="eyebrow">Plans / Pricing</span>
+            <h2>Starting at $15</h2>
+            <p>Choose the plan structure that fits your week. All of them route into the same personalized generator flow.</p>
+          </div>
+          <div class="pricing-grid">
+            <article class="pricing-card reveal">
+              <div class="pricing-card-content">
+                <h3>Plan 1</h3>
+                <p>One Main Meal</p>
+                <div class="plan-price">$15/day</div>
+                <div class="plan-meta">A simple daily anchor meal.</div>
+              </div>
+              <div class="pricing-card-content pt-0">
+                <button type="button" class="landing-btn w-full js-start-generator" data-plan="Plan 1: 1 main meal per day">Start your order</button>
+              </div>
+            </article>
+            <article class="pricing-card reveal delay-1">
+              <div class="pricing-card-content">
+                <h3>Plan 2</h3>
+                <p>2 Main Meals (Lunch + Dinner)</p>
+                <div class="plan-price">$30/day</div>
+                <div class="plan-meta">Lunch and dinner covered.</div>
+              </div>
+              <div class="pricing-card-content pt-0">
+                <button type="button" class="landing-btn w-full js-start-generator" data-plan="Plan 2: 2 main meals per day">Start your order</button>
+              </div>
+            </article>
+            <article class="pricing-card reveal delay-2">
+              <div class="pricing-card-content">
+                <h3>Plan 3</h3>
+                <p>Breakfast + 1 Main Meal</p>
+                <div class="plan-price">$26/day</div>
+                <div class="plan-meta">Better mornings with one main meal later.</div>
+              </div>
+              <div class="pricing-card-content pt-0">
+                <button type="button" class="landing-btn w-full js-start-generator" data-plan="Plan 3: 1 main meal + 1 breakfast">Start your order</button>
+              </div>
+            </article>
+            <article class="pricing-card featured reveal delay-3">
+              <div class="pricing-card-content">
+                <h3>Plan 4</h3>
+                <p>Breakfast + 2 Main Meals</p>
+                <div class="plan-price">$40/day</div>
+                <div class="plan-meta">The full-day option for complete coverage.</div>
+              </div>
+              <div class="pricing-card-content pt-0">
+                <button type="button" class="landing-btn w-full js-start-generator" data-plan="Plan 4: 2 main meals + 1 breakfast (full day)">Start your order</button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-section">
+        <div class="landing-container">
+          <div class="creator-panel reveal">
+            <div class="creator-image min-h-[420px]">
+              <img src="https://chontaduroprepmeals.com/assets/images/image07.jpg" alt="Angela Ordonez, creator of Chontaduro">
+            </div>
+            <div class="creator-copy">
+              <span class="eyebrow">Creator</span>
+              <h2 class="text-[2.2rem] md:text-[3rem] leading-none mt-3 mb-4">Ángela Ordóñez</h2>
+              <p>Data Scientist with emphasis on Data Science &amp; Machine Learning, making data-driven decisions to design smarter, personalized solutions. Electronics &amp; Telecommunications Engineer with a strong background in systems, technology, and innovation. Deeply passionate about health and nutrition, constantly studying how food, metabolism, and habits impact the body and mind.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-section" id="contact">
+        <div class="landing-container">
+          <div class="section-heading reveal">
+            <span class="eyebrow">Contact</span>
+            <h2>Stay close to the kitchen</h2>
+            <p>Questions, custom requests, or ready to start? Reach Chontaduro directly.</p>
+          </div>
+          <div class="contact-grid">
+            <div class="contact-card reveal">
+              <h3>Instagram</h3>
+              <p>See meals, updates, and behind-the-scenes content.</p>
+              <div class="mt-4"><a href="https://www.instagram.com/chontaduroprepmeals" target="_blank" rel="noreferrer">@chontaduroprepmeals</a></div>
+            </div>
+            <div class="contact-card reveal delay-1">
+              <h3>Phone</h3>
+              <p>Call or text for direct support.</p>
+              <div class="mt-4"><a href="tel:2062266936">2062266936</a></div>
+            </div>
+            <div class="contact-card reveal delay-2">
+              <h3>Email</h3>
+              <p>For plan questions, deliveries, and general inquiries.</p>
+              <div class="mt-4"><a href="mailto:chontaduroprepmeals@gmail.com">chontaduroprepmeals@gmail.com</a></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-section">
+        <div class="landing-container">
+          <div class="final-cta-panel reveal">
+            <div class="final-cta-copy">
+              <span class="eyebrow">Final call</span>
+              <h2>WHAT ARE YOU WAITING FOR?</h2>
+              <p>When you are ready, the generator is right here. Tell us your goals, choose your plan, and let Chontaduro do the precise part.</p>
+              <div class="mt-8">
+                <button type="button" class="landing-btn js-start-generator">PICK YOUR PLAN NOW</button>
+              </div>
+            </div>
+            <div class="final-cta-image min-h-[360px]">
+              <img src="https://chontaduroprepmeals.com/assets/images/image01.jpg" alt="Chontaduro prepared meal presentation">
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="landing-footer">
+      <div class="landing-container">©2026 Chontaduro - Powered by Precision-Driven Nutrition</div>
+    </footer>
+  </div>
+
+  <div id="generatorShell" class="generator-shell" aria-hidden="true">
+    <div class="app-shell">
+      <div class="app-card" id="app-root">
+        <h1 class="text-center" style="color:#ff7b00;">🍽️ Chontaduro Menu Generator</h1>
+        
+        <!-- Version indicator (small, bottom right) -->
+        <div style="position: fixed; bottom: 5px; right: 5px; font-size: 9px; color: #999; z-index: 1000;">v2.1</div>
+
+        <!-- Banner to show delivery state -->
+        <div id="zipBanner" role="status" aria-live="polite"></div>
+
+        <div id="app" class="text-center">
+          <div id="loading" class="py-10">
+              <div class="loader mx-auto" style="border-top-color: #ff7b00; animation: spin 1s linear infinite; border: 4px solid #e5e7eb; border-top-width:4px; border-radius:9999px; width:48px; height:48px;"></div>
+            <p class="text-gray-600 mt-4">Loading...</p>
+          </div>
         </div>
       </div>
     </div>
@@ -285,11 +931,59 @@ html.in-iframe .app-card {
     const BASE = "";
     let sessionId = Math.random().toString(36).substring(2);
     let currentStep = "start";
+    let hasStartedGenerator = false;
     window.userSession = {
       session_id: sessionId,
       current_step: currentStep,
       answers: {}
     };
+
+    function showGeneratorShell() {
+      document.body.classList.add('generator-active');
+      document.getElementById('generatorShell')?.setAttribute('aria-hidden', 'false');
+      setTimeout(() => {
+        const generator = document.getElementById('generatorShell');
+        if (generator) generator.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 80);
+    }
+
+    async function beginGenerator(planValue) {
+      if (hasStartedGenerator) return;
+      hasStartedGenerator = true;
+      if (planValue) window._preselectedPlan = planValue;
+      showGeneratorShell();
+      try {
+        await ensureZipBeforeStart();
+      } catch (err) {
+        hasStartedGenerator = false;
+        window._preselectedPlan = null;
+        document.body.classList.remove('generator-active');
+        document.getElementById('generatorShell')?.setAttribute('aria-hidden', 'true');
+        console.error(err);
+      }
+    }
+
+    function setupLandingPage() {
+      document.querySelectorAll('.js-start-generator').forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          beginGenerator(button.dataset.plan || null);
+        });
+      });
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.18, rootMargin: '0px 0px -8% 0px' });
+
+      document.querySelectorAll('.reveal:not(.is-visible)').forEach((element) => {
+        observer.observe(element);
+      });
+    }
 
     // --- Utility: fetch with timeout to handle cold starts gracefully ---
     function fetchWithTimeout(resource, options = {}, timeout = 9000) {
@@ -432,7 +1126,7 @@ html.in-iframe .app-card {
     }
 
     window.addEventListener('load', () => {
-      ensureZipBeforeStart();
+      setupLandingPage();
     });
 
     async function ensureZipBeforeStart() {
@@ -1028,6 +1722,12 @@ html.in-iframe .app-card {
         return renderAllergiesAndRestrictions(question, fields[0]);
       }
       if (currentStep === "pick_plan" && fields.length === 1 && fields[0].name === "Plan") {
+        if (window._preselectedPlan) {
+          const plan = window._preselectedPlan;
+          window._preselectedPlan = null;
+          step({ Plan: plan }, "next");
+          return;
+        }
         return renderPlanSelection(question, fields[0]);
       }
       if (currentStep === "objective" && fields.length === 1 && fields[0].name === "Objective") {
