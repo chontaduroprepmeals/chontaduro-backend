@@ -16,6 +16,7 @@
     :root {
       /* Base font-size responsive: between 15px and 18px depending on viewport */
       font-size: clamp(15px, 1.0vw + 1.0px, 18px);
+      --landing-nav-height: 86px;
     }
 
 /* Tamaño global de fuentes */
@@ -49,6 +50,7 @@ html, body {
     .landing-page {
       position: relative;
       min-height: 100vh;
+      width: 100%;
       background:
         radial-gradient(circle at top left, rgba(255, 128, 32, 0.18), transparent 32%),
         radial-gradient(circle at top right, rgba(255, 190, 92, 0.2), transparent 24%),
@@ -56,6 +58,7 @@ html, body {
       color: #26170d;
       transition: transform 0.65s ease, opacity 0.45s ease;
       z-index: 2;
+      overflow: visible;
     }
 
     /* generator-active kept for iframe embed compat — real show/hide via .is-visible / .is-hidden */
@@ -70,6 +73,7 @@ html, body {
       backdrop-filter: blur(14px);
       background: rgba(255, 248, 242, 0.84);
       border-bottom: 1px solid rgba(255, 107, 0, 0.12);
+      min-height: var(--landing-nav-height);
     }
 
     .landing-container {
@@ -82,7 +86,8 @@ html, body {
       grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
       gap: 32px;
       align-items: center;
-      padding: 48px 0 72px;
+      min-height: calc(100vh - var(--landing-nav-height));
+      padding: 20px 0 32px;
     }
 
     .eyebrow {
@@ -105,8 +110,9 @@ html, body {
 
     .hero-copy h1 {
       font-family: 'Cormorant Garamond', serif;
-      font-size: clamp(3rem, 8vw, 6.5rem);
+      font-size: clamp(2.1rem, 8.2vw, 6.2rem);
       line-height: 0.92;
+      white-space: nowrap;
       margin: 16px 0 18px;
       color: #1f1209;
     }
@@ -364,6 +370,23 @@ html, body {
 
     .final-cta-panel {
       background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 241, 229, 0.95) 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .final-cta-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(120deg, rgba(255, 250, 245, 0.88), rgba(255, 241, 229, 0.74)), url('https://chontaduroprepmeals.com/assets/images/image03.jpg');
+      background-size: cover;
+      background-position: center;
+      z-index: 0;
+    }
+
+    .final-cta-panel > * {
+      position: relative;
+      z-index: 1;
     }
 
     .landing-footer {
@@ -570,7 +593,8 @@ a {
       }
 
       .hero-grid {
-        padding: 28px 0 56px;
+        min-height: calc(100vh - var(--landing-nav-height));
+        padding: 14px 0 24px;
         gap: 20px;
       }
 
@@ -579,7 +603,7 @@ a {
       }
 
       .hero-copy h1 {
-        font-size: clamp(2.8rem, 18vw, 4.4rem);
+        font-size: clamp(2rem, 13.5vw, 3.8rem);
       }
 
       .about-panel,
@@ -636,8 +660,7 @@ html.in-iframe .app-card {
 <body>
   <div id="landingPage" class="landing-page">
     <nav class="landing-nav">
-      <div class="landing-container flex items-center justify-between py-4 gap-4">
-        <a href="#top" class="brand-display text-2xl text-slate-900 no-underline">Chontaduro</a>
+      <div class="landing-container flex items-center justify-end py-4 gap-4">
         <button type="button" class="landing-btn js-start-generator">Start your order</button>
       </div>
     </nav>
@@ -655,7 +678,7 @@ html.in-iframe .app-card {
           <p class="subtitle">Born in Seattle, Washington.</p>
         </div>
         <div class="hero-image-wrap reveal delay-1 is-visible">
-          <img src="https://chontaduroprepmeals.com/assets/images/image02.jpg" alt="Prepared Chontaduro meal bowls">
+          <img src="https://chontaduroprepmeals.com/assets/images/image02.jpg" alt="Prepared Chontaduro meal bowls" referrerpolicy="no-referrer">
           <div class="hero-stat">
             <strong>Starting at $15/day</strong>
             Personalized meals built around your goals, routine, and delivery needs.
@@ -693,7 +716,7 @@ html.in-iframe .app-card {
           </div>
           <div class="steps-grid">
             <article class="step-card reveal">
-              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image06.jpg" alt="Person filling out health information"></div>
+              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image06.jpg" alt="Person filling out health information" referrerpolicy="no-referrer"></div>
               <div class="step-content">
                 <span class="step-index">01</span>
                 <h3>Enter Your Info</h3>
@@ -701,7 +724,7 @@ html.in-iframe .app-card {
               </div>
             </article>
             <article class="step-card reveal delay-1">
-              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image08.jpg" alt="Healthy ingredients laid out for meal planning"></div>
+              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image08.jpg" alt="Healthy ingredients laid out for meal planning" referrerpolicy="no-referrer"></div>
               <div class="step-content">
                 <span class="step-index">02</span>
                 <h3>Our System Does the Math 🤖✨</h3>
@@ -709,7 +732,7 @@ html.in-iframe .app-card {
               </div>
             </article>
             <article class="step-card reveal delay-2">
-              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image05.jpg" alt="Fresh meals prepared in the kitchen"></div>
+              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image05.jpg" alt="Fresh meals prepared in the kitchen" referrerpolicy="no-referrer"></div>
               <div class="step-content">
                 <span class="step-index">03</span>
                 <h3>We Cook It Fresh 🍴</h3>
@@ -717,7 +740,7 @@ html.in-iframe .app-card {
               </div>
             </article>
             <article class="step-card reveal delay-3">
-              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image04.jpg" alt="Prepared meals ready for pickup or delivery"></div>
+              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image04.jpg" alt="Prepared meals ready for pickup or delivery" referrerpolicy="no-referrer"></div>
               <div class="step-content">
                 <span class="step-index">04</span>
                 <h3>Delivery &amp; Enjoy 🚚</h3>
@@ -788,7 +811,7 @@ html.in-iframe .app-card {
         <div class="landing-container">
           <div class="creator-panel reveal">
             <div class="creator-image min-h-[420px]">
-              <img src="https://chontaduroprepmeals.com/assets/images/image07.jpg" alt="Angela Ordonez, creator of Chontaduro">
+              <img src="https://chontaduroprepmeals.com/assets/images/image07.jpg" alt="Angela Ordonez, creator of Chontaduro" referrerpolicy="no-referrer">
             </div>
             <div class="creator-copy">
               <span class="eyebrow">Creator</span>
@@ -838,7 +861,7 @@ html.in-iframe .app-card {
               </div>
             </div>
             <div class="final-cta-image min-h-[360px]">
-              <img src="https://chontaduroprepmeals.com/assets/images/image01.jpg" alt="Chontaduro prepared meal presentation">
+              <img src="https://chontaduroprepmeals.com/assets/images/image01.jpg" alt="Chontaduro prepared meal presentation" referrerpolicy="no-referrer">
             </div>
           </div>
         </div>
