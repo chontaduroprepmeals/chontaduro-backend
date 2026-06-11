@@ -488,6 +488,8 @@ app.add_middleware(
 register_upload_routes(app)
 # montar carpeta ./uploads para servir archivos locales (fallback)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+# montar carpeta ./static para servir recursos estáticos
+app.mount("/static", StaticFiles(directory="static"), name="static")
 register_delivery_routes(app)
 
 
