@@ -521,7 +521,7 @@ def version():
 # Serve frontend
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
-    return FileResponse("index.html")
+    return FileResponse(os.path.join(BASE_DIR, "index.html"))
 
 # --- LOAD MEALS (expects English keys; tolerant with Spanish keys) ---
 MEALS_DATA: List[Dict[str, Any]] = []
