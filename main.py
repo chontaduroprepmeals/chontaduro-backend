@@ -4,7 +4,10 @@ import csv
 import io
 import threading
 import time
-os.makedirs("uploads", exist_ok=True)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 # main.py
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
@@ -487,9 +490,9 @@ app.add_middleware(
 # Registrar rutas de subida (llama a la función que trae upload_image.py)
 register_upload_routes(app)
 # montar carpeta ./uploads para servir archivos locales (fallback)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 # montar carpeta ./static para servir recursos estáticos
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 register_delivery_routes(app)
 
 
