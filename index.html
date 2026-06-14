@@ -51,14 +51,11 @@ html, body {
       position: relative;
       min-height: 100vh;
       width: 100%;
-      background:
-        radial-gradient(circle at top left, rgba(255, 128, 32, 0.18), transparent 32%),
-        radial-gradient(circle at top right, rgba(255, 190, 92, 0.2), transparent 24%),
-        linear-gradient(180deg, #fffaf5 0%, #fff3e7 46%, #fffdf9 100%);
-      color: #26170d;
+      background: #FDF6EE;
+      color: #2C1810;
       transition: transform 0.65s ease, opacity 0.45s ease;
       z-index: 2;
-      overflow: visible;
+      overflow-x: clip;
     }
 
     /* generator-active kept for iframe embed compat — real show/hide via .is-visible / .is-hidden */
@@ -70,111 +67,62 @@ html, body {
       position: sticky;
       top: 0;
       z-index: 60;
-      backdrop-filter: blur(14px);
-      background: rgba(255, 248, 242, 0.84);
-      border-bottom: 1px solid rgba(255, 107, 0, 0.12);
+      backdrop-filter: blur(8px);
+      background: rgba(253, 246, 238, 0.92);
+      border-bottom: 1px solid rgba(44, 24, 16, 0.08);
       min-height: var(--landing-nav-height);
     }
 
     .landing-container {
-      width: min(1180px, calc(100% - 32px));
+      width: min(980px, calc(100% - 32px));
       margin: 0 auto;
     }
 
-    .hero-grid {
-      display: grid;
-      grid-template-columns: 55% 45%;
-      gap: 24px;
-      align-items: start;
-      min-height: calc(100vh - var(--landing-nav-height));
-      padding: 24px 0 24px;
-      overflow: visible;
+    .hero-section {
+      padding: 40px 0 84px;
+      text-align: center;
     }
 
-    .hero-copy {
-      min-width: 0;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 0.85rem;
-      font-weight: 700;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: #c75600;
-    }
-
-    .eyebrow::before {
-      content: '';
-      width: 38px;
-      height: 1px;
-      background: currentColor;
-    }
-
-    .hero-copy h1 {
+    .hero-title {
       font-family: 'Cormorant Garamond', serif;
-      font-size: clamp(2rem, 5vw, 4.5rem);
-      line-height: 0.95;
-      white-space: nowrap;
+      font-size: clamp(3rem, 10vw, 7rem);
+      line-height: 0.9;
+      letter-spacing: 0.04em;
+      margin: 0;
+      text-align: center;
+      text-transform: uppercase;
+      color: #2C1810;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(1.1rem, 2.8vw, 1.6rem);
+      color: #5f4334;
+      text-align: center;
+      margin: 18px auto 0;
+      max-width: 40rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 28px;
+    }
+
+    .hero-image {
+      width: 100%;
+      margin-top: 44px;
+      border-radius: 16px;
       overflow: hidden;
-      margin: 8px 0 14px;
-      color: #1f1209;
     }
 
-    .hero-copy .tagline {
-      font-size: clamp(1.15rem, 2.6vw, 1.75rem);
-      color: #7a4318;
-      max-width: 28rem;
-    }
-
-    .hero-copy .subtitle {
-      margin-top: 20px;
-      color: #6f6256;
-      font-size: 1rem;
-    }
-
-    .hero-image-wrap,
-    .creator-image,
-    .final-cta-image,
-    .step-media {
-      overflow: hidden;
-      border-radius: 28px;
-      box-shadow: 0 24px 70px rgba(102, 53, 14, 0.18);
-    }
-
-    .hero-image-wrap {
-      position: relative;
-      max-width: 88%;
-      margin-left: auto;
-      min-height: 0;
-      background: transparent;
-    }
-
-    .hero-image-wrap img {
+    .hero-image img {
       width: 100%;
       height: auto;
-      max-height: 68vh;
       object-fit: cover;
       display: block;
-    }
-
-    .creator-image img,
-    .final-cta-image img,
-    .step-media img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    .hero-image-wrap::after {
-      content: '';
-      position: absolute;
-      inset: auto 0 0 0;
-      height: 42%;
-      background: linear-gradient(180deg, transparent 0%, rgba(21, 12, 6, 0.62) 100%);
+      max-height: 72vh;
     }
 
     .landing-btn,
@@ -184,211 +132,247 @@ html, body {
       justify-content: center;
       gap: 10px;
       border-radius: 999px;
-      padding: 14px 24px;
-      font-weight: 800;
+      padding: 12px 24px;
+      font-weight: 700;
       letter-spacing: 0.02em;
-      border: none;
+      border: 1px solid transparent;
       cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      transition: opacity 0.2s ease, transform 0.2s ease;
       text-decoration: none;
+      font-size: 1rem;
     }
 
     .landing-btn {
-      background: linear-gradient(135deg, #ff6b00 0%, #ff8b2d 100%);
+      background: #E8621A;
       color: #fff;
-      box-shadow: 0 18px 40px rgba(255, 107, 0, 0.28);
     }
 
     .landing-btn-secondary {
-      background: rgba(255, 255, 255, 0.72);
-      color: #7d3a0d;
-      border: 1px solid rgba(255, 107, 0, 0.18);
+      background: transparent;
+      color: #2C1810;
+      border-color: rgba(44, 24, 16, 0.25);
     }
 
     .landing-btn:hover,
     .landing-btn-secondary:hover {
-      transform: translateY(-2px);
+      transform: translateY(-1px);
+      opacity: 0.9;
     }
 
     .landing-section {
-      padding: 76px 0;
+      padding: clamp(80px, 11vw, 120px) 0;
+      text-align: center;
     }
 
-    .section-heading {
-      max-width: 760px;
-      margin-bottom: 30px;
+    .section-inner {
+      max-width: 700px;
+      margin: 0 auto;
     }
 
-    .section-heading h2 {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: clamp(2.2rem, 5vw, 4rem);
-      line-height: 0.98;
-      margin: 10px 0 14px;
-      color: #1f1209;
-    }
-
-    .section-heading p {
-      color: #6b5b50;
-      max-width: 46rem;
-      font-size: 1.05rem;
-    }
-
-    .about-panel,
-    .creator-panel,
-    .final-cta-panel {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
-      gap: 28px;
-      align-items: center;
-      background: rgba(255, 255, 255, 0.7);
-      border: 1px solid rgba(255, 107, 0, 0.08);
-      border-radius: 32px;
-      padding: 28px;
-      box-shadow: 0 18px 42px rgba(83, 43, 11, 0.08);
-    }
-
-    .about-copy,
-    .creator-copy,
-    .final-cta-copy {
-      font-size: 1.05rem;
-      color: #4f3a2a;
-    }
-
-    .steps-grid,
-    .pricing-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 22px;
-    }
-
-    .step-card,
-    .pricing-card,
-    .contact-card {
-      background: rgba(255, 255, 255, 0.82);
-      border: 1px solid rgba(255, 107, 0, 0.08);
-      border-radius: 26px;
-      overflow: hidden;
-      box-shadow: 0 18px 38px rgba(83, 43, 11, 0.08);
-    }
-
-    .step-card {
-      display: flex;
-      flex-direction: column;
-      min-height: 100%;
-    }
-
-    .step-media {
-      aspect-ratio: 4 / 3;
-      border-radius: 0;
-      box-shadow: none;
-    }
-
-    .step-content,
-    .pricing-card-content,
-    .contact-card {
-      padding: 22px;
-    }
-
-    .step-index {
-      display: inline-flex;
-      width: 42px;
-      height: 42px;
-      align-items: center;
-      justify-content: center;
-      border-radius: 999px;
-      background: rgba(255, 107, 0, 0.12);
-      color: #c65600;
-      font-weight: 800;
-      margin-bottom: 14px;
-    }
-
-    .step-card h3,
-    .pricing-card h3,
-    .creator-copy h3,
-    .final-cta-copy h3 {
-      margin: 0 0 10px 0;
-      font-size: 1.35rem;
-      color: #1f1209;
-    }
-
-    .step-card p,
-    .pricing-card p,
-    .contact-card p,
-    .creator-copy p,
-    .final-cta-copy p {
-      color: #675547;
+    .section-kicker {
       margin: 0;
-    }
-
-    .pricing-card {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    .pricing-card.featured {
-      background: linear-gradient(180deg, rgba(255, 244, 236, 0.96) 0%, rgba(255, 255, 255, 0.96) 100%);
-      border: 1px solid rgba(255, 107, 0, 0.26);
-      transform: translateY(-4px);
-    }
-
-    .plan-price {
-      font-size: 2rem;
-      line-height: 1;
-      font-weight: 800;
-      color: #ba4f00;
-      margin: 18px 0 10px;
-    }
-
-    .plan-meta {
-      color: #936848;
-      font-size: 0.95rem;
-      margin-bottom: 18px;
-    }
-
-    .contact-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 18px;
-    }
-
-    .contact-card a {
-      font-size: 1rem;
-      color: #ba4f00;
-      text-decoration: none;
+      font-size: 0.82rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #915838;
       font-weight: 700;
     }
 
-    .contact-card a:hover {
-      text-decoration: underline;
+    .section-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2.1rem, 7vw, 4rem);
+      line-height: 0.98;
+      margin: 14px 0;
+      color: #2C1810;
     }
 
-    .final-cta-panel {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 241, 229, 0.95) 100%);
-      position: relative;
+    .section-copy {
+      color: #5f4334;
+      font-size: 1.05rem;
+      margin: 0 auto;
+    }
+
+    .steps-wrap {
+      margin-top: 52px;
+      display: grid;
+      gap: 56px;
+    }
+
+    .step-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      gap: 28px;
+      text-align: left;
+    }
+
+    .step-row.reverse .step-text {
+      order: 2;
+    }
+
+    .step-row.reverse .step-media {
+      order: 1;
+    }
+
+    .step-index {
+      font-size: 0.9rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #915838;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: inline-block;
+    }
+
+    .step-title {
+      margin: 0 0 8px;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(1.7rem, 4vw, 2.5rem);
+      line-height: 1.08;
+    }
+
+    .step-description {
+      margin: 0;
+      color: #5f4334;
+    }
+
+    .step-media {
+      border-radius: 14px;
       overflow: hidden;
     }
 
-    .final-cta-panel::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background-image: linear-gradient(120deg, rgba(255, 250, 245, 0.88), rgba(255, 241, 229, 0.74)), url('https://chontaduroprepmeals.com/assets/images/image03.jpg');
-      background-size: cover;
-      background-position: center;
-      z-index: 0;
+    .step-media img {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      display: block;
     }
 
-    .final-cta-panel > * {
-      position: relative;
-      z-index: 1;
+    .pricing-list {
+      margin: 34px auto 0;
+      max-width: 640px;
+      display: grid;
+      gap: 14px;
+      text-align: left;
+    }
+
+    .plan-link {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 6px;
+      border: none;
+      border-bottom: 1px solid rgba(44, 24, 16, 0.2);
+      background: transparent;
+      color: #2C1810;
+      text-align: left;
+      cursor: pointer;
+      font-size: 1rem;
+      font-family: Manrope, sans-serif;
+    }
+
+    .plan-link:hover {
+      color: #E8621A;
+    }
+
+    .plan-link .arrow {
+      color: #E8621A;
+      font-size: 1.1rem;
+      margin-left: 12px;
+    }
+
+    .pricing-hint {
+      margin-top: 20px;
+      color: #5f4334;
+      text-align: center;
+    }
+
+    .pricing-hint a {
+      color: #E8621A;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(232, 98, 26, 0.4);
+    }
+
+    .pricing-hint a:hover {
+      opacity: 0.8;
+    }
+
+    .creator-photo {
+      width: min(240px, 70vw);
+      margin: 0 auto 24px;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .creator-photo img {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      display: block;
+    }
+
+    .creator-bio {
+      margin: 22px auto 0;
+      max-width: 740px;
+      text-align: left;
+      color: #5f4334;
+      display: grid;
+      gap: 10px;
+    }
+
+    .creator-bio li {
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    .contact-links {
+      margin-top: 30px;
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+
+    .contact-link {
+      color: #2C1810;
+      text-decoration: none;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .contact-link:hover {
+      color: #E8621A;
+    }
+
+    .final-cta-section {
+      margin-top: clamp(80px, 11vw, 120px);
+      min-height: 62vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background-image: linear-gradient(rgba(24, 12, 8, 0.38), rgba(24, 12, 8, 0.38)), url('/static/images/image01.jpg');
+      background-size: cover;
+      background-position: center;
+      padding: 90px 20px;
+    }
+
+    .final-cta-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2.4rem, 8vw, 5.2rem);
+      line-height: 0.95;
+      color: #fff;
+      margin: 0 0 22px;
+      text-transform: uppercase;
     }
 
     .landing-footer {
-      padding: 30px 0 48px;
+      padding: 36px 0 52px;
       text-align: center;
-      color: #7a695d;
+      color: #6f5a4d;
       font-size: 0.95rem;
     }
 
@@ -579,48 +563,37 @@ a {
     }
 
     @media (max-width: 900px) {
-      .hero-grid,
-      .about-panel,
-      .creator-panel,
-      .final-cta-panel {
+      .step-row,
+      .step-row.reverse {
         grid-template-columns: 1fr;
+        text-align: center;
       }
 
-      .steps-grid,
-      .pricing-grid,
-      .contact-grid {
-        grid-template-columns: 1fr;
+      .step-row.reverse .step-text,
+      .step-row.reverse .step-media {
+        order: initial;
       }
 
-      .hero-image-wrap {
-        min-height: 360px;
+      .creator-bio {
+        text-align: left;
       }
     }
 
     @media (max-width: 640px) {
       .landing-container {
-        width: min(100% - 24px, 1180px);
+        width: min(100% - 24px, 980px);
       }
 
-      .hero-grid {
-        min-height: calc(100vh - var(--landing-nav-height));
-        padding: 0 0 20px;
-        gap: 20px;
+      .hero-section {
+        padding: 40px 0 72px;
       }
 
       .landing-section {
-        padding: 54px 0;
+        padding: 80px 0;
       }
 
-      .hero-copy h1 {
-        font-size: clamp(2rem, 13.5vw, 3.8rem);
-      }
-
-      .about-panel,
-      .creator-panel,
-      .final-cta-panel {
-        padding: 20px;
-        border-radius: 24px;
+      .hero-image {
+        margin-top: 30px;
       }
     }
 
@@ -669,81 +642,79 @@ html.in-iframe .app-card {
     </nav>
 
     <main id="top">
-      <section class="landing-container hero-grid">
-        <div class="hero-copy reveal is-visible">
-          <span class="eyebrow">Precision-driven nutrition</span>
-          <h1>CHONTADURO</h1>
-          <p class="tagline">The easiest way to stay healthy</p>
-          <div class="mt-8 flex flex-wrap gap-4">
+      <section class="hero-section landing-container">
+        <div class="reveal is-visible">
+          <h1 class="hero-title">CHONTADURO</h1>
+          <p class="hero-subtitle">The easiest way to stay healthy</p>
+          <div class="hero-actions">
             <button type="button" class="landing-btn js-start-generator">Start your order</button>
             <button type="button" class="landing-btn-secondary js-start-generator">Pick your plan</button>
           </div>
-          <p class="subtitle">Born in Seattle, Washington.</p>
+          <div class="hero-image reveal delay-1 is-visible">
+            <img src="/static/images/image02.jpg" alt="Prepared Chontaduro meal bowls">
+          </div>
         </div>
-        <div class="hero-image-wrap reveal delay-1 is-visible">
-          <img src="/static/images/image02.jpg" alt="Prepared Chontaduro meal bowls">
-        </div>
-      </div>
+      </section>
 
-      <section class="landing-section">
-        <div class="landing-container">
-          <div class="about-panel reveal">
-            <div class="about-copy">
-              <div class="section-heading mb-0">
-                <span class="eyebrow">About</span>
-                <h2>Dedicated to Nutritional Precision</h2>
-                <p>Revolutionizing healthy eating, Chontaduro's System is Powered by advanced algorithms and data-driven decisions, crafting meals perfectly aligned with your body, lifestyle, and goals. We take care of the details, you enjoy the results.</p>
-              </div>
-            </div>
-            <div class="rounded-[28px] overflow-hidden bg-[#fff1e6] p-8 min-h-[260px] flex items-end">
-              <div>
-                <div class="text-sm uppercase tracking-[0.3em] text-orange-600 font-bold mb-3">Why it works</div>
-                <div class="text-3xl font-bold text-slate-900 mb-3">Smarter meal prep, less guesswork.</div>
-                <p class="text-[#6b5b50] m-0">Every plan is shaped by real inputs, structured calculations, and kitchen execution designed to be repeatable in real life.</p>
-              </div>
-            </div>
+      <section class="landing-section" id="about">
+        <div class="landing-container section-inner reveal">
+          <p class="section-kicker">About</p>
+          <h2 class="section-title">Dedicated to Nutritional Precision</h2>
+          <p class="section-copy">Revolutionizing healthy eating, Chontaduro's system is powered by advanced algorithms and data-driven decisions, crafting meals aligned with your body, lifestyle, and goals. We handle the details, you enjoy the results.</p>
+          <div class="hero-actions">
+            <button type="button" class="landing-btn js-start-generator">Start your order</button>
           </div>
         </div>
       </section>
 
       <section class="landing-section" id="how-it-works">
         <div class="landing-container">
-          <div class="section-heading reveal">
-            <span class="eyebrow">How it works</span>
-            <h2>From your goals to meals on your table</h2>
-            <p>Every step is designed to feel simple on your side while the heavy lifting happens behind the scenes.</p>
+          <div class="section-inner reveal">
+            <p class="section-kicker">How it works</p>
+            <h2 class="section-title">From your goals to meals on your table</h2>
           </div>
-          <div class="steps-grid">
-            <article class="step-card reveal">
-              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image06.jpg" alt="Person filling out health information" referrerpolicy="no-referrer"></div>
-              <div class="step-content">
-                <span class="step-index">01</span>
-                <h3>Enter Your Info</h3>
-                <p>Tell us about yourself! Just fill out a quick form with your goals and preferences.</p>
+          <div class="steps-wrap">
+            <article class="step-row reveal">
+              <div class="step-text">
+                <span class="step-index">Step 1</span>
+                <h3 class="step-title">Enter Your Info</h3>
+                <p class="step-description">Tell us about yourself with a quick form. We collect the details needed to calculate your nutrition profile.</p>
+              </div>
+              <div class="step-media">
+                <img src="/static/images/image06.jpg" alt="Person filling out health information">
               </div>
             </article>
-            <article class="step-card reveal delay-1">
-              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image08.jpg" alt="Healthy ingredients laid out for meal planning" referrerpolicy="no-referrer"></div>
-              <div class="step-content">
-                <span class="step-index">02</span>
-                <h3>Our System Does the Math 🤖✨</h3>
-                <p>Using smart, precision-focused algorithms and clear logic, we calculate your needs in seconds.</p>
+
+            <article class="step-row reverse reveal delay-1">
+              <div class="step-text">
+                <span class="step-index">Step 2</span>
+                <h3 class="step-title">Our System Does the Math</h3>
+                <p class="step-description">Precision calculations transform your inputs into a practical plan matched to your routine.</p>
+              </div>
+              <div class="step-media">
+                <img src="/static/images/image08.jpg" alt="Healthy ingredients laid out for meal planning">
               </div>
             </article>
-            <article class="step-card reveal delay-2">
-              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image05.jpg" alt="Fresh meals prepared in the kitchen" referrerpolicy="no-referrer"></div>
-              <div class="step-content">
-                <span class="step-index">03</span>
-                <h3>We Cook It Fresh 🍴</h3>
-                <p>Our kitchen turns those numbers into real food: Tasty, balanced, and ready for YOU.</p>
+
+            <article class="step-row reveal delay-2">
+              <div class="step-text">
+                <span class="step-index">Step 3</span>
+                <h3 class="step-title">We Cook It Fresh</h3>
+                <p class="step-description">Our kitchen turns those numbers into real food: balanced, flavorful meals prepared with consistency.</p>
+              </div>
+              <div class="step-media">
+                <img src="/static/images/image05.jpg" alt="Fresh meals prepared in the kitchen">
               </div>
             </article>
-            <article class="step-card reveal delay-3">
-              <div class="step-media"><img src="https://chontaduroprepmeals.com/assets/images/image04.jpg" alt="Prepared meals ready for pickup or delivery" referrerpolicy="no-referrer"></div>
-              <div class="step-content">
-                <span class="step-index">04</span>
-                <h3>Delivery &amp; Enjoy 🚚</h3>
-                <p>Pick them up or get them delivered. No prep, no mess - Just eat, feel good, repeat.</p>
+
+            <article class="step-row reverse reveal delay-3">
+              <div class="step-text">
+                <span class="step-index">Step 4</span>
+                <h3 class="step-title">Delivery and Enjoy</h3>
+                <p class="step-description">Pickup or delivery, ready to eat. Less prep, less guesswork, and more consistency through your week.</p>
+              </div>
+              <div class="step-media">
+                <img src="/static/images/image04.jpg" alt="Prepared meals ready for pickup or delivery">
               </div>
             </article>
           </div>
@@ -751,118 +722,62 @@ html.in-iframe .app-card {
       </section>
 
       <section class="landing-section" id="pricing">
-        <div class="landing-container">
-          <div class="section-heading reveal">
-            <span class="eyebrow">Plans / Pricing</span>
-            <h2>Starting at $15</h2>
-            <p>Choose the plan structure that fits your week. All of them route into the same personalized generator flow.</p>
+        <div class="landing-container section-inner reveal">
+          <p class="section-kicker">Plans / Pricing</p>
+          <h2 class="section-title">Starting at $15/day</h2>
+          <div class="pricing-list">
+            <button type="button" class="plan-link js-start-generator" data-plan="Plan 1: 1 main meal per day">
+              <span>Plan 1 - One Main Meal</span>
+              <span class="arrow">-></span>
+            </button>
+            <button type="button" class="plan-link js-start-generator" data-plan="Plan 2: 2 main meals per day">
+              <span>Plan 2 - Lunch + Dinner</span>
+              <span class="arrow">-></span>
+            </button>
+            <button type="button" class="plan-link js-start-generator" data-plan="Plan 3: 1 main meal + 1 breakfast">
+              <span>Plan 3 - Breakfast + 1 Main Meal</span>
+              <span class="arrow">-></span>
+            </button>
+            <button type="button" class="plan-link js-start-generator" data-plan="Plan 4: 2 main meals + 1 breakfast (full day)">
+              <span>Plan 4 - Breakfast + 2 Main Meals</span>
+              <span class="arrow">-></span>
+            </button>
           </div>
-          <div class="pricing-grid">
-            <article class="pricing-card reveal">
-              <div class="pricing-card-content">
-                <h3>Plan 1</h3>
-                <p>One Main Meal</p>
-                <div class="plan-price">$15/day</div>
-                <div class="plan-meta">A simple daily anchor meal.</div>
-              </div>
-              <div class="pricing-card-content pt-0">
-                <button type="button" class="landing-btn w-full js-start-generator" data-plan="Plan 1: 1 main meal per day">Start your order</button>
-              </div>
-            </article>
-            <article class="pricing-card reveal delay-1">
-              <div class="pricing-card-content">
-                <h3>Plan 2</h3>
-                <p>2 Main Meals (Lunch + Dinner)</p>
-                <div class="plan-price">$30/day</div>
-                <div class="plan-meta">Lunch and dinner covered.</div>
-              </div>
-              <div class="pricing-card-content pt-0">
-                <button type="button" class="landing-btn w-full js-start-generator" data-plan="Plan 2: 2 main meals per day">Start your order</button>
-              </div>
-            </article>
-            <article class="pricing-card reveal delay-2">
-              <div class="pricing-card-content">
-                <h3>Plan 3</h3>
-                <p>Breakfast + 1 Main Meal</p>
-                <div class="plan-price">$26/day</div>
-                <div class="plan-meta">Better mornings with one main meal later.</div>
-              </div>
-              <div class="pricing-card-content pt-0">
-                <button type="button" class="landing-btn w-full js-start-generator" data-plan="Plan 3: 1 main meal + 1 breakfast">Start your order</button>
-              </div>
-            </article>
-            <article class="pricing-card featured reveal delay-3">
-              <div class="pricing-card-content">
-                <h3>Plan 4</h3>
-                <p>Breakfast + 2 Main Meals</p>
-                <div class="plan-price">$40/day</div>
-                <div class="plan-meta">The full-day option for complete coverage.</div>
-              </div>
-              <div class="pricing-card-content pt-0">
-                <button type="button" class="landing-btn w-full js-start-generator" data-plan="Plan 4: 2 main meals + 1 breakfast (full day)">Start your order</button>
-              </div>
-            </article>
-          </div>
+          <p class="pricing-hint">Not sure which plan? <a href="#how-it-works">Compare them here</a></p>
         </div>
       </section>
 
-      <section class="landing-section">
-        <div class="landing-container">
-          <div class="creator-panel reveal">
-            <div class="creator-image min-h-[420px]">
-              <img src="https://chontaduroprepmeals.com/assets/images/image07.jpg" alt="Angela Ordonez, creator of Chontaduro" referrerpolicy="no-referrer">
-            </div>
-            <div class="creator-copy">
-              <span class="eyebrow">Creator</span>
-              <h2 class="text-[2.2rem] md:text-[3rem] leading-none mt-3 mb-4">Ángela Ordóñez</h2>
-              <p>Data Scientist with emphasis on Data Science &amp; Machine Learning, making data-driven decisions to design smarter, personalized solutions. Electronics &amp; Telecommunications Engineer with a strong background in systems, technology, and innovation. Deeply passionate about health and nutrition, constantly studying how food, metabolism, and habits impact the body and mind.</p>
-            </div>
+      <section class="landing-section" id="creator">
+        <div class="landing-container section-inner reveal">
+          <p class="section-kicker">Creator</p>
+          <div class="creator-photo">
+            <img src="/static/images/image07.jpg" alt="Angela Ordonez, creator of Chontaduro">
           </div>
+          <h2 class="section-title">Ángela Ordóñez</h2>
+          <ul class="creator-bio">
+            <li>Data Scientist focused on Machine Learning and personalized decision systems.</li>
+            <li>Electronics and Telecommunications Engineer with a strong systems and technology background.</li>
+            <li>Passionate about health and nutrition, translating science into practical meals for real life.</li>
+          </ul>
         </div>
       </section>
 
       <section class="landing-section" id="contact">
-        <div class="landing-container">
-          <div class="section-heading reveal">
-            <span class="eyebrow">Contact</span>
-            <h2>Stay close to the kitchen</h2>
-            <p>Questions, custom requests, or ready to start? Reach Chontaduro directly.</p>
-          </div>
-          <div class="contact-grid">
-            <div class="contact-card reveal">
-              <h3>Instagram</h3>
-              <p>See meals, updates, and behind-the-scenes content.</p>
-              <div class="mt-4"><a href="https://www.instagram.com/chontaduroprepmeals" target="_blank" rel="noreferrer">@chontaduroprepmeals</a></div>
-            </div>
-            <div class="contact-card reveal delay-1">
-              <h3>Phone</h3>
-              <p>Call or text for direct support.</p>
-              <div class="mt-4"><a href="tel:2062266936">2062266936</a></div>
-            </div>
-            <div class="contact-card reveal delay-2">
-              <h3>Email</h3>
-              <p>For plan questions, deliveries, and general inquiries.</p>
-              <div class="mt-4"><a href="mailto:chontaduroprepmeals@gmail.com">chontaduroprepmeals@gmail.com</a></div>
-            </div>
+        <div class="landing-container section-inner reveal">
+          <p class="section-kicker">Contact</p>
+          <h2 class="section-title">Stay close to the kitchen</h2>
+          <div class="contact-links">
+            <a class="contact-link" href="https://www.instagram.com/chontaduroprepmeals" target="_blank" rel="noreferrer">Instagram</a>
+            <a class="contact-link" href="tel:2062266936">Phone</a>
+            <a class="contact-link" href="mailto:chontaduroprepmeals@gmail.com">Email</a>
           </div>
         </div>
       </section>
 
-      <section class="landing-section">
-        <div class="landing-container">
-          <div class="final-cta-panel reveal">
-            <div class="final-cta-copy">
-              <span class="eyebrow">Final call</span>
-              <h2>WHAT ARE YOU WAITING FOR?</h2>
-              <p>When you are ready, the generator is right here. Tell us your goals, choose your plan, and let Chontaduro do the precise part.</p>
-              <div class="mt-8">
-                <button type="button" class="landing-btn js-start-generator">PICK YOUR PLAN NOW</button>
-              </div>
-            </div>
-            <div class="final-cta-image min-h-[360px]">
-              <img src="https://chontaduroprepmeals.com/assets/images/image01.jpg" alt="Chontaduro prepared meal presentation" referrerpolicy="no-referrer">
-            </div>
-          </div>
+      <section class="final-cta-section reveal">
+        <div>
+          <h2 class="final-cta-title">WHAT ARE YOU WAITING FOR?</h2>
+          <button type="button" class="landing-btn js-start-generator">PICK YOUR PLAN NOW</button>
         </div>
       </section>
     </main>
