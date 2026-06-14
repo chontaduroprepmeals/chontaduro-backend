@@ -298,6 +298,102 @@ html, body {
       opacity: 0.8;
     }
 
+    .expand-panel {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transition: max-height 0.45s ease, opacity 0.35s ease;
+    }
+
+    .expand-panel.is-open {
+      max-height: 1800px;
+      opacity: 1;
+      margin-top: 26px;
+    }
+
+    .plan-detail-card,
+    .plan-comparison-wrap {
+      background: rgba(255, 255, 255, 0.74);
+      border: 1px solid rgba(232, 98, 26, 0.2);
+      border-radius: 14px;
+      padding: 22px;
+      text-align: left;
+    }
+
+    .plan-detail-card {
+      display: none;
+    }
+
+    .plan-detail-card.is-open {
+      display: block;
+    }
+
+    .plan-detail-title {
+      margin: 0 0 12px;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(1.8rem, 4vw, 2.4rem);
+      color: #2C1810;
+    }
+
+    .plan-detail-points {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 7px;
+      color: #3f2a1f;
+    }
+
+    .plan-detail-note {
+      margin: 14px 0 0;
+      color: #5f4334;
+      font-style: italic;
+    }
+
+    .plan-detail-actions {
+      margin-top: 18px;
+    }
+
+    .plan-comparison-title {
+      margin: 0 0 14px;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(1.8rem, 4vw, 2.3rem);
+      color: #2C1810;
+      text-align: center;
+    }
+
+    .comparison-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .comparison-table {
+      width: 100%;
+      min-width: 700px;
+      border-collapse: collapse;
+      color: #3f2a1f;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(44, 24, 16, 0.14);
+      text-align: center;
+      font-size: 0.95rem;
+    }
+
+    .comparison-table th:first-child,
+    .comparison-table td:first-child {
+      text-align: left;
+      font-weight: 700;
+      color: #2C1810;
+    }
+
+    .comparison-table thead th {
+      color: #E8621A;
+      font-weight: 700;
+    }
+
     .creator-photo {
       width: min(240px, 70vw);
       margin: 0 auto 24px;
@@ -726,24 +822,114 @@ html.in-iframe .app-card {
           <p class="section-kicker">Plans / Pricing</p>
           <h2 class="section-title">Starting at $15/day</h2>
           <div class="pricing-list">
-            <button type="button" class="plan-link js-start-generator" data-plan="Plan 1: 1 main meal per day">
+            <button type="button" class="plan-link js-plan-detail-trigger" data-detail-plan="plan1">
               <span>Plan 1 - One Main Meal</span>
               <span class="arrow">-></span>
             </button>
-            <button type="button" class="plan-link js-start-generator" data-plan="Plan 2: 2 main meals per day">
+            <button type="button" class="plan-link js-plan-detail-trigger" data-detail-plan="plan2">
               <span>Plan 2 - Lunch + Dinner</span>
               <span class="arrow">-></span>
             </button>
-            <button type="button" class="plan-link js-start-generator" data-plan="Plan 3: 1 main meal + 1 breakfast">
+            <button type="button" class="plan-link js-plan-detail-trigger" data-detail-plan="plan3">
               <span>Plan 3 - Breakfast + 1 Main Meal</span>
               <span class="arrow">-></span>
             </button>
-            <button type="button" class="plan-link js-start-generator" data-plan="Plan 4: 2 main meals + 1 breakfast (full day)">
+            <button type="button" class="plan-link js-plan-detail-trigger" data-detail-plan="plan4">
               <span>Plan 4 - Breakfast + 2 Main Meals</span>
               <span class="arrow">-></span>
             </button>
           </div>
-          <p class="pricing-hint">Not sure which plan? <a href="#how-it-works">Compare them here</a></p>
+          <p class="pricing-hint">Not sure which plan to choose? <a href="#" id="comparePlansToggle" aria-expanded="false">Compare them here</a></p>
+
+          <div id="planDetailPanel" class="expand-panel" aria-hidden="true">
+            <article class="plan-detail-card" data-plan-detail="plan1">
+              <h3 class="plan-detail-title">Plan 1 - 1 Main Meal</h3>
+              <ul class="plan-detail-points">
+                <li>✅ Personalized portion for that meal</li>
+                <li>✅ Protein tracking for that meal</li>
+                <li>❌ No tracking of carbs, fats, or calories</li>
+                <li>❌ No guidance for other meals</li>
+              </ul>
+              <p class="plan-detail-note">💡 For those who want guidance for one main meal while managing the rest of the day on their own.</p>
+              <div class="plan-detail-actions">
+                <button type="button" class="landing-btn js-start-generator" data-plan="Plan 1: 1 main meal per day">Start with Plan 1</button>
+              </div>
+            </article>
+
+            <article class="plan-detail-card" data-plan-detail="plan2">
+              <h3 class="plan-detail-title">Plan 2 - 2 Main Meals (Lunch + Dinner)</h3>
+              <ul class="plan-detail-points">
+                <li>✅ Personalized portions for each meal</li>
+                <li>✅ Protein tracking for these 2 meals</li>
+                <li>✅ Carbs tracking for these 2 meals</li>
+                <li>❌ No tracking of fats or total calories</li>
+              </ul>
+              <p class="plan-detail-note">💡 For those who want structure for two main meals with solid protein + carbs guide.</p>
+              <div class="plan-detail-actions">
+                <button type="button" class="landing-btn js-start-generator" data-plan="Plan 2: 2 main meals per day">Start with Plan 2</button>
+              </div>
+            </article>
+
+            <article class="plan-detail-card" data-plan-detail="plan3">
+              <h3 class="plan-detail-title">Plan 3 - Breakfast + 1 Main Meal</h3>
+              <ul class="plan-detail-points">
+                <li>✅ Personalized portions for each meal</li>
+                <li>✅ Protein tracking for these 2 meals</li>
+                <li>✅ Carbs tracking for these 2 meals</li>
+                <li>❌ No tracking of fats or total calories</li>
+              </ul>
+              <p class="plan-detail-note">💡 For those who want a structured start to the day with flexibility for the rest.</p>
+              <div class="plan-detail-actions">
+                <button type="button" class="landing-btn js-start-generator" data-plan="Plan 3: 1 main meal + 1 breakfast">Start with Plan 3</button>
+              </div>
+            </article>
+
+            <article class="plan-detail-card" data-plan-detail="plan4">
+              <h3 class="plan-detail-title">Plan 4 - 🏆 Full Day (Breakfast + Lunch + Dinner)</h3>
+              <ul class="plan-detail-points">
+                <li>✅ Personalized portions for all meals</li>
+                <li>✅ Full macro tracking (Protein + Carbs + Fats)</li>
+                <li>✅ Full calorie tracking</li>
+                <li>✅ Snack guidance to reach protein or calorie goals</li>
+              </ul>
+              <p class="plan-detail-note">💡 For those who want complete guidance, precise tracking, and a fully planned day.</p>
+              <div class="plan-detail-actions">
+                <button type="button" class="landing-btn js-start-generator" data-plan="Plan 4: 2 main meals + 1 breakfast (full day)">Start with Plan 4</button>
+              </div>
+            </article>
+          </div>
+
+          <div id="planComparisonPanel" class="expand-panel" aria-hidden="true">
+            <div class="plan-comparison-wrap">
+              <h3 class="plan-comparison-title">Plan Comparison</h3>
+              <div class="comparison-table-wrap">
+                <table class="comparison-table">
+                  <thead>
+                    <tr>
+                      <th>Feature</th>
+                      <th>Plan 1</th>
+                      <th>Plan 2</th>
+                      <th>Plan 3</th>
+                      <th>Plan 4</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Meals per day</td><td>1</td><td>2</td><td>2</td><td>3</td></tr>
+                    <tr><td>Includes breakfast</td><td>❌</td><td>❌</td><td>✅</td><td>✅</td></tr>
+                    <tr><td>Includes lunch</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                    <tr><td>Includes dinner</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                    <tr><td>Personalized portions</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                    <tr><td>Protein tracking</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                    <tr><td>Carbs tracking</td><td>❌</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                    <tr><td>Full macro tracking</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td></tr>
+                    <tr><td>Calorie tracking</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td></tr>
+                    <tr><td>Snack Guidance</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td></tr>
+                    <tr><td>Price per day</td><td>$15</td><td>$30</td><td>$26</td><td>$40</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -922,6 +1108,64 @@ html.in-iframe .app-card {
 
     function setupLandingPage() {
       document.body.classList.add('js-enhanced');
+
+      const planDetailPanel = document.getElementById('planDetailPanel');
+      const planComparisonPanel = document.getElementById('planComparisonPanel');
+      const compareToggle = document.getElementById('comparePlansToggle');
+
+      const closePlanDetails = () => {
+        if (!planDetailPanel) return;
+        planDetailPanel.classList.remove('is-open');
+        planDetailPanel.setAttribute('aria-hidden', 'true');
+        planDetailPanel.querySelectorAll('.plan-detail-card').forEach((card) => {
+          card.classList.remove('is-open');
+        });
+      };
+
+      const closeComparison = () => {
+        if (!planComparisonPanel) return;
+        planComparisonPanel.classList.remove('is-open');
+        planComparisonPanel.setAttribute('aria-hidden', 'true');
+        if (compareToggle) compareToggle.setAttribute('aria-expanded', 'false');
+      };
+
+      document.querySelectorAll('.js-plan-detail-trigger').forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          const targetPlan = button.dataset.detailPlan;
+          if (!planDetailPanel || !targetPlan) return;
+
+          const targetCard = planDetailPanel.querySelector(`[data-plan-detail="${targetPlan}"]`);
+          if (!targetCard) return;
+
+          const alreadyOpen = planDetailPanel.classList.contains('is-open') && targetCard.classList.contains('is-open');
+          closeComparison();
+          closePlanDetails();
+
+          if (!alreadyOpen) {
+            targetCard.classList.add('is-open');
+            planDetailPanel.classList.add('is-open');
+            planDetailPanel.setAttribute('aria-hidden', 'false');
+            planDetailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        });
+      });
+
+      if (compareToggle && planComparisonPanel) {
+        compareToggle.addEventListener('click', (event) => {
+          event.preventDefault();
+          const willOpen = !planComparisonPanel.classList.contains('is-open');
+          closePlanDetails();
+          closeComparison();
+
+          if (willOpen) {
+            planComparisonPanel.classList.add('is-open');
+            planComparisonPanel.setAttribute('aria-hidden', 'false');
+            compareToggle.setAttribute('aria-expanded', 'true');
+            planComparisonPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        });
+      }
 
       document.querySelectorAll('.js-start-generator').forEach((button) => {
         button.addEventListener('click', (event) => {
