@@ -83,11 +83,11 @@ html, body {
 
     .hero-grid {
       display: grid;
-      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+      grid-template-columns: 55% 45%;
       gap: 24px;
-      align-items: center;
+      align-items: start;
       min-height: calc(100vh - var(--landing-nav-height));
-      padding: 0 0 24px;
+      padding: 24px 0 24px;
       overflow: visible;
     }
 
@@ -115,9 +115,10 @@ html, body {
 
     .hero-copy h1 {
       font-family: 'Cormorant Garamond', serif;
-      font-size: clamp(2.5rem, 8vw, 7rem);
+      font-size: clamp(2rem, 5vw, 4.5rem);
       line-height: 0.95;
       white-space: nowrap;
+      overflow: hidden;
       margin: 8px 0 14px;
       color: #1f1209;
     }
