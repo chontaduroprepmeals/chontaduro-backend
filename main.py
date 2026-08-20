@@ -583,6 +583,14 @@ load_templates()
 
 # --- SESSIONS (in-memory) ---
 sessions: Dict[str, Dict[str, Any]] = {}
+@app.get("/reset-session")
+async def reset_session(request: Request):
+    session_id = request.cookies.get("session_id")
+    if session_id and session_id in sessions:
+        del sessions[session_id]
+    response = JSONResponse({"status": "session cleared"})
+    response.delete_cookie("session_id")
+    return response
 
 # --- LOGIN SECURITY (in-memory lockout) ---
 MAX_FAILED_LOGIN_ATTEMPTS = int(os.getenv("MAX_FAILED_LOGIN_ATTEMPTS", "5"))
