@@ -136,6 +136,22 @@ INGREDIENT_DATABASE = {
         "typical_serving_g": 148,
         "unit": "g"
     },
+        "pork tenderloin": {
+        "protein_per_100g": 31.0,
+        "carbs_per_100g": 0.0,
+        "fat_per_100g": 3.5,
+        "calories_per_100g": 143,
+        "typical_serving_g": 125,
+        "unit": "g"
+    },
+    "ground pork": {
+        "protein_per_100g": 25.7,
+        "carbs_per_100g": 0.0,
+        "fat_per_100g": 20.0,
+        "calories_per_100g": 297,
+        "typical_serving_g": 130,
+        "unit": "g"
+    },
 
     # Dairy
     "regular milk": {

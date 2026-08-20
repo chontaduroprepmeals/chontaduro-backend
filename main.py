@@ -2037,7 +2037,7 @@ def _enrich_with_protein_under_budgets(
 def _build_final_macros_from_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     totals = _compute_working_totals(rows)
     return {
-        "protein_g": round(float(totals.get("protein_g", 0)), 1),
+        "protein_g": round(min(40.0, float(totals.get("protein_g", 0))), 1),
         "carbs_g": round(float(totals.get("carbs_g", 0)), 1),
         "fat_g": round(float(totals.get("fat_g", 0)), 1),
         "calories": round(float(totals.get("calories", 0))),
@@ -2237,10 +2237,9 @@ def validate_daily_calories(daily_menu: List[Dict], target_daily_calories: int) 
         for meal in daily_menu:
             if "final_macros" in meal:
                 meal["final_macros"]["calories"] = round(meal["final_macros"]["calories"] * scale_factor)
-                meal["final_macros"]["protein_g"] = round(meal["final_macros"]["protein_g"] * scale_factor, 1)
+                meal["final_macros"]["protein_g"] = round(min(40.0, meal["final_macros"]["protein_g"] * scale_factor), 1)
                 meal["final_macros"]["carbs_g"] = round(meal["final_macros"]["carbs_g"] * scale_factor, 1)
                 meal["final_macros"]["fat_g"] = round(meal["final_macros"]["fat_g"] * scale_factor, 1)
-
             if "portion_multiplier" in meal:
                 meal["portion_multiplier"] = round(meal["portion_multiplier"] * scale_factor, 2)
 
