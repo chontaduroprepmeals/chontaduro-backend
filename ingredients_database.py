@@ -77,7 +77,7 @@ INGREDIENT_DATABASE = {
         "carbs_per_100g": 0.0,
         "fat_per_100g": 3.6,
         "calories_per_100g": 165,
-        "typical_serving_g": 150,
+        "typical_serving_g": 125,
         "unit": "g"
     },
     "eggs": {
@@ -109,7 +109,7 @@ INGREDIENT_DATABASE = {
         "carbs_per_100g": 0.0,
         "fat_per_100g": 8.0,
         "calories_per_100g": 189,
-        "typical_serving_g": 150,
+        "typical_serving_g": 148,
         "unit": "g"
     },
     "canned tuna": {
@@ -117,7 +117,7 @@ INGREDIENT_DATABASE = {
         "carbs_per_100g": 0.0,
         "fat_per_100g": 0.8,
         "calories_per_100g": 128,
-        "typical_serving_g": 100,
+        "typical_serving_g": 130,
         "unit": "g"
     },
     "canned sardines": {
@@ -125,7 +125,7 @@ INGREDIENT_DATABASE = {
         "carbs_per_100g": 0.0,
         "fat_per_100g": 11.5,
         "calories_per_100g": 208,
-        "typical_serving_g": 100,
+        "typical_serving_g": 160,
         "unit": "g"
     },
     "whole chicken": {
@@ -133,7 +133,7 @@ INGREDIENT_DATABASE = {
         "carbs_per_100g": 0.0,
         "fat_per_100g": 14.0,
         "calories_per_100g": 239,
-        "typical_serving_g": 150,
+        "typical_serving_g": 148,
         "unit": "g"
     },
 

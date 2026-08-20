@@ -4475,7 +4475,7 @@ async def next_step(request: Request):
                             },
                             "final_total_estimate": {
                                 "protein": f"~{round(day_meal_protein + protein_deficit_for_snacks - _snack_range_variance)}-{round(day_meal_protein + protein_deficit_for_snacks + _snack_range_variance)}g",
-                                "carbs": f"~{round(day_meal_carbs + max(0, remaining_carbs_for_snacks - _snack_range_variance))}-{round(day_meal_carbs + remaining_carbs_for_snacks + 10)}g",
+                                "carbs": f"~{int(round(day_meal_carbs + max(0, remaining_carbs_for_snacks - _snack_range_variance)))}-{int(round(day_meal_carbs + remaining_carbs_for_snacks + 10))}g",
                                 "fat": f"~{round(day_meal_fat)}-{round(day_meal_fat + 5)}g",
                                 "calories": f"~{round(day_meal_calories + calorie_dist['snack_calories_reserved'] - 30)}-{round(day_meal_calories + calorie_dist['snack_calories_reserved'] + 30)} kcal",
                             },
