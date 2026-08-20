@@ -4307,7 +4307,9 @@ async def next_step(request: Request):
                     meal_entry["final_macros"] = adjusted["final_macros"]
 
                     # Sync exposed assigned values with constrained final result.
-                    meal_entry["protein_assigned"] = round(float(adjusted["final_macros"].get("protein_g", 0)), 1)
+                     # Hard cap: never deliver more than 40g protein per meal
+                    meal_entry["final_macros"]["protein_g"] = round(min(40.0, float(meal_entry["final_macros"].get("protein_g", 0))), 1)
+                    meal_entry["protein_assigned"] = meal_entry["final_macros"]["protein_g"]
                     meal_entry["fat_assigned"] = round(float(adjusted["final_macros"].get("fat_g", 0)), 1)
                     meal_entry["carbs_assigned"] = round(float(adjusted["final_macros"].get("carbs_g", 0)), 1)
                     meal_entry["calories_assigned"] = int(adjusted["final_macros"].get("calories", 0))
