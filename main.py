@@ -2097,6 +2097,7 @@ def adjust_meal_for_macro_budgets(
 
     start_totals = _compute_working_totals(rows)
     if float(start_totals.get("protein_g", 0)) > 0 and protein_target > 0:
+        protein_target = min(40.0, protein_target)  # Hard cap at 40g
         protein_scale = protein_target / float(start_totals.get("protein_g", 0))
         _scale_working_rows(rows, protein_scale)
         if abs(protein_scale - 1.0) > 0.02:
