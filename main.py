@@ -3387,7 +3387,7 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
             meal_dict = meal_obj.model_dump() if hasattr(meal_obj, "model_dump") else dict(meal_obj)
 
             # Use smart protein distribution value for this slot
-            assigned_protein = protein_distribution[meal_idx_in_day % len(protein_distribution)]
+            assigned_protein = min(40, protein_distribution[meal_idx_in_day % len(protein_distribution)])
             assigned_fat = fat_per_meal + (1 if meal_idx_in_day < fat_remainder else 0)
             assigned_carbs = carbs_per_meal + (1 if meal_idx_in_day < carbs_remainder else 0)
 
