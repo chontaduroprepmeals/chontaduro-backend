@@ -3334,16 +3334,19 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
     plan_map = {1: (1, 0), 2: (2, 0), 3: (1, 1), 4: (2, 1)}
     num_main, num_break = plan_map.get(state.plan, (1, 0))
     meals_per_day = num_main + num_break
-    days = state.days or max(1, len(menu) // max(1, meals_per_day))
+    days = state.days or max(1, len(menu) / max(1, meals_per_day))
 
     # Daily nutritional targets
-    daily_protein_target = int(macros_daily_protein or 120)  # Default 120g if not provided
+    daily_protein_target = int(macros_daily_protein or 120)
+    # CAP: meals can only deliver max 40g per meal
+    max_from_meals = meals_per_day * 40
+    protein_for_meals = min(daily_protein_target, max_from_meals)
     daily_calorie_target = int(calorie_target or 2000)  # Default 2000 kcal
 
     # Use smart protein distribution: evenly across meals with 40g cap.
     # When target > 40g × num_meals, all slots are capped at 40g and the
     # remainder is covered by snacks (not reflected here).
-    protein_distribution = distribute_protein_across_meals(daily_protein_target, meals_per_day)
+    protein_distribution = distribute_protein_across_meals(protein_for_meals, meals_per_day)
     protein_per_meal = protein_distribution[0]  # First slot value (may differ by ±1g for remainder slots)
 
     # Calculate daily macros
