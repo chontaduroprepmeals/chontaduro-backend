@@ -4300,7 +4300,7 @@ async def next_step(request: Request):
                     meal_entry["day_label"] = f"DAY {day_num} - {meal_type}"
                     
                     # Per-meal macro targets derived from daily budget split.
-                    protein_target_for_meal = float(meal.get("provided_protein", 0) or 0)
+                    protein_target_for_meal = min(40.0, float(meal.get("provided_protein", 0) or 0))
                     carb_budget_for_meal = float(meal.get("carbs_assigned", 0) or 0)
                     fat_budget_for_meal = float(meal.get("fat_assigned", 0) or 0)
 
