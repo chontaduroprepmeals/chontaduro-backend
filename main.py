@@ -4347,6 +4347,12 @@ async def next_step(request: Request):
                 # Apply per-day macro validation: scale down or up carbs/fat/calories so each
                 # day's total is within 5% of the meal calorie target.
                 # Protein is NOT scaled (already enforced at ~40g per meal).
+                # HARD POST-PROCESSOR: enforce 40g protein cap on ALL meals
+                for _meal in response_menu:
+                    if _meal.get("final_macros", {}).get("protein_g", 0) > 40:
+                        _meal["final_macros"]["protein_g"] = 40.0
+                    if _meal.get("protein_assigned", 0) > 40:
+                        _meal["protein_assigned"] = 40.0
                 days_in_menu = set(m.get("day_number", 1) for m in response_menu)
                 for day_num in days_in_menu:
                     day_meals = [m for m in response_menu if m.get("day_number", 1) == day_num]
