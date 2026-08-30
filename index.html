@@ -3008,7 +3008,7 @@ html.in-iframe .app-card {
         // Calculate day totals (prefer final_macros when available)
         let dayProtein = 0, dayCarbs = 0, dayFat = 0, dayCalories = 0;
         dayMeals.forEach(m => {
-          dayProtein  += m.final_macros ? m.final_macros.protein_g : (m.protein_assigned || 0);
+          dayProtein  += Math.min(40, m.final_macros ? m.final_macros.protein_g : (m.protein_assigned || 0));
           dayCarbs    += m.final_macros ? m.final_macros.carbs_g   : (m.carbs_assigned || 0);
           dayFat      += m.final_macros ? m.final_macros.fat_g     : (m.fat_assigned || 0);
           dayCalories += m.final_macros ? m.final_macros.calories  : (m.calories_assigned || m.calories || 0);
