@@ -3650,14 +3650,15 @@ def calculate_meal_calorie_distribution(daily_calories: int, num_meals: int, pro
         }
 
 
-def generate_flexible_snack_message(protein_gap: int, carbs_gap: int, fat_gap: int, calories_gap: int) -> Dict[str, Any]:
+def generate_flexible_snack_message(protein_gap: int, carbs_gap: int, fat_gap: int, calories_gap: int, daily_carb_target: int = 210, daily_fat_target: int = 56) -> Dict[str, Any]:
     """
     Generates flexible snack guidance with nutrient ranges instead of exact values.
     Only used for Plan 4 when the protein gap is small (<=25g).
     """
     # Range half-widths: allow ±5g protein, ±10g carbs, ±30 kcal flexibility
-    _PROTEIN_RANGE_DELTA = 5
-    _CARBS_RANGE_DELTA = 10
+    _PROTEIN_RANGE_DELTA = 10
+    _CARBS_RANGE_DELTA = max(10, int(daily_carb_target * 0.10))
+    _FAT_RANGE_DELTA = max(4, int(daily_fat_target * 0.08))
     _CAL_RANGE_DELTA = 30
     _MIN_PROTEIN_G = 10
     _MIN_CARBS_G = 10
@@ -4446,6 +4447,8 @@ async def next_step(request: Request):
                         carbs_gap=carbs_deficit,
                         fat_gap=fat_deficit,
                         calories_gap=calorie_dist["snack_calories_reserved"],
+                        daily_carb_target=macros.get("carbs_grams", 210),
+                        daily_fat_target=macros.get("fat_grams", 56),
                     )
                     print(f"\n[DEBUG] Plan 4 flexible snack guidance: {protein_deficit_for_snacks}g protein gap")
                 elif protein_deficit_for_snacks > 0 and protein_deficit_for_snacks <= 25:
