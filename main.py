@@ -4476,7 +4476,7 @@ async def next_step(request: Request):
                     _snack_range_variance = 5
                     for day_num in sorted(days_in_menu):
                         day_meals = [m for m in response_menu if m.get("day_number", 1) == day_num]
-                        day_meal_protein = round(sum(m["final_macros"]["protein_g"] for m in day_meals), 1)
+                        day_meal_protein = round(sum(min(40.0, m["final_macros"]["protein_g"]) for m in day_meals), 1)
                         day_meal_carbs = round(sum(m["final_macros"]["carbs_g"] for m in day_meals), 1)
                         day_meal_fat = round(sum(m["final_macros"]["fat_g"] for m in day_meals), 1)
                         day_meal_calories = round(sum(m["final_macros"]["calories"] for m in day_meals))
