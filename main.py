@@ -3666,11 +3666,12 @@ def generate_flexible_snack_message(protein_gap: int, carbs_gap: int, fat_gap: i
     protein_min = max(_MIN_PROTEIN_G, protein_gap - _PROTEIN_RANGE_DELTA)
     protein_max = protein_gap + _PROTEIN_RANGE_DELTA
 
+    carbs_gap = int(round(carbs_gap))
     carbs_min = max(_MIN_CARBS_G, carbs_gap - _CARBS_RANGE_DELTA)
     carbs_max = max(_MIN_CARBS_G + _CARBS_RANGE_DELTA, carbs_gap + _CARBS_RANGE_DELTA)
 
-    cal_min = max(_MIN_CAL, calories_gap - _CAL_RANGE_DELTA)
-    cal_max = calories_gap + _CAL_RANGE_DELTA
+    cal_min = max(_MIN_CAL, int(round(calories_gap)) - _CAL_RANGE_DELTA)
+    cal_max = int(round(calories_gap)) + _CAL_RANGE_DELTA
 
     message = (
         f"Complete your day with a snack containing:\n"
