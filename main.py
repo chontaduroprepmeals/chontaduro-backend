@@ -2080,11 +2080,10 @@ def adjust_meal_for_macro_budgets(
     2) keep carbs and fats inside per-meal budget shares
     3) trim carb-heavy ingredients first when carbs are too high
     """
-    natural_protein = float(_compute_working_totals(rows).get("protein_g", 0)) if rows else 0.0
-    if natural_protein >= 25.0:
-        protein_target = min(40.0, natural_protein)
-    else:
-        protein_target = min(40.0, max(0.0, float(target_protein_per_meal or 0.0)))
+    protein_target = min(40.0, max(0.0, float(target_protein_per_meal or 0.0)))
+    meal_base_protein = float(meal_data.get("protein_g", 0) or 0)
+    if meal_base_protein >= 25.0:
+        protein_target = min(40.0, meal_base_protein)
     carb_budget = max(0.0, float(target_carbs_per_meal or 0.0))
     fat_budget = max(0.0, float(target_fat_per_meal or 0.0))
 
