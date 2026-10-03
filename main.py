@@ -3363,7 +3363,7 @@ def allocate_protein_to_menu(state: SessionState, menu: List[Meal], macros_daily
 
     fat_per_meal = daily_fat_target // meals_per_day
     carbs_per_meal = daily_carb_target // meals_per_day
-    calories_per_meal = daily_calorie_target // meals_per_day
+    calories_per_meal = min(750, daily_calorie_target // meals_per_day)
 
     fat_remainder = daily_fat_target % meals_per_day
     carbs_remainder = daily_carb_target % meals_per_day
