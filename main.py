@@ -3636,7 +3636,7 @@ def calculate_meal_calorie_distribution(daily_calories: int, num_meals: int, pro
             max(_MIN_SNACK_RESERVE_KCAL, protein_gap * _SNACK_KCAL_PER_GRAM_PROTEIN),
         )
         meal_calories_total = daily_calories - snack_calorie_reserve
-        calories_per_meal = round(meal_calories_total / num_meals)
+        calories_per_meal = min(750, round(meal_calories_total / num_meals))
         return {
             "calories_per_meal": calories_per_meal,
             "total_meal_calories": meal_calories_total,
@@ -3644,7 +3644,7 @@ def calculate_meal_calorie_distribution(daily_calories: int, num_meals: int, pro
             "message": f"Meals designed for {meal_calories_total} kcal, leaving {snack_calorie_reserve} kcal for snacks",
         }
     else:
-        calories_per_meal = round(daily_calories / num_meals)
+        calories_per_meal = min(750, round(daily_calories / num_meals))
         return {
             "calories_per_meal": calories_per_meal,
             "total_meal_calories": daily_calories,
