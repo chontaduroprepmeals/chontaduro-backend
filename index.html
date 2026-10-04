@@ -3033,9 +3033,9 @@ html.in-iframe .app-card {
 
           // Use final_macros when available, otherwise fall back to assigned values
           const displayProtein = Math.min(40, m.final_macros ? m.final_macros.protein_g : (m.protein_assigned || m.provided_protein || 0));
-          const displayCarbs   = m.final_macros ? m.final_macros.carbs_g   : (m.carbs_assigned || 0);
-          const displayFat     = m.final_macros ? m.final_macros.fat_g     : (m.fat_assigned || 0);
-          const displayCalories = m.final_macros ? m.final_macros.calories : (m.calories_assigned || m.calories || 0);
+          const displayCarbs   = Math.min(90, m.final_macros ? m.final_macros.carbs_g   : (m.carbs_assigned || 0));
+          const displayFat     = Math.min(35, m.final_macros ? m.final_macros.fat_g     : (m.fat_assigned || 0));
+          const displayCalories = (displayProtein * 4) + (displayCarbs * 4) + (displayFat * 9);
 
           // Meal type emoji
           let mealTypeEmoji = '🍽️';
