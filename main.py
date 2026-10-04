@@ -4309,9 +4309,8 @@ async def next_step(request: Request):
                     
                     # Per-meal macro targets derived from daily budget split.
                     protein_target_for_meal = min(40.0, float(meal.get("provided_protein", 0) or 0))
-                    carb_budget_for_meal = float(meal.get("carbs_assigned", 0) or 0)
-                    fat_budget_for_meal = float(meal.get("fat_assigned", 0) or 0)
-
+                    carb_budget_for_meal = min(80.0, float(meal.get("carbs_assigned", 0) or 0))
+                    fat_budget_for_meal = min(30.0, float(meal.get("fat_assigned", 0) or 0))
                     # Algorithmic constrained adjustment: protein target + carb/fat budget share.
                     adjusted = adjust_meal_for_macro_budgets(
                         meal_data=meal,
