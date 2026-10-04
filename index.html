@@ -3009,9 +3009,9 @@ html.in-iframe .app-card {
         let dayProtein = 0, dayCarbs = 0, dayFat = 0, dayCalories = 0;
         dayMeals.forEach(m => {
           dayProtein  += Math.min(40, m.final_macros ? m.final_macros.protein_g : (m.protein_assigned || 0));
-          dayCarbs    += m.final_macros ? m.final_macros.carbs_g   : (m.carbs_assigned || 0);
-          dayFat      += m.final_macros ? m.final_macros.fat_g     : (m.fat_assigned || 0);
-          dayCalories += m.final_macros ? m.final_macros.calories  : (m.calories_assigned || m.calories || 0);
+          dayCarbs    += Math.min(90, m.final_macros ? m.final_macros.carbs_g   : (m.carbs_assigned || 0));
+          dayFat      += Math.min(35, m.final_macros ? m.final_macros.fat_g     : (m.fat_assigned || 0));
+          dayCalories += (Math.min(40, m.final_macros ? m.final_macros.protein_g : (m.protein_assigned || 0)) * 4) + (Math.min(90, m.final_macros ? m.final_macros.carbs_g : (m.carbs_assigned || 0)) * 4) + (Math.min(35, m.final_macros ? m.final_macros.fat_g : (m.fat_assigned || 0)) * 9);
         });
         dayCalories = Math.round(dayCalories);
         
