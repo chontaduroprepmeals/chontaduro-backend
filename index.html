@@ -1310,7 +1310,7 @@ html.in-iframe .app-card {
           const generated = await api('/next-step', {
             session_id: window.userSession?.session_id || sessionId,
             step: 'review',
-            answer: {}
+            answer: window.userSession?.answers || {}
           });
           if (generated.menu) {
             renderMenu(generated);
