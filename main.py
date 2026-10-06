@@ -4222,7 +4222,7 @@ async def next_step(request: Request):
 
                 # Validate plan against protein goal and calculate calorie distribution
                 plan_validation = validate_plan_for_protein_goal(meals_per_day_pre, daily_protein_target)
-                if not plan_validation["valid"] and plan_validation.get("recommendation") == "upgrade_required":
+                if False:  # never block, always generate menu with warning
                     return {
                         "question": plan_validation["message"],
                         "fields": [],
