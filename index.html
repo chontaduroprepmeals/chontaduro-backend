@@ -2947,7 +2947,7 @@ html.in-iframe .app-card {
       html += `<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">Your Menu</h2><div><button onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Adjust Preferences</button></div></div>`;
       const planPriceMap = { 1: 15, 2: 30, 3: 26, 4: 40 };
       const pricePerDay = planPriceMap[userPlan] || (data.price || 0);
-      const numDays = data.days ? data.days.length : 1;
+      const numDays = data.daily_summaries ? Object.keys(data.daily_summaries).length : 1;
       const planPrice = pricePerDay * numDays;
       html += `<div class="mb-4">Estimated plan price: <strong>$${Number(planPrice).toFixed(2)}</strong>/week (${numDays} day${numDays > 1 ? 's' : ''} × $${pricePerDay}/day)</div>`;
       if (isPlan4 && data.nutrition) html += `<div class="mb-4 text-left p-3 bg-gray-50 rounded">TMB: ${data.nutrition.tmb||'N/A'} kcal — TDEE: ${data.nutrition.tdee||'N/A'} kcal — Target: ${data.nutrition.calorie_target||'N/A'} kcal</div>`;
