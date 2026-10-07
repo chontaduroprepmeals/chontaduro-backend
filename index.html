@@ -1310,7 +1310,7 @@ html.in-iframe .app-card {
           const generated = await api('/next-step', {
             session_id: window.userSession?.session_id || sessionId,
             step: 'review',
-            answer: window.userSession?.answers || {}
+            answer: (() => { const a = window.userSession?.answers || {}; const pi = a.personal_info || {}; const dur = a.duration || {}; return { ...pi, ...a.diet_preference, ...a.objective, ...(a.allergies_and_restrictions || {}), days: dur.days || dur.Days, plan: (a.pick_plan || {}).Plan }; })()
           });
           if (generated.menu) {
             renderMenu(generated);
