@@ -2771,24 +2771,6 @@ html.in-iframe .app-card {
                 <div><span class="text-sm text-gray-600">Duration:</span> <span class="font-semibold">${reviewData.avgDuration}</span></div>
                 <div><span class="text-sm text-gray-600">Intensity:</span> <span class="font-semibold">${reviewData.intensity}</span></div>
               </div>
-              ${activeSection === 'activity' ? `
-                <div class="mt-4 border-t pt-3 grid grid-cols-1 gap-3">
-                  <label class="text-sm font-medium">Exercise days per week</label>
-                  <input id="review-days-per-week" type="number" min="0" max="7" class="p-2 border rounded-lg" value="${reviewData.daysPerWeek}">
-                  <label class="text-sm font-medium">Average session duration</label>
-                  <select id="review-avg-duration" class="p-2 border rounded-lg">
-                    ${REVIEW_DURATION_OPTIONS.map(opt => `<option value="${opt}" ${String(reviewData.avgDuration) === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-                  </select>
-                  <label class="text-sm font-medium">Intensity</label>
-                  <select id="review-intensity" class="p-2 border rounded-lg">
-                    ${REVIEW_INTENSITY_OPTIONS.map(opt => `<option value="${opt}" ${String(reviewData.intensity) === opt ? 'selected' : ''}>${opt}</option>`).join('')}
-                  </select>
-                  <div class="mt-1 flex gap-2 justify-end">
-                    <button type="button" onclick="cancelReviewInline()" class="px-3 py-2 border rounded-lg">Cancel</button>
-                    <button type="button" onclick="saveReviewInline('activity')" class="px-3 py-2 bg-orange-500 text-white rounded-lg">Save</button>
-                  </div>
-                </div>
-              ` : ''}
             </div>
           </div>
           
