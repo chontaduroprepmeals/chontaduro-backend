@@ -4051,6 +4051,7 @@ async def next_step(request: Request):
 
     elif step_name == "review":
             try:
+                print(f"[REVIEW DEBUG] answer keys: {list(answer.keys())}, days_per_week={answer.get('days_per_week')}, activity_days={state.activity_days_bucket}")
                 # Accept full state payload at generate time to preserve data integrity
                 # even if client-side step tracking drifts.
                 plan_val = answer.get("plan")
