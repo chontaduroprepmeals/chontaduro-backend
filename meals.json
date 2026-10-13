@@ -1,5 +1,140 @@
 [
   {
+    "name": "Bacon and Egg Potato Bowl",
+    "type": "breakfast",
+    "ingredients": [
+      "potato",
+      "eggs",
+      "bacon",
+      "olive oil",
+      "salt"
+    ],
+    "serving_size_g": 350,
+    "protein_g": 28,
+    "carbs_g": 32,
+    "fat_g": 18,
+    "calories": 400,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Avocado Egg Toast",
+    "type": "breakfast",
+    "ingredients": [
+      "whole wheat bread",
+      "eggs",
+      "avocado",
+      "olive oil",
+      "salt"
+    ],
+    "serving_size_g": 300,
+    "protein_g": 24,
+    "carbs_g": 30,
+    "fat_g": 22,
+    "calories": 410,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "vegetarian"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Egg White Veggie Omelette",
+    "type": "breakfast",
+    "ingredients": [
+      "egg whites",
+      "spinach",
+      "tomato",
+      "onion",
+      "olive oil",
+      "salt"
+    ],
+    "serving_size_g": 300,
+    "protein_g": 30,
+    "carbs_g": 8,
+    "fat_g": 10,
+    "calories": 240,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "low carb",
+      "vegetarian"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Tuna and Egg Toast",
+    "type": "breakfast",
+    "ingredients": [
+      "canned tuna",
+      "eggs",
+      "whole wheat bread",
+      "olive oil",
+      "salt"
+    ],
+    "serving_size_g": 320,
+    "protein_g": 35,
+    "carbs_g": 25,
+    "fat_g": 14,
+    "calories": 370,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Banana Protein Smoothie",
+    "type": "breakfast",
+    "ingredients": [
+      "banana",
+      "regular milk",
+      "protein powder",
+      "oats"
+    ],
+    "serving_size_g": 400,
+    "protein_g": 30,
+    "carbs_g": 48,
+    "fat_g": 8,
+    "calories": 390,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "vegetarian",
+      "budget friendly"
+    ],
+    "image_url": ""
+  },
+  {
+    "name": "Turkey and Egg Scramble",
+    "type": "breakfast",
+    "ingredients": [
+      "ground turkey",
+      "eggs",
+      "tomato",
+      "onion",
+      "olive oil",
+      "salt"
+    ],
+    "serving_size_g": 350,
+    "protein_g": 32,
+    "carbs_g": 6,
+    "fat_g": 16,
+    "calories": 300,
+    "price": 11.0,
+    "tags": [
+      "high protein",
+      "low carb"
+    ],
+    "image_url": ""
+  },
+  {
     "name": "Scrambled Eggs with Whole Wheat Toast",
     "type": "breakfast",
     "ingredients": [
@@ -16,27 +151,6 @@
     "price": 11.0,
     "tags": [
       "high protein",
-      "budget friendly"
-    ],
-    "image_url": ""
-  },
-  {
-    "name": "Oatmeal with Banana and Peanut Butter",
-    "type": "breakfast",
-    "ingredients": [
-      "oats",
-      "banana",
-      "peanut butter",
-      "regular milk"
-    ],
-    "serving_size_g": 350,
-    "protein_g": 8,
-    "carbs_g": 46,
-    "fat_g": 15,
-    "calories": 350,
-    "price": 11.0,
-    "tags": [
-      "vegetarian",
       "budget friendly"
     ],
     "image_url": ""
@@ -100,45 +214,6 @@
     "price": 11.0,
     "tags": [
       "high protein",
-      "budget friendly"
-    ],
-    "image_url": ""
-  },
-  {
-    "name": "Cottage Cheese with Papaya",
-    "type": "breakfast",
-    "ingredients": [
-      "cottage cheese",
-      "papaya",
-      "banana"
-    ],
-    "serving_size_g": 350,
-    "protein_g": 16,
-    "carbs_g": 64,
-    "fat_g": 4,
-    "calories": 350,
-    "price": 11.0,
-    "tags": [
-      "high protein",
-      "vegetarian"
-    ],
-    "image_url": ""
-  },
-  {
-    "name": "Rice Cereal with Milk and Banana",
-    "type": "breakfast",
-    "ingredients": [
-      "rice cereal",
-      "regular milk",
-      "banana"
-    ],
-    "serving_size_g": 300,
-    "protein_g": 7,
-    "carbs_g": 77,
-    "fat_g": 8,
-    "calories": 407,
-    "price": 11.0,
-    "tags": [
       "budget friendly"
     ],
     "image_url": ""
