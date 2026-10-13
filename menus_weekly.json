@@ -29,7 +29,19 @@
         "Chicken and Vegetable Stir-Fry with Rice",
         "Ground Beef Tacos with Corn Tortillas",
         "Chicken Breast with Quinoa and Zucchini",
-        "Tuna Salad with Mixed Greens and Whole Wheat Bread"
+        "Tuna Salad with Mixed Greens and Whole Wheat Bread",
+        "Ground Chicken Stuffed Bell Peppers with Rice",
+        "Baked Chicken Breast with Mashed Cauliflower",
+        "Ground Beef and Cabbage Stir-Fry",
+        "Rice and Egg White Scramble with Vegetables",
+        "Chicken Breast with Sweet Potato and Green Beans",
+        "Tuna and White Bean Salad",
+        "Ground Turkey and Lentil Chili",
+        "Whole Chicken Leg with Rice and Corn",
+        "Greek Yogurt Chicken with Cucumber Salad",
+        "Pork Tenderloin with Rice and Green Beans",
+        "Chicken Soup with Rice and Vegetables",
+        "Sardine Pasta with Tomatoes"
       ],
       "breakfasts": [
         "Bacon and Egg Potato Bowl",
@@ -38,7 +50,11 @@
         "Tuna and Egg Toast",
         "Banana Protein Smoothie",
         "Turkey and Egg Scramble",
-        "Scrambled Eggs with Whole Wheat Toast"
+        "Scrambled Eggs with Whole Wheat Toast",
+        "Greek Yogurt with Apple and Granola",
+        "Egg and Cheese Arepa",
+        "Corn Tortilla Breakfast Wrap",
+        "Protein Pancakes"
       ]
     }
   },
@@ -59,7 +75,6 @@
     },
     "pool": {
       "mains": [
-        "Chicken Breast with Quinoa and Zucchini",
         "Tuna Salad with Mixed Greens and Whole Wheat Bread",
         "Ground Chicken Stuffed Bell Peppers with Rice",
         "Baked Chicken Breast with Mashed Cauliflower",
@@ -74,10 +89,20 @@
         "Chicken Soup with Rice and Vegetables",
         "Sardine Pasta with Tomatoes",
         "Grilled Chicken Breast with White Rice and Broccoli",
-        "Ground Beef with Pasta and Tomato Sauce"
+        "Ground Beef with Pasta and Tomato Sauce",
+        "Chicken Meatballs with Mashed Potatoes",
+        "Tuna Pasta Salad",
+        "Ground Turkey with Sweet Plantains and Rice",
+        "Grilled Chicken with Roasted Potatoes and Green Beans",
+        "Pasta with Ground Chicken and Spinach",
+        "Baked Chicken Thighs with Cauliflower Rice",
+        "Turkey Meatballs with Spaghetti",
+        "Sardine Rice Bowl with Vegetables",
+        "Chicken and Vegetable Stir-Fry with Rice",
+        "Ground Beef Tacos with Corn Tortillas",
+        "Chicken Breast with Quinoa and Zucchini"
       ],
       "breakfasts": [
-        "Banana Protein Smoothie",
         "Turkey and Egg Scramble",
         "Scrambled Eggs with Whole Wheat Toast",
         "Greek Yogurt with Apple and Granola",
@@ -87,7 +112,8 @@
         "Bacon and Egg Potato Bowl",
         "Avocado Egg Toast",
         "Egg White Veggie Omelette",
-        "Tuna and Egg Toast"
+        "Tuna and Egg Toast",
+        "Banana Protein Smoothie"
       ]
     }
   }
