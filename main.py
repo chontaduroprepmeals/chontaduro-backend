@@ -2887,13 +2887,15 @@ def _enforce_weekly_protein_variety(menu_objs: List[Meal], state: SessionState) 
                     selected = candidate
                     break
         if not selected:
-            for pool in same_type_pool.values():
-                for candidate in pool:
-                    if _fits(candidate):
-                        selected = candidate
-                        break
-                if selected:
+            # fallback: only use same meal_type to avoid putting breakfasts in lunch/dinner slots
+            correct_type_pool = same_type_pool.get(meal_type, [])
+            for candidate in correct_type_pool:
+                if candidate.name != meal.name and _fits(candidate):
+                    selected = candidate
                     break
+        if not selected:
+            # last resort: repeat original meal rather than use wrong type
+            selected = meal
         if not selected:
             selected = meal
 
