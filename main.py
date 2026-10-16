@@ -4507,7 +4507,13 @@ async def next_step(request: Request):
                                 "fat": f"~{round(day_meal_fat)}-{round(day_meal_fat + 5)}g",
                                 "calories": f"~{round(day_meal_calories + calorie_dist['snack_calories_reserved'] - 30)}-{round(day_meal_calories + calorie_dist['snack_calories_reserved'] + 30)} kcal",
                             },
-                            "message": "✨ Perfect balance for your body recomposition goals!",
+                            "message": (
+                                "✨ Perfect balance for your body recomposition goals!" if "recomp" in (state.objective or "").lower()
+                                else "🔥 Optimized to help you lose fat while keeping muscle!" if "lose fat" in (state.objective or "").lower()
+                                else "💪 Fueled to maximize muscle growth!" if "gain muscle" in (state.objective or "").lower()
+                                else "⚖️ Balanced to maintain your shape and energy!" if "maintain" in (state.objective or "").lower()
+                                else "✨ Perfectly balanced for your goals!"
+                            ),
                         }
 
                     daily_summary = daily_summaries.get("1", {})
