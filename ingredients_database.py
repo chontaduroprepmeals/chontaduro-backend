@@ -54,6 +54,14 @@ INGREDIENT_DATABASE = {
         "typical_serving_g": 100,
         "unit": "g"
     },
+    "corn": {
+        "protein_per_100g": 3.2,
+        "carbs_per_100g": 19.0,
+        "fat_per_100g": 1.2,
+        "calories_per_100g": 96,
+        "typical_serving_g": 80,
+        "unit": "g"
+    },
     "corn tortillas": {
         "protein_per_100g": 5.7,
         "carbs_per_100g": 44.6,
@@ -492,6 +500,7 @@ INGREDIENT_ALIASES = {
     "lean ground beef": ["ground beef"],
     "whole chicken": ["chicken thighs", "chicken leg", "chicken meatballs"],
     "chickpeas": ["garbanzo beans", "garbanzos"],
+    "corn": ["sweet corn", "canned corn", "corn kernels", "maize"],
     "corn tortillas": ["corn tortilla", "flour tortilla"],
     "black beans": ["beans"],
     "red beans": ["kidney beans"],
