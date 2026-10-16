@@ -2995,7 +2995,7 @@ html.in-iframe .app-card {
           dayProtein  += Math.min(40, m.final_macros ? m.final_macros.protein_g : (m.protein_assigned || 0));
           dayCarbs    += Math.min(90, m.final_macros ? m.final_macros.carbs_g   : (m.carbs_assigned || 0));
           dayFat      += Math.min(35, m.final_macros ? m.final_macros.fat_g     : (m.fat_assigned || 0));
-          dayCalories += (Math.min(40, m.final_macros ? m.final_macros.protein_g : (m.protein_assigned || 0)) * 4) + (Math.min(90, m.final_macros ? m.final_macros.carbs_g : (m.carbs_assigned || 0)) * 4) + (Math.min(35, m.final_macros ? m.final_macros.fat_g : (m.fat_assigned || 0)) * 9);
+          dayCalories += m.final_macros ? m.final_macros.calories : ((m.protein_assigned || 0) * 4) + ((m.carbs_assigned || 0) * 4) + ((m.fat_assigned || 0) * 9);
         });
         dayCalories = Math.round(dayCalories);
         
