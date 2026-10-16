@@ -2925,7 +2925,7 @@ html.in-iframe .app-card {
         <div class="text-lg font-bold mb-1">Chef-curated variety with premium presentation</div>
         <div class="text-sm">Protein rotation follows your selected diet. Medical allergies are accommodated, and meals are styled for a polished weekly experience.</div>
       </div>`;
-      html += `<div class="mb-4 p-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-sm font-medium">Each meal contains a maximum of 40g of protein — the optimal amount for absorption. Your daily macros are calculated based on your personal stats and goals.</div>`;
+      html += `<div class="mb-4 p-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-sm font-medium">Protein is distributed across meals (up to 40g per meal) to maximize absorption throughout the day. Your daily macros are calculated based on your personal stats and goals.</div>`;
       html += `<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">Your Menu</h2><div><button onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Adjust Preferences</button></div></div>`;
       const planPriceMap = { 1: 15, 2: 30, 3: 26, 4: 40 };
       const pricePerDay = planPriceMap[userPlan] || (data.price || 0);
