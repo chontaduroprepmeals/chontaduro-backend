@@ -1041,13 +1041,13 @@ html.in-iframe .app-card {
         // Ensure the iframe fills the parent's dimensions fully
 
     // Typing effect for hero subtitle
-    (function() {
+    document.addEventListener("DOMContentLoaded", function() { (function() {
       const phrases = [
         'Calculated for your goals.',
         'Portioned for your needs.',
         'Prepared for your week.'
       ];
-      const el = document.querySelector('.typed-subtitle');
+      const el = document.querySelector('.typed-subtitle') || document.getElementById('landingPage')?.querySelector('.typed-subtitle');
       if (!el) return;
       let pi = 0, ci = 0, deleting = false;
       function type() {
@@ -1069,7 +1069,7 @@ html.in-iframe .app-card {
         setTimeout(type, deleting ? 40 : 70);
       }
       type();
-    })();
+    })(); });
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
