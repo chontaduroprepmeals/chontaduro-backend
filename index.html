@@ -145,6 +145,16 @@ html, body {
     .landing-btn {
       background: #E8621A;
       color: #fff;
+      padding: 16px 36px;
+      font-size: 1.15rem;
+      box-shadow: 0 0 0 0 rgba(232, 98, 26, 0.5);
+      animation: pulse-glow 2.5s infinite;
+    }
+
+    @keyframes pulse-glow {
+      0%   { box-shadow: 0 0 0 0 rgba(232, 98, 26, 0.5); }
+      70%  { box-shadow: 0 0 0 12px rgba(232, 98, 26, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(232, 98, 26, 0); }
     }
 
     .landing-btn-secondary {
@@ -743,7 +753,7 @@ html.in-iframe .app-card {
           <p class="hero-subtitle">The easiest way to stay healthy</p>
           <div class="hero-actions">
             <button type="button" class="landing-btn js-start-generator">Start your order</button>
-            <button type="button" class="landing-btn-secondary js-start-generator">Pick your plan</button>
+
           </div>
           <div class="hero-image reveal delay-1 is-visible">
             <img src="/static/images/image02.jpg" alt="Prepared Chontaduro meal bowls">
