@@ -3178,13 +3178,20 @@ html.in-iframe .app-card {
         return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
       };
       
-      let html = `<div class="mb-4 rounded-2xl border-2 border-orange-200 bg-gradient-to-r from-orange-50 via-amber-50 to-white p-5 text-orange-900 shadow-sm">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-orange-600 mb-2">Premium weekly menu</div>
-        <div class="text-lg font-bold mb-1">Chef-curated variety with premium presentation</div>
-        <div class="text-sm">Protein rotation follows your selected diet. Medical allergies are accommodated, and meals are styled for a polished weekly experience.</div>
-      </div>`;
-      html += `<div class="mb-4 p-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 text-sm font-medium">Protein is distributed across meals (up to 40g per meal) to maximize absorption throughout the day. Your daily macros are calculated based on your personal stats and goals.</div>`;
-      html += `<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">Your Menu</h2><div><button onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Adjust Preferences</button></div></div>`;
+      let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:#2C1810;font-weight:700">Your Menu</div>
+        <button onclick="step({}, 'back')" style="padding:8px 18px;border-radius:999px;border:2px solid rgba(232,98,26,0.25);background:#fff;color:#2C1810;font-family:Manrope,sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer">← Adjust</button>
+      </div>
+      <details style="margin-bottom:16px;cursor:pointer">
+        <summary style="font-size:0.8rem;color:#E8621A;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;list-style:none;display:flex;align-items:center;gap:6px">
+          ℹ️ About this menu
+        </summary>
+        <div style="margin-top:10px;padding:14px 16px;border-radius:12px;background:#fff8f4;border:1px solid rgba(232,98,26,0.15);font-size:0.88rem;color:#7a5c50;line-height:1.6">
+          <strong style="color:#2C1810">Premium weekly menu</strong> — Chef-curated variety with premium presentation. Protein rotation follows your selected diet. Medical allergies are accommodated.<br><br>
+          Protein is distributed across meals (up to 40g per meal) to maximize absorption throughout the day. Your daily macros are calculated based on your personal stats and goals.
+        </div>
+      </details>`;
+
       const planPriceMap = { 1: 15, 2: 30, 3: 26, 4: 40 };
       const pricePerDay = planPriceMap[userPlan] || (data.price || 0);
       const numDays = data.daily_summaries ? Object.keys(data.daily_summaries).length : (data.duration || data.days_ordered || 1);
