@@ -2064,35 +2064,43 @@ html.in-iframe .app-card {
 
     // Allergies and Restrictions Tag Input
     function renderAllergiesAndRestrictions(question, field) {
-      let html = `<form id="f">
-        <h2 class="text-2xl font-bold mb-2 text-center">${question}</h2>
-        <p class="text-gray-600 text-center mb-4">Type and press Enter to add items you're allergic to or simply dislike</p>
-        
-        <div class="mb-4">
-          <label class="block text-sm font-medium mb-2">Allergies & Food Restrictions</label>
-          <div id="tags-container" class="border rounded-lg p-3 min-h-[80px] mb-2 bg-gray-50">
-            <div id="tags-display" class="flex flex-wrap gap-2 mb-2"></div>
-            <div class="flex gap-2">
-              <input type="text" id="restriction-input" 
-                     class="flex-1 p-2 border rounded" 
-                     placeholder="Type item and press Enter (e.g., dairy, chicken, nuts)">
-              <button type="button" id="add-restriction-btn" 
-                      class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600">
-                Add
-              </button>
-            </div>
-          </div>
-          <p class="text-xs text-gray-500">Common items: dairy, nuts, seafood, gluten, soy, eggs, chicken, broccoli, oats</p>
-          <p class="text-xs text-gray-500 mt-1">Leave empty if you have no restrictions</p>
+      const commonAllergies = ['Peanuts','Tree Nuts','Dairy','Gluten','Eggs','Fish','Shellfish','Soy','Spicy'];
+      let html = `<form id="f" style="text-align:center">
+        <div style="font-size:2.2rem;margin-bottom:10px">🚫</div>
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.9rem;color:#2C1810;margin:0 0 8px 0">${question}</h2>
+        <p style="color:#7a5c50;font-size:0.95rem;margin:0 0 24px 0">Tap to select. Leave empty if none.</p>
+
+        <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:20px">
+          ${commonAllergies.map(a => `
+            <button type="button" onclick="toggleAllergy(this,'${a}')"
+              style="padding:10px 18px;border-radius:999px;border:2px solid rgba(232,98,26,0.25);
+                     background:#fff;color:#2C1810;font-family:Manrope,sans-serif;font-size:0.9rem;
+                     font-weight:600;cursor:pointer;transition:all 0.15s" data-allergy="${a}">
+              ${a}
+            </button>`).join('')}
         </div>
-        
+
+        <div style="margin-bottom:20px;text-align:left">
+          <label style="font-size:0.85rem;font-weight:700;color:#915838;letter-spacing:0.08em;text-transform:uppercase">Other restrictions</label>
+          <input type="text" id="restriction-input" placeholder="e.g. broccoli, oats…"
+            style="width:100%;padding:13px 16px;border:2px solid rgba(232,98,26,0.2);border-radius:12px;
+                   font-size:1rem;font-family:Manrope,sans-serif;color:#2C1810;box-sizing:border-box;
+                   margin-top:8px;outline:none">
+        </div>
+
         <input type="hidden" name="Allergies_and_Restrictions" id="restrictions_input" value="">
-        
-        <div class="mt-6 flex justify-center">
-          <button type="button" id="back" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button>
-        </div>
-        <div class="mt-3 text-center">
-          <button type="submit" class="px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition">Continue →</button>
+
+        <div style="display:flex;gap:12px;margin-top:8px">
+          <button type="button" id="back"
+            style="flex:1;padding:14px;border-radius:999px;border:2px solid rgba(232,98,26,0.25);
+                   background:#fff;color:#2C1810;font-family:Manrope,sans-serif;font-weight:700;cursor:pointer">
+            ← Back
+          </button>
+          <button type="submit"
+            style="flex:2;padding:14px;border-radius:999px;border:none;background:#E8621A;
+                   color:#fff;font-family:Manrope,sans-serif;font-size:1rem;font-weight:700;cursor:pointer">
+            Continue →
+          </button>
         </div>
       </form>`;
 
@@ -2123,6 +2131,24 @@ html.in-iframe .app-card {
         });
         updateHiddenInput();
       }
+
+      window.toggleAllergy = function(btn, name) {
+        const active = btn.getAttribute('data-active') === '1';
+        if (active) {
+          btn.removeAttribute('data-active');
+          btn.style.background = '#fff';
+          btn.style.color = '#2C1810';
+          btn.style.borderColor = 'rgba(232,98,26,0.25)';
+          window.restrictionTags = window.restrictionTags.filter(t => t !== name.toLowerCase());
+        } else {
+          btn.setAttribute('data-active','1');
+          btn.style.background = '#E8621A';
+          btn.style.color = '#fff';
+          btn.style.borderColor = '#E8621A';
+          if (!window.restrictionTags.includes(name.toLowerCase())) window.restrictionTags.push(name.toLowerCase());
+        }
+        updateHiddenInput();
+      };
 
       window.addRestrictionTag = function(value) {
         if (!value) return;
