@@ -2698,61 +2698,39 @@ html.in-iframe .app-card {
     // Visual Days Selector with calendar-style cards
     function renderDaysSelector(question, fields) {
       const daysOptions = [1, 2, 3, 4, 5, 6, 7];
-      
-      let html = `<form id="f">
-        <div class="space-y-6">
-          <div class="text-center mb-6">
-            <h2 class="text-2xl font-bold text-gray-800 mb-2">📅 How many days of meal prep?</h2>
-            <p class="text-gray-600">Choose the number of days you want your meals prepared for</p>
-          </div>
-          
-          <div class="grid grid-cols-2 md:grid-cols-7 gap-4">
-      `;
-      
-      daysOptions.forEach(days => {
-        // Create visual calendar grid
-        let calendarGrid = '';
-        const rows = Math.ceil(days / 4);
-        for (let row = 0; row < rows; row++) {
-          calendarGrid += '<div class="flex justify-center gap-1">';
-          for (let col = 0; col < Math.min(4, days - row * 4); col++) {
-            calendarGrid += '<span class="text-lg">🗓️</span>';
-          }
-          calendarGrid += '</div>';
-        }
-        
-        html += `
-          <div onclick="selectDays(${days})" 
-               class="days-card cursor-pointer p-6 border-2 border-gray-300 rounded-xl text-center
-                      hover:scale-105 hover:shadow-lg transition-all duration-200
-                      hover:border-orange-400 bg-white"
-               data-days="${days}">
-            <div class="text-3xl font-bold text-orange-600 mb-2">${days}</div>
-            <div class="text-sm text-gray-600 mb-3">days</div>
-            <div class="calendar-visual space-y-1">
-              ${calendarGrid}
-            </div>
-          </div>
-        `;
-      });
-      
-      html += `
-          </div>
-          <input type="hidden" id="selected_days_input" value="5">
+      const dayLabels = ['','Mon','Mon-Tue','Mon-Wed','Mon-Thu','Mon-Fri','Mon-Sat','Full week'];
 
-          <div class="mt-8 flex justify-center">
-            <button type="button" onclick="step({}, 'back')" class="px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-200">← Back</button>
-          </div>
-          
-          <!-- Submit Button -->
-          <div class="mt-3 text-center">
-            <button type="submit" 
-                    class="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xl font-bold rounded-xl
-                           shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200
-                           border-2 border-orange-600">
-              Continue to Review →
-            </button>
-          </div>
+      let html = `<form id="f" style="text-align:center">
+        <div style="font-size:2.2rem;margin-bottom:10px">📅</div>
+        <h2 style="font-family:'Cormorant Garamond',serif;font-size:1.9rem;color:#2C1810;margin:0 0 8px 0">How many days?</h2>
+        <p style="color:#7a5c50;font-size:0.95rem;margin:0 0 24px 0">Choose how many days of meals you want prepared</p>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:24px">
+      `;
+
+      daysOptions.forEach(days => {
+        html += `
+          <div onclick="selectDays(${days})"
+               data-days="${days}"
+               style="cursor:pointer;padding:16px 4px;border:2px solid rgba(232,98,26,0.2);
+                      border-radius:14px;background:#fff;transition:all 0.15s;user-select:none">
+            <div style="font-size:1.6rem;font-weight:800;color:#E8621A;font-family:Manrope,sans-serif">${days}</div>
+            <div style="font-size:0.72rem;color:#7a5c50;margin-top:4px;font-family:Manrope,sans-serif">day${days>1?'s':''}</div>
+          </div>`;
+      });
+
+      html += `</div>
+        <input type="hidden" id="selected_days_input" value="5">
+        <div style="display:flex;gap:12px;margin-top:8px">
+          <button type="button" onclick="step({}, 'back')"
+            style="flex:1;padding:14px;border-radius:999px;border:2px solid rgba(232,98,26,0.25);
+                   background:#fff;color:#2C1810;font-family:Manrope,sans-serif;font-weight:700;cursor:pointer">
+            ← Back
+          </button>
+          <button type="submit"
+            style="flex:2;padding:14px;border-radius:999px;border:none;background:#E8621A;
+                   color:#fff;font-family:Manrope,sans-serif;font-size:1rem;font-weight:700;cursor:pointer">
+            Continue to Review →
+          </button>
         </div>
       </form>`;
       
