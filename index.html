@@ -269,37 +269,85 @@ html, body {
     }
 
     .pricing-list {
-      margin: 34px auto 0;
-      max-width: 640px;
+      margin: 40px auto 0;
+      max-width: 900px;
       display: grid;
-      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
       text-align: left;
     }
 
     .plan-link {
-      width: 100%;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 6px;
-      border: none;
-      border-bottom: 1px solid rgba(44, 24, 16, 0.2);
-      background: transparent;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 24px 22px;
+      border: 2px solid rgba(232, 98, 26, 0.15);
+      border-radius: 16px;
+      background: #fff;
       color: #2C1810;
-      text-align: left;
       cursor: pointer;
-      font-size: 1rem;
       font-family: Manrope, sans-serif;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+      box-shadow: 0 2px 12px rgba(44,24,16,0.06);
+      position: relative;
+      overflow: hidden;
     }
 
     .plan-link:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 28px rgba(232,98,26,0.18);
+      border-color: #E8621A;
+    }
+
+    .plan-link .plan-icon {
+      font-size: 2rem;
+      margin-bottom: 12px;
+    }
+
+    .plan-link .plan-name {
+      font-size: 1rem;
+      font-weight: 800;
+      color: #2C1810;
+      margin-bottom: 6px;
+    }
+
+    .plan-link .plan-desc {
+      font-size: 0.82rem;
+      color: #7a5c50;
+      margin-bottom: 14px;
+      line-height: 1.4;
+    }
+
+    .plan-link .plan-price {
+      font-size: 1.1rem;
+      font-weight: 800;
       color: #E8621A;
     }
 
     .plan-link .arrow {
+      position: absolute;
+      top: 18px;
+      right: 18px;
       color: #E8621A;
-      font-size: 1.1rem;
-      margin-left: 12px;
+      font-size: 1rem;
+    }
+
+    .plan-link.featured {
+      border-color: #E8621A;
+      background: linear-gradient(135deg, #fff8f4 0%, #fff 100%);
+    }
+
+    .plan-badge {
+      position: absolute;
+      top: 0; right: 0;
+      background: #E8621A;
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 0 14px 0 10px;
+      letter-spacing: 0.05em;
     }
 
     .pricing-hint {
@@ -833,20 +881,33 @@ html.in-iframe .app-card {
           <h2 class="section-title">Starting at $15/day</h2>
           <div class="pricing-list">
             <button type="button" class="plan-link js-plan-detail-trigger" data-detail-plan="plan1">
-              <span>Plan 1 - One Main Meal</span>
-              <span class="arrow">-></span>
+              <span class="plan-icon">🍽️</span>
+              <span class="plan-name">Plan 1 — One Main Meal</span>
+              <span class="plan-desc">One personalized meal a day. Perfect if you want a healthy anchor meal.</span>
+              <span class="plan-price">From $15/day</span>
+              <span class="arrow">→</span>
             </button>
             <button type="button" class="plan-link js-plan-detail-trigger" data-detail-plan="plan2">
-              <span>Plan 2 - Lunch + Dinner</span>
-              <span class="arrow">-></span>
+              <span class="plan-icon">🥗</span>
+              <span class="plan-name">Plan 2 — Lunch + Dinner</span>
+              <span class="plan-desc">Two main meals with protein and carb tracking built in.</span>
+              <span class="plan-price">From $30/day</span>
+              <span class="arrow">→</span>
             </button>
             <button type="button" class="plan-link js-plan-detail-trigger" data-detail-plan="plan3">
-              <span>Plan 3 - Breakfast + 1 Main Meal</span>
-              <span class="arrow">-></span>
+              <span class="plan-icon">🌅</span>
+              <span class="plan-name">Plan 3 — Breakfast + 1 Meal</span>
+              <span class="plan-desc">Start strong with a structured breakfast plus one main meal.</span>
+              <span class="plan-price">From $26/day</span>
+              <span class="arrow">→</span>
             </button>
-            <button type="button" class="plan-link js-plan-detail-trigger" data-detail-plan="plan4">
-              <span>Plan 4 - Breakfast + 2 Main Meals</span>
-              <span class="arrow">-></span>
+            <button type="button" class="plan-link featured js-plan-detail-trigger" data-detail-plan="plan4">
+              <span class="plan-badge">MOST POPULAR</span>
+              <span class="plan-icon">🏆</span>
+              <span class="plan-name">Plan 4 — Full Day</span>
+              <span class="plan-desc">Breakfast, lunch and dinner. Full macro + calorie tracking all day.</span>
+              <span class="plan-price">From $40/day</span>
+              <span class="arrow">→</span>
             </button>
           </div>
           <p class="pricing-hint">Not sure which plan to choose? <a href="#" id="comparePlansToggle" aria-expanded="false">Compare them here</a></p>
