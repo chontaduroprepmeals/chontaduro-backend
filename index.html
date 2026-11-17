@@ -191,19 +191,47 @@ html, body {
 
     .section-kicker {
       margin: 0;
-      font-size: 1rem;
-      letter-spacing: 0.18em;
+      font-size: 0.9rem;
+      letter-spacing: 0.22em;
       text-transform: uppercase;
-      color: #915838;
+      color: #E8621A;
       font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-kicker::before,
+    .section-kicker::after {
+      content: '';
+      display: inline-block;
+      width: 28px;
+      height: 2px;
+      background: #E8621A;
+      border-radius: 2px;
     }
 
     .section-title {
       font-family: 'Cormorant Garamond', serif;
-      font-size: clamp(2.8rem, 8vw, 5rem);
-      line-height: 0.98;
-      margin: 14px 0;
+      font-size: clamp(3rem, 9vw, 6rem);
+      line-height: 0.95;
+      margin: 16px 0;
       color: #2C1810;
+      position: relative;
+    }
+
+    .section-inner.reveal .section-title {
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .section-inner:not(.is-visible) .section-title {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    .section-inner.is-visible .section-title {
+      opacity: 1;
+      transform: translateY(0);
     }
 
     .section-copy {
