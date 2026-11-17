@@ -3408,31 +3408,40 @@ html.in-iframe .app-card {
           const mo = ds.meals_only || {};
           const sc = ds.snack_contribution || {};
           const ft = ds.final_total_estimate || {};
-          html += `<div class="mt-4 rounded-2xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
-            <div class="text-sm font-semibold uppercase tracking-wide text-emerald-700 mb-2">Daily nutrition summary</div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-              <div class="rounded-xl bg-white p-3 border border-emerald-100">
-                <div class="font-bold text-emerald-800 mb-1">Meals only</div>
-                <div>${mo.protein || 0}g protein</div>
-                <div>${mo.carbs || 0}g carbs</div>
-                <div>${mo.fat || 0}g fat</div>
-                <div>${mo.calories || 0} kcal</div>
+          html += `<div style="margin-top:20px;border-radius:20px;border:1.5px solid rgba(232,98,26,0.15);background:#fff8f4;padding:20px 18px">
+            <div style="font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:700;color:#2C1810;text-align:center;margin-bottom:16px;letter-spacing:0.04em">Daily Nutrition Summary</div>
+            
+            <!-- Macro pills row -->
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+              <div style="background:#fff;border-radius:14px;padding:12px 6px;text-align:center;border:1.5px solid rgba(232,98,26,0.12)">
+                <div style="font-size:1.4rem;font-weight:800;color:#E8621A;font-family:Manrope,sans-serif">${mo.protein || 0}g</div>
+                <div style="font-size:0.7rem;color:#7a5c50;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px">Protein</div>
               </div>
-              <div class="rounded-xl bg-white p-3 border border-amber-100">
-                <div class="font-bold text-amber-700 mb-1">🥤 Protein gap</div>
-                <div class="text-sm text-amber-800 mb-2">Your meals cover most of your macros. To hit your full protein goal, you can add snacks — or skip them to keep calories lower. Your choice!</div>
-                <div class="text-sm"><span class="font-semibold">Protein needed:</span> ${sc.protein || ''}</div>
-                <div class="text-sm text-gray-500 mt-1">e.g. 1–2 protein shakes or bars (~150–300 kcal extra)</div>
+              <div style="background:#fff;border-radius:14px;padding:12px 6px;text-align:center;border:1.5px solid rgba(232,98,26,0.12)">
+                <div style="font-size:1.4rem;font-weight:800;color:#E8621A;font-family:Manrope,sans-serif">${mo.carbs || 0}g</div>
+                <div style="font-size:0.7rem;color:#7a5c50;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px">Carbs</div>
               </div>
-              <div class="rounded-xl bg-white p-3 border border-emerald-100">
-                <div class="font-bold text-emerald-800 mb-1">Estimated final total</div>
-                <div>${ft.protein || ''} protein</div>
-                <div>${ft.carbs || ''} carbs</div>
-                <div>${ft.fat || ''} fat</div>
-                <div>${ft.calories || ''}</div>
+              <div style="background:#fff;border-radius:14px;padding:12px 6px;text-align:center;border:1.5px solid rgba(232,98,26,0.12)">
+                <div style="font-size:1.4rem;font-weight:800;color:#E8621A;font-family:Manrope,sans-serif">${mo.fat || 0}g</div>
+                <div style="font-size:0.7rem;color:#7a5c50;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px">Fat</div>
+              </div>
+              <div style="background:#E8621A;border-radius:14px;padding:12px 6px;text-align:center">
+                <div style="font-size:1.4rem;font-weight:800;color:#fff;font-family:Manrope,sans-serif">${mo.calories || 0}</div>
+                <div style="font-size:0.7rem;color:rgba(255,255,255,0.8);text-transform:uppercase;letter-spacing:0.08em;margin-top:2px">kcal</div>
               </div>
             </div>
-            <div class="mt-3 text-sm font-medium text-emerald-700">${ds.message || ''}</div>
+
+            <!-- Protein gap note -->
+            <div style="background:#fff;border-radius:14px;padding:14px 16px;border:1.5px solid rgba(232,98,26,0.15);display:flex;gap:12px;align-items:flex-start">
+              <div style="font-size:1.4rem;line-height:1">🥤</div>
+              <div>
+                <div style="font-size:0.8rem;font-weight:700;color:#E8621A;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Protein gap · ${sc.protein || ''}</div>
+                <div style="font-size:0.85rem;color:#7a5c50;line-height:1.5">Your meals cover most of your macros. Add 1–2 protein shakes or bars to hit your full goal — or skip to keep calories lower. Your choice.</div>
+              </div>
+            </div>
+
+            <!-- Goal message -->
+            <div style="margin-top:12px;text-align:center;font-size:0.85rem;color:#2C1810;font-weight:600">${ds.message || ''}</div>
           </div>`;
         }
         html += `</div>`; // Close day section
