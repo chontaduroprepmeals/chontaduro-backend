@@ -3255,13 +3255,32 @@ html.in-iframe .app-card {
         </div>`;
       }
 
-      html += `<div class="space-y-3">`;
       // Group meals by day
       const mealsByDay = groupMealsByDay(data.menu || []);
       const dayKeys = Object.keys(mealsByDay).sort((a, b) => parseInt(a) - parseInt(b));
-      
-      // Render each day section
-      dayKeys.forEach(dayNum => {
+      const totalDays = dayKeys.length;
+
+      // Grid layout based on number of days
+      // 1: 1col, 2: 2col, 3: 2+1, 4: 2x2, 5: 2+2+1, 6: 3x2, 7: 3+3+1
+      const gridTemplates = {
+        1: 'repeat(1,1fr)',
+        2: 'repeat(2,1fr)',
+        3: 'repeat(2,1fr)',
+        4: 'repeat(2,1fr)',
+        5: 'repeat(2,1fr)',
+        6: 'repeat(3,1fr)',
+        7: 'repeat(3,1fr)',
+      };
+      const gridCols = gridTemplates[totalDays] || 'repeat(2,1fr)';
+
+      // Wrapper — full width grid
+      html += `<div style="display:grid;grid-template-columns:${gridCols};gap:16px;margin-top:8px">`;
+
+      dayKeys.forEach((dayNum, dayIndex) => {
+        // Last card centered when odd count
+        const isLastOdd = (totalDays % 2 !== 0 && dayIndex === totalDays - 1 && totalDays !== 1);
+        const isLastOdd3 = (totalDays === 7 && dayIndex === 6);
+        const spanStyle = (isLastOdd || isLastOdd3) ? 'grid-column:1/-1;max-width:calc(33.33% - 8px);margin:0 auto;width:100%' : '';
         const dayMeals = mealsByDay[dayNum];
         
         // Calculate day totals (prefer final_macros when available)
@@ -3274,15 +3293,13 @@ html.in-iframe .app-card {
         });
         dayCalories = Math.round(dayCalories);
         
-        // Day header — show calorie total only for Plan 4
-        html += `<div class="mb-6 bg-white p-4 rounded-lg border-2 border-orange-200 shadow-sm">
-          <div class="flex justify-between items-center mb-3">
-            <h3 class="text-2xl font-bold text-orange-600">📅 DAY ${dayNum}</h3>
-            ${isPlan4 ? `<div class="text-sm text-gray-600">Total: ${dayCalories} kcal</div>` : ''}
-          </div>`;
-        
-        // Render meals for this day
-        html += `<div class="space-y-3">`;
+        // Day card
+        html += `<div style="${spanStyle}background:#fff;border-radius:20px;border:1.5px solid rgba(232,98,26,0.15);overflow:hidden;display:flex;flex-direction:column">
+          <div style="background:linear-gradient(135deg,#fff7ed,#ffe8d6);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(232,98,26,0.1)">
+            <div style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:700;color:#2C1810">Day ${dayNum}</div>
+            ${isPlan4 ? `<div style="font-size:0.8rem;font-weight:700;color:#E8621A;font-family:Manrope,sans-serif">${dayCalories} kcal</div>` : ''}
+          </div>
+          <div style="padding:12px;display:flex;flex-direction:column;gap:10px;flex:1">`;
         
         dayMeals.forEach(m => {
           const safeName = (m.name || "").replace(/'/g, "\\'");
@@ -3356,34 +3373,27 @@ html.in-iframe .app-card {
             perMealInfo = `<div style="margin-top: 10px; font-size: 0.9em; color: #6b7280; font-style: italic;">Porción adaptada a tus objetivos</div>`;
           }
 
-          html += `<div class="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
-            <div style="height:190px;overflow:hidden;background:linear-gradient(135deg,#fff7ed,#ffedd5);">
-              <img src="${imageSrc}" alt="${m.name || 'Meal image'}" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.onerror=null;this.src='${placeholderSrc}'">
+          html += `<div style="border-radius:14px;overflow:hidden;border:1px solid rgba(232,98,26,0.1);background:#fffbf8">
+            <div style="height:140px;overflow:hidden">
+              <img src="${imageSrc}" alt="${m.name || 'Meal'}" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.onerror=null;this.src='${placeholderSrc}'">
             </div>
-            <div class="p-4 bg-gradient-to-b from-white to-orange-50/30">
-              <div class="flex justify-between items-start gap-4">
-                <div class="flex-1">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="text-2xl">${mealTypeEmoji}</span>
-                  <div>
-                    <div class="font-bold text-sm text-gray-600">${mealType}</div>
-                    <div style="font-size:16px;font-weight:500;line-height:1.35;">${m.name}</div>
-                  </div>
-                </div>
-                <div class="text-sm text-gray-600">${m.type}${isPlan4 ? ` • ${Math.round(displayCalories)} kcal` : ''} • $${(m.price||0).toFixed(2)}</div>
-                ${portionInfo}
-                ${ingredientsHTML}
-                ${modificationsHTML}
-                ${perMealInfo}
+            <div style="padding:10px 12px">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                <span style="font-size:1rem">${mealTypeEmoji}</span>
+                <span style="font-size:0.7rem;font-weight:700;color:#E8621A;text-transform:uppercase;letter-spacing:0.08em;font-family:Manrope,sans-serif">${mealType}</span>
               </div>
-              <div class="flex flex-col items-end gap-2 ml-4"></div>
-              </div>
+              <div style="font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:700;color:#2C1810;line-height:1.3;margin-bottom:4px">${m.name}</div>
+              <div style="font-size:0.75rem;color:#7a5c50">$${(m.price||0).toFixed(2)}${isPlan4 ? ` · ${Math.round(displayCalories)} kcal` : ''}</div>
+              ${portionInfo}
+              ${ingredientsHTML}
+              ${modificationsHTML}
+              ${perMealInfo}
             </div>
           </div>`;
           
         });
         
-        html += `</div>`; // Close day meals
+        html += `</div></div>`; // Close meals list + day card
         const ds = dailySummaries[String(dayNum)] || (isPlan4 ? {
           meals_only: {
             protein: Math.round(dayProtein),
@@ -3444,10 +3454,9 @@ html.in-iframe .app-card {
             <div style="margin-top:12px;text-align:center;font-size:0.85rem;color:#2C1810;font-weight:600">${ds.message || ''}</div>
           </div>`;
         }
-        html += `</div>`; // Close day section
       });
 
-      html += `</div>`;
+      html += `</div>`; // Close grid
 
       html += `<div class="mt-4 flex gap-3 justify-center flex-wrap">
           <button onclick="proceedToCheckout()" class="px-4 py-3 bg-green-600 text-white rounded font-bold text-lg">🛒 Order Now</button>
