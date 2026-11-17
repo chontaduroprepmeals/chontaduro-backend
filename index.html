@@ -2165,11 +2165,9 @@ html.in-iframe .app-card {
         renderTags();
       };
 
-      addBtn.onclick = () => {
-        addRestrictionTag(input.value);
-      };
+      if (addBtn) addBtn.onclick = () => { addRestrictionTag(input.value); };
 
-      input.onkeypress = (e) => {
+      if (input) input.onkeypress = (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           addRestrictionTag(input.value);
