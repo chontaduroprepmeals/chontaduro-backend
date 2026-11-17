@@ -2203,7 +2203,7 @@ html.in-iframe .app-card {
       if (currentStep === "diet_preference" && fields.length === 1 && fields[0].name === "Diet Preference") {
         return renderDietPreference(question, fields[0]);
       }
-      if (currentStep === "allergies_and_restrictions" && fields.length === 1 && fields[0].name === "Allergies and Restrictions") {
+      if (currentStep === "allergies_and_restrictions") {
         return renderAllergiesAndRestrictions(question, fields[0]);
       }
       if (currentStep === "pick_plan" && fields.length === 1 && fields[0].name === "Plan") {
