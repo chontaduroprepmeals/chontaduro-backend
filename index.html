@@ -2764,13 +2764,15 @@ html.in-iframe .app-card {
     
     // Global function to select days
     window.selectDays = function(days) {
-      // Remove selection from ALL cards using data attribute
+      // Reset ALL cards
       document.querySelectorAll('[data-days]').forEach(card => {
         card.style.border = '2px solid rgba(232,98,26,0.2)';
         card.style.background = '#fff';
-        card.style.color = '#E8621A';
         card.style.transform = 'scale(1)';
         card.style.boxShadow = 'none';
+        const divs = card.querySelectorAll('div');
+        if (divs[0]) divs[0].style.color = '#E8621A';
+        if (divs[1]) divs[1].style.color = '#7a5c50';
       });
       
       // Highlight selected card
@@ -2780,9 +2782,9 @@ html.in-iframe .app-card {
         selectedCard.style.background = '#E8621A';
         selectedCard.style.transform = 'scale(1.08)';
         selectedCard.style.boxShadow = '0 4px 16px rgba(232,98,26,0.3)';
-        selectedCard.querySelector('div').style.color = '#fff';
-        const sub = selectedCard.querySelectorAll('div')[1];
-        if (sub) sub.style.color = 'rgba(255,255,255,0.8)';
+        const divs = selectedCard.querySelectorAll('div');
+        if (divs[0]) divs[0].style.color = '#fff';
+        if (divs[1]) divs[1].style.color = 'rgba(255,255,255,0.8)';
       }
       
       // Store the value
