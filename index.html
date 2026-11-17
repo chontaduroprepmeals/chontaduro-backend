@@ -213,7 +213,7 @@ html, body {
 
     .section-title {
       font-family: 'Cormorant Garamond', serif;
-      font-size: clamp(3.5rem, 12vw, 8rem);
+      font-size: clamp(2.1rem, 7vw, 4rem);
       line-height: 0.95;
       margin: 16px 0;
       color: #2C1810;
@@ -755,17 +755,58 @@ a {
     }
     #zipModal {
       width: 100%;
-      max-width: 520px;
+      max-width: 440px;
       background: white;
-      padding: 18px;
-      border-radius: 8px;
-      box-shadow: 0 14px 40px rgba(0,0,0,0.25);
-      text-align:left;
+      padding: 36px 32px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(44,24,16,0.18);
+      text-align: center;
     }
-    #zipModal h2 { margin: 0 0 10px 0; }
-    #zipModal input[type="text"] { width: 100%; padding: 10px; font-size: 1rem; margin: 8px 0 12px 0; box-sizing: border-box; }
-    #zipModal .actions { display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
-    #zipModal .hint { font-size: 0.9rem; color: #666; margin-top:8px; }
+    #zipModal .zip-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    #zipModal h2 {
+      margin: 0 0 8px 0;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2rem;
+      color: #2C1810;
+    }
+    #zipModal p {
+      color: #7a5c50;
+      font-size: 0.95rem;
+      margin: 0 0 20px 0;
+      line-height: 1.5;
+    }
+    #zipModal input[type="text"] {
+      width: 100%;
+      padding: 14px 18px;
+      font-size: 1.3rem;
+      text-align: center;
+      letter-spacing: 0.15em;
+      font-weight: 700;
+      margin: 0 0 16px 0;
+      box-sizing: border-box;
+      border: 2px solid rgba(232,98,26,0.25);
+      border-radius: 12px;
+      outline: none;
+      font-family: Manrope, sans-serif;
+      color: #2C1810;
+      transition: border-color 0.2s;
+    }
+    #zipModal input[type="text"]:focus { border-color: #E8621A; }
+    #zipModal .actions { display:flex; gap:10px; justify-content: center; margin-top: 4px; flex-direction: column; }
+    #zipModal .actions button {
+      width: 100%;
+      padding: 14px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      font-family: Manrope, sans-serif;
+    }
+    #zipTryBtn { background: #E8621A; color: #fff; }
+    #zipTryBtn:hover { opacity: 0.9; }
+    #zipContinueBtn { background: #f5ede8; color: #2C1810; }
+    #zipModal .hint { font-size: 0.82rem; color: #aaa; margin-top: 14px; }
 
     /* Banner and messages */
     #zipBanner { display:none; background:#fff4e5; border-left:4px solid #ffb74d; padding:10px 14px; margin-bottom: 12px; border-radius:6px; }
@@ -1156,17 +1197,16 @@ html.in-iframe .app-card {
   <!-- ZIP modal (overlay) -->
   <div id="zipModalOverlay" aria-hidden="true">
     <div id="zipModal" role="dialog" aria-modal="true" aria-labelledby="zipModalTitle">
-      <h2 id="zipModalTitle">What is your postal code?</h2>
-      <p>To verify if we deliver to your area, please enter your postal code.</p>
-      <input id="zipInput" type="text" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" placeholder="Ex: 90210" aria-label="Zip code">
+      <div class="zip-icon">📍</div>
+      <h2 id="zipModalTitle">Where are you located?</h2>
+      <p>Enter your zip code so we can confirm delivery to your area.</p>
+      <input id="zipInput" type="text" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" placeholder="98101" aria-label="Zip code">
       <div id="zipMessage"></div>
-
       <div class="actions">
-        <button id="zipContinueBtn" style="display:none;" class="px-4 py-2 bg-gray-300 rounded">Continue (Pickup only)</button>
-        <button id="zipTryBtn" class="px-4 py-2 bg-orange-500 text-white rounded">Verify</button>
+        <button id="zipTryBtn">Check my area →</button>
+        <button id="zipContinueBtn" style="display:none;">Continue with pickup only</button>
       </div>
-
-      <div class="hint">You can change the postal code later in account or shipping information.</div>
+      <div class="hint">You can update this later during checkout.</div>
     </div>
   </div>
 
