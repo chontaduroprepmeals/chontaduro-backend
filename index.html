@@ -272,9 +272,65 @@ html, body {
       margin: 40px auto 0;
       max-width: 900px;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(3, 1fr);
       gap: 20px;
       text-align: left;
+    }
+
+    .plan-link.featured-full {
+      grid-column: 1 / -1;
+      flex-direction: row;
+      align-items: center;
+      gap: 24px;
+      padding: 28px 32px;
+      background: linear-gradient(135deg, #E8621A 0%, #c94e10 100%);
+      border-color: #E8621A;
+      color: #fff;
+    }
+
+    .plan-link.featured-full .plan-name,
+    .plan-link.featured-full .plan-price {
+      color: #fff;
+    }
+
+    .plan-link.featured-full .plan-desc {
+      color: rgba(255,255,255,0.85);
+      flex: 1;
+      margin-bottom: 0;
+    }
+
+    .plan-link.featured-full .plan-icon {
+      font-size: 2.8rem;
+      margin-bottom: 0;
+    }
+
+    .plan-link.featured-full .arrow {
+      position: static;
+      color: #fff;
+      font-size: 1.5rem;
+    }
+
+    .plan-link.featured-full .plan-badge {
+      background: #fff;
+      color: #E8621A;
+      border-radius: 20px;
+      padding: 4px 14px;
+      position: static;
+    }
+
+    .plan-link.featured-full:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 36px rgba(232,98,26,0.4);
+    }
+
+    @media (max-width: 640px) {
+      .pricing-list {
+        grid-template-columns: 1fr;
+      }
+      .plan-link.featured-full {
+        flex-direction: column;
+        align-items: flex-start;
+      }
     }
 
     .plan-link {
@@ -901,12 +957,16 @@ html.in-iframe .app-card {
               <span class="plan-price">From $26/day</span>
               <span class="arrow">→</span>
             </button>
-            <button type="button" class="plan-link featured js-plan-detail-trigger" data-detail-plan="plan4">
-              <span class="plan-badge">MOST POPULAR</span>
+            <button type="button" class="plan-link featured-full js-plan-detail-trigger" data-detail-plan="plan4">
               <span class="plan-icon">🏆</span>
-              <span class="plan-name">Plan 4 — Full Day</span>
-              <span class="plan-desc">Breakfast, lunch and dinner. Full macro + calorie tracking all day.</span>
-              <span class="plan-price">From $40/day</span>
+              <div style="flex:1">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                  <span class="plan-name" style="font-size:1.2rem">Plan 4 — Full Day</span>
+                  <span class="plan-badge">MOST POPULAR</span>
+                </div>
+                <span class="plan-desc">Breakfast, lunch and dinner. Full macro + calorie tracking — the complete package.</span>
+              </div>
+              <span class="plan-price" style="font-size:1.4rem;white-space:nowrap">From $40/day</span>
               <span class="arrow">→</span>
             </button>
           </div>
